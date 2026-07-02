@@ -1,0 +1,9 @@
+{
+  "extends": "../../node_modules/@mentormama/tsconfig-base/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "include": ["*.config.ts", "src/**/*"]
+}

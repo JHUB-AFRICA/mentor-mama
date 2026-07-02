@@ -1,0 +1,9 @@
+{
+  "name": "@mentormama/tsconfig-base",
+  "version": "0.0.0",
+  "private": true,
+  "main": "tsconfig.json",
+  "exports": {
+    ".": "./tsconfig.json"
+  }
+}

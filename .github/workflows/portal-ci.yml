@@ -1,0 +1,42 @@
+name: Portal CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/portal-*"
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  ci:
+    name: Lint, typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm --filter @mentormama/portal lint
+
+      - name: Typecheck
+        run: pnpm --filter @mentormama/portal exec tsc --noEmit
+
+      - name: Build
+        run: pnpm --filter @mentormama/portal build

@@ -1,0 +1,13 @@
+{
+  "name": "@mentormama/prettier-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "prettier.config.js",
+  "exports": {
+    ".": "./prettier.config.js"
+  },
+  "peerDependencies": {
+    "prettier": "^3.0.0"
+  }
+}

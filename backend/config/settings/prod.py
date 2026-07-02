@@ -1,0 +1,24 @@
+"""Production Django settings for MentorMAMA backend."""
+
+from .base import *
+
+DEBUG = False
+
+SECRET_KEY = env("SECRET_KEY")
+
+ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+
+DATABASES = {
+    "default": env.db("DATABASE_URL"),
+}
+
+CORS_ALLOWED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+
+# Security headers
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
