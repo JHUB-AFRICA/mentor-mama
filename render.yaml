@@ -3,8 +3,9 @@ services:
     name: mentormama-website
     env: static
     # Render's free tier is perfect for static React/Vite builds.
-    # We install pnpm, install dependencies, and build the web workspace.
-    buildCommand: corepack enable pnpm && pnpm install && pnpm --filter @mentormama/web build
+    # pnpm is already available from the packageManager field in package.json,
+    # so we only install dependencies and build the web workspace.
+    buildCommand: pnpm install && pnpm --filter @mentormama/web build
     # Vite outputs the production build to the dist folder
     staticPublishPath: apps/web/dist
     # React uses client-side routing, so all paths must redirect to index.html
