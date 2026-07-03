@@ -41,22 +41,81 @@ export default function Preloader({ onComplete }: PreloaderProps) {
       filter: "blur(8px)",
     });
 
-    const tl = gsap.timeline({
+    let introFinished = false;
+    let pageLoaded = document.readyState === "complete";
+
+    const playOutro = () => {
+      const outroTl = gsap.timeline({
+        onComplete: onComplete,
+      });
+
+      // Stop looping animations cleanly
+      gsap.killTweensOf([svgRef.current, wave1Ref.current, wave2Ref.current]);
+
+      outroTl.to(textRef.current, {
+        opacity: 1,
+        y: 0,
+        filter: "blur(0px)",
+        duration: 0.8,
+        ease: "power3.out",
+      })
+      .fromTo(textRef.current, 
+        { letterSpacing: "0.22em" },
+        { letterSpacing: "0.02em", duration: 1.1, ease: "power2.out" },
+        "-=0.8"
+      )
+      .to(containerRef.current, {
+        opacity: 0,
+        scale: 1.05,
+        filter: "blur(6px)",
+        duration: 0.8,
+        ease: "power2.inOut",
+      }, "+=0.4");
+    };
+
+    const checkAndTransition = () => {
+      if (pageLoaded && introFinished) {
+        playOutro();
+      }
+    };
+
+    const handleLoad = () => {
+      pageLoaded = true;
+      checkAndTransition();
+    };
+
+    if (!pageLoaded) {
+      window.addEventListener("load", handleLoad);
+    }
+
+    // Intro timeline
+    const introTl = gsap.timeline({
       onComplete: () => {
-        // Modern exit: fade out, scale up, and blur overlay
-        gsap.to(containerRef.current, {
-          opacity: 0,
-          scale: 1.05,
-          filter: "blur(6px)",
-          duration: 0.8,
-          ease: "power2.inOut",
-          onComplete: onComplete,
-        });
+        introFinished = true;
+        
+        // Loop standard spin & pulse if page isn't ready
+        if (!pageLoaded) {
+          gsap.to(svgRef.current, {
+            rotation: "+=360",
+            duration: 2.5,
+            repeat: -1,
+            ease: "none",
+          });
+          gsap.to([wave1Ref.current, wave2Ref.current], {
+            opacity: 0.25,
+            scale: 2.2,
+            duration: 1.5,
+            stagger: 0.4,
+            repeat: -1,
+            ease: "power1.out",
+          });
+        }
+        checkAndTransition();
       },
     });
 
     // 1. Draw outer U-curve
-    tl.to(pathRef.current, {
+    introTl.to(pathRef.current, {
       strokeDashoffset: 0,
       duration: 1.4,
       ease: "power3.inOut",
@@ -72,40 +131,12 @@ export default function Preloader({ onComplete }: PreloaderProps) {
       rotation: 360,
       duration: 2.2,
       ease: "power4.out",
-    }, "-=1.4")
-    // 4. Trigger concentric wave rings
-    .to([wave1Ref.current, wave2Ref.current], {
-      opacity: 0.35,
-      scale: 1.8,
-      duration: 0.8,
-      stagger: 0.15,
-      ease: "power2.out",
-    }, "-=1.1")
-    .to([wave1Ref.current, wave2Ref.current], {
-      opacity: 0,
-      scale: 2.6,
-      duration: 0.8,
-      stagger: 0.15,
-      ease: "power2.in",
-    }, "-=0.7")
-    // 5. Fade & de-blur wordmark and tagline while compressing letter-spacing
-    .to(textRef.current, {
-      opacity: 1,
-      y: 0,
-      filter: "blur(0px)",
-      duration: 0.8,
-      ease: "power3.out",
-    }, "-=1.2")
-    .fromTo(textRef.current, 
-      { letterSpacing: "0.22em" },
-      { letterSpacing: "0.02em", duration: 1.1, ease: "power2.out" },
-      "-=1.2"
-    )
-    // 6. Hold frame
-    .to({}, { duration: 0.6 });
+    }, "-=1.4");
 
     return () => {
-      tl.kill();
+      window.removeEventListener("load", handleLoad);
+      introTl.kill();
+      gsap.killTweensOf([svgRef.current, wave1Ref.current, wave2Ref.current, containerRef.current, textRef.current]);
     };
   }, [onComplete]);
 
