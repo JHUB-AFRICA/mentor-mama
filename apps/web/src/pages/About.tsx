@@ -204,7 +204,7 @@ const team = [
   {
     name: "Dr. Lawrence Nderu",
     role: "Academic Supervisor",
-    image: "/images/testimonial-3.jpg",
+    image: "/images/team/lawrence.jpeg",
     bio: "Senior Lecturer at JKUAT School of Computing. Guides computing design frameworks, technical architecture, and developer sprint coordination.",
     socials: { linkedin: "#", github: "#" },
   },
