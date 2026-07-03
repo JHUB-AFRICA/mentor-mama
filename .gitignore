@@ -12,6 +12,8 @@ dist
 build
 .next
 out
+.vite
+.vite/
 *.tsbuildinfo
 
 # Python
