@@ -1,0 +1,61 @@
+{
+  "hash": "ec1c5727",
+  "configHash": "bc596745",
+  "lockfileHash": "bb2c25de",
+  "browserHash": "1a859eeb",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../../../node_modules/.pnpm/react@19.2.7/node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "ef6f51d9",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../../../node_modules/.pnpm/react-dom@19.2.7_react@19.2.7/node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "d7b2e6bc",
+      "needsInterop": true
+    },
+    "react-router-dom": {
+      "src": "../../../../node_modules/.pnpm/react-router-dom@7.18.1_react-dom@19.2.7_react@19.2.7__react@19.2.7/node_modules/react-router-dom/dist/index.mjs",
+      "file": "react-router-dom.js",
+      "fileHash": "809938bc",
+      "needsInterop": false
+    },
+    "react": {
+      "src": "../../../../node_modules/.pnpm/react@19.2.7/node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "21b2765e",
+      "needsInterop": true
+    },
+    "lucide-react": {
+      "src": "../../../../node_modules/.pnpm/lucide-react@0.562.0_react@19.2.7/node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "190c485e",
+      "needsInterop": false
+    },
+    "gsap": {
+      "src": "../../../../node_modules/.pnpm/gsap@3.15.0/node_modules/gsap/index.js",
+      "file": "gsap.js",
+      "fileHash": "9f1ebe3b",
+      "needsInterop": false
+    },
+    "gsap/ScrollTrigger": {
+      "src": "../../../../node_modules/.pnpm/gsap@3.15.0/node_modules/gsap/ScrollTrigger.js",
+      "file": "gsap_ScrollTrigger.js",
+      "fileHash": "6f165035",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-GBY36G4P": {
+      "file": "chunk-GBY36G4P.js"
+    },
+    "chunk-MLOXOII3": {
+      "file": "chunk-MLOXOII3.js"
+    },
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
+    }
+  }
+}

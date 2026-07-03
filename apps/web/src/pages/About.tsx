@@ -211,14 +211,14 @@ const team = [
   {
     name: "Bouric Okwaro",
     role: "Fullstack Developer",
-    image: "/images/team-1.jpg",
+    image: "/images/team/bouric.jpeg",
     bio: "Develops and maintains both frontend and backend systems, builds and integrates APIs, manages databases, and ensures secure, scalable applications.",
     socials: { github: "#", linkedin: "#", twitter: "#" },
   },
   {
     name: "Jude Hunja",
     role: "Project Manager",
-    image: "/images/team-2.jpg",
+    image: "/images/team/jude.jpeg",
     bio: "Leads project planning and execution, coordinates team activities, tracks progress, manages timelines, and ensures project delivery.",
     socials: { linkedin: "#", twitter: "#" },
   },
