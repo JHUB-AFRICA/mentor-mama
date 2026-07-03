@@ -53,8 +53,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements/dev.txt
 
-      - name: Run accounts tests first
-        run: pytest apps/accounts -v
-
-      - name: Run remaining tests
-        run: pytest
+      - name: Run tests
+        run: pytest -v
