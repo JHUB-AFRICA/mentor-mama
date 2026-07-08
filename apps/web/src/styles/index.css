@@ -149,3 +149,12 @@
     margin-right: auto;
   }
 }
+
+/* Optimize GPU compositing for scroll reveal animations and prevent Chrome Android rendering glitches */
+[data-reveal] {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+

@@ -261,7 +261,7 @@ function Team() {
             <div
               key={m.name}
               data-reveal
-              className="bg-white border border-sage/20 rounded-refined p-6 shadow-editorial hover:shadow-editorial-hover hover:border-sage/40 transition-all duration-300 flex flex-col justify-between h-auto md:h-full group"
+              className="bg-white border border-sage/20 rounded-refined p-6 shadow-editorial hover:shadow-editorial-hover hover:border-sage/40 transition-[box-shadow,border-color] duration-300 flex flex-col justify-between h-auto md:h-full group"
             >
               <div>
                 <div className="overflow-hidden rounded-refined mb-5 shadow-sm aspect-square relative bg-cream">
