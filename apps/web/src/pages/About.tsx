@@ -225,7 +225,7 @@ const team = [
   {
     name: "Branice Nafula",
     role: "Frontend Developer",
-    image: "/images/team-3.jpg",
+    image: "/images/team/branice.jpeg",
     bio: "Builds intuitive and responsive user interfaces, implements features, integrates APIs, and optimizes user experience on web and mobile platforms.",
     socials: { github: "#", linkedin: "#" },
   },
