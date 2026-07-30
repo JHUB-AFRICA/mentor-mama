@@ -197,7 +197,7 @@ const team = [
   {
     name: "Dr. Carolyne Kerubo Nyariki",
     role: "Lead Research Initiator",
-    image: "/images/testimonial-2.jpg",
+    image: "/images/team/carolyne.png",
     bio: "Lecturer and Researcher at JKUAT School of Nursing. Proposed the foundational research basis for structured digital placement mentorship in maternal healthcare.",
     socials: { linkedin: "#", twitter: "" },
   },
@@ -232,7 +232,7 @@ const team = [
   {
     name: "Michelle Mwangi",
     role: "UI/UX Designer",
-    image: "/images/team-4.jpg",
+    image: "/images/team/michelle.jpeg",
     bio: "Designs user-centered experiences, creates wireframes and prototypes, builds the design system, and ensures brand consistency and usability.",
     socials: { linkedin: "#", twitter: "#" },
   },
