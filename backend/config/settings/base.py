@@ -34,16 +34,24 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "corsheaders",
-    "apps.accounts",
+    # Layer 0 — platform
     "apps.core",
+    "apps.identity",
+    # Layer 1 — organisational and capability
+    "apps.institutions",
     "apps.facilities",
-    "apps.training",
+    "apps.learning",
+    "apps.content",
+    # Layer 2 — core domain
+    "apps.placements",
+    # Layer 3 — placement-bound children
     "apps.induction",
-    "apps.sessions",
-    "apps.feedback",
-    "apps.escalations",
-    "apps.dashboards",
-    "apps.content_library",
+    "apps.mentorship",
+    "apps.assessments",
+    "apps.safeguarding",
+    # Layer 5 — read side and leaves
+    "apps.analytics",
+    "apps.notifications",
 ]
 
 MIDDLEWARE = [
@@ -79,10 +87,13 @@ TEMPLATES = [
     },
 ]
 
+# PostgreSQL in every environment, including local dev and tests (ADR 0009):
+# SQLite cannot express our partial indexes, EXCLUDE constraints or triggers, so
+# a green SQLite run would prove nothing.
 DATABASES = {
     "default": env.db(
         var="DATABASE_URL",
-        default="sqlite:///" + str(BASE_DIR / "db.sqlite3"),
+        default="postgres://mentormama:mentormama@localhost:5433/mentormama",
     )
 }
 
@@ -114,10 +125,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-AUTH_USER_MODEL = "accounts.User"
+DEFAULT_CHARSET = "utf-8"
+
+AUTH_USER_MODEL = "identity.User"
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Domain errors and constraint violations are translated here (DB-01, ERR-01).
+    "EXCEPTION_HANDLER": "apps.core.http.domain_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],

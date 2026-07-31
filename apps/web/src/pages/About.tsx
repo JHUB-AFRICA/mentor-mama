@@ -27,7 +27,7 @@ function AboutHero() {
 
       <div ref={ref} className="relative z-20 content-max-width container-padding pt-16 w-full">
         <div className="max-w-2xl">
-          <span data-reveal className="text-overline text-gold">About Us</span>
+          <span data-reveal className="text-overline text-sage">About Us</span>
           <h1 data-reveal className="text-h1 text-white mt-4">
             Our mission is simple
           </h1>
@@ -170,7 +170,7 @@ function Values() {
     <section className="bg-sage/5 relative z-10 border-b border-cream-dark/10">
       <div ref={ref} className="content-max-width container-padding section-padding">
         <div data-reveal className="mb-16 max-w-lg">
-          <span className="text-overline text-gold">Our Values</span>
+          <span className="text-overline text-sage">Our Values</span>
           <h2 className="text-h2 text-navy mt-3">What drives our design</h2>
         </div>
 

@@ -1,0 +1,7 @@
+<!-- MentorMAMA — favicon — 16px grid, mark only
+     Vectorised from the raster master; colours corrected to the documented palette.
+     See README.md in this folder for provenance and verification. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="MentorMAMA">
+  <path d="M7.24 14.45C4.78 14.35 2.74 13.07 1.66 10.94C1.33 10.3 1.17 9.76 1.06 8.93C1.02 8.66 1.0 2.46 1.04 2.29C1.21 1.46 2.35 1.27 2.72 2.0C2.83 2.22 2.82 1.94 2.83 5.3C2.84 8.01 2.85 8.4 2.87 8.59C3.22 11.15 5.33 12.81 8.03 12.65C9.99 12.54 11.54 11.76 12.72 10.29C13.07 9.85 13.3 9.46 13.6 8.8C13.92 8.11 14.86 8.22 14.98 8.97C15.08 9.56 14.13 11.18 13.09 12.21C11.7 13.59 9.95 14.34 7.91 14.45C7.59 14.47 7.51 14.47 7.24 14.45Z" fill="#0D1B33"/>
+  <circle cx="8.11" cy="8.72" r="1.9" fill="none" stroke="#1D8C8C" stroke-width="1.04"/>
+</svg>

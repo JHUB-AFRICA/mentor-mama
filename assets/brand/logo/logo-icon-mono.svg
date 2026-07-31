@@ -1,0 +1,7 @@
+<!-- MentorMAMA — icon, monochrome — inherits currentColor
+     Vectorised from the raster master; colours corrected to the documented palette.
+     See README.md in this folder for provenance and verification. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MentorMAMA">
+  <path d="M232.24 458.86C154.91 455.61 90.63 415.19 56.72 348.53C46.49 328.41 41.41 311.38 37.86 285.35C36.67 276.63 36.0 81.9 37.15 76.4C42.53 50.47 78.37 44.45 90.06 67.52C93.59 74.48 93.27 65.49 93.63 171.3C93.92 256.45 94.06 268.54 94.87 274.51C105.79 354.89 172.15 407.22 256.83 402.22C318.61 398.58 367.13 374.11 404.2 327.94C415.33 314.06 422.53 302.0 432.03 281.29C442.07 259.39 471.47 262.92 475.44 286.49C478.55 304.89 448.69 356.0 415.9 388.41C372.26 431.55 317.25 455.3 253.21 458.66C243.1 459.19 240.67 459.22 232.24 458.86Z" fill="currentColor"/>
+  <circle cx="259.42" cy="278.72" r="59.63" fill="none" stroke="currentColor" stroke-width="32.59"/>
+</svg>

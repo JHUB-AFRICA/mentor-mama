@@ -18,7 +18,7 @@ export default function Footer() {
           {/* Column 1: Logo & Mission Statement */}
           <div className="space-y-6">
             <Link to="/" className="inline-block">
-              <Logo variant="dark" size={36} />
+              <Logo lockup="stacked" tone="white" height={92} showTagline />
             </Link>
             <p className="text-[13px] text-white/40 leading-relaxed max-w-[240px]">
               A digital clinical mentorship toolkit supporting midwives and nursing students for safer maternity care placement.

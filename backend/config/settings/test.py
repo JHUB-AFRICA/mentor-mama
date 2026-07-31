@@ -1,20 +1,11 @@
-"""Test Django settings for MentorMAMA backend."""
+"""Test settings. PostgreSQL, per ADR 0009 — never SQLite."""
 
-from .base import *
+from .base import *  # noqa: F403
 
-DEBUG = True
+DEBUG = False
 
 SECRET_KEY = "test-secret-key-not-for-production"
 
 ALLOWED_HOSTS = ["*"]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
-    }
-}
-
-PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.MD5PasswordHasher",
-]
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

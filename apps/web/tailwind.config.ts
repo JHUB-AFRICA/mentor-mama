@@ -62,7 +62,7 @@ export default {
         },
       },
       fontFamily: {
-        display: ["Playfair Display", "Georgia", "serif"],
+        display: ["Manrope", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
         body: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
       borderRadius: {

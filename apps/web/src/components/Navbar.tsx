@@ -34,7 +34,7 @@ export default function Navbar() {
         <div className="content-max-width container-padding flex items-center justify-between h-18 lg:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center group">
-            <Logo variant="light" size={28} />
+            <Logo lockup="horizontal" tone="navy" height={32} accentWord />
           </Link>
 
           {/* Desktop Nav */}
@@ -101,12 +101,11 @@ export default function Navbar() {
             </Link>
           ))}
           <div
-            className="flex flex-col items-center gap-5 mt-6"
+            className="flex flex-col items-center gap-5 mt-6 transition-all duration-500"
             style={{
               transitionDelay: mobileOpen ? "360ms" : "0ms",
               opacity: mobileOpen ? 1 : 0,
               transform: mobileOpen ? "translateY(0)" : "translateY(16px)",
-              transition: "all 0.5s ease",
             }}
           >
             <Link

@@ -1,60 +1,156 @@
+import {
+  BRAND_ACCENT,
+  BRAND_INK,
+  LOCKUP,
+  MARK_BOX,
+  MARK_PATH,
+  MARK_RING,
+  TAGLINE_BOX,
+  TAGLINE_PATH,
+  WORDMARK_BOX,
+  WORDMARK_MAMA_PATH,
+  WORDMARK_MENTOR_PATH,
+  WORDMARK_PATH,
+} from "./brand/marks";
+
+type Lockup = "horizontal" | "stacked" | "icon";
+type Tone = "navy" | "white" | "mono";
+
 interface LogoProps {
   className?: string;
-  size?: number;
-  iconOnly?: boolean;
-  variant?: "light" | "dark";
+  /** Rendered height in px. The lockup scales from this. */
+  height?: number;
+  lockup?: Lockup;
+  tone?: Tone;
+  /** Only meaningful for the stacked lockup — the master pairs the tagline there. */
+  showTagline?: boolean;
+  /**
+   * Render "MAMA" in the accent colour. A deliberate deviation from the master
+   * artwork, approved for UI use — see assets/brand/logo/README.md.
+   */
+  accentWord?: boolean;
+  /** Accessible name. Pass "" when an adjacent link already names it. */
+  title?: string;
 }
 
-export default function Logo({ className = "", size = 32, iconOnly = false, variant = "light" }: LogoProps) {
-  // Midnight Navy vs White for the outer curve
-  const outerColor = variant === "light" ? "#0D1B33" : "#FFFFFF"; 
-  // Guiding Teal (Ocean Teal) for the inner ring
-  const innerColor = "#1D8C8C"; 
+/**
+ * The MentorMAMA logo, drawn from the vectorised master artwork in
+ * ./brand/marks. Nothing here is redrawn or approximated: the mark and the
+ * logotype are the master outlines, and the colours are the documented palette.
+ *
+ * Guidelines constraints encoded here:
+ *  - the logotype is a single ink colour, never two-tone (§05)
+ *  - the mark never renders below 24px (§04) — warns in development
+ *  - the tagline is only paired in the stacked lockup (§05)
+ */
+export default function Logo({
+  className = "",
+  height = 32,
+  lockup = "horizontal",
+  tone = "navy",
+  showTagline = false,
+  accentWord = false,
+  title = "MentorMAMA",
+}: LogoProps) {
+  const ink = tone === "white" ? "#FFFFFF" : tone === "mono" ? "currentColor" : BRAND_INK;
+  const accent = tone === "mono" ? "currentColor" : BRAND_ACCENT;
 
-  return (
-    <div className={`flex items-center gap-2.5 ${className}`}>
+  const a11y = title
+    ? ({ role: "img", "aria-label": title } as const)
+    : ({ "aria-hidden": true, focusable: "false" } as const);
+
+  if (lockup === "icon") {
+    if (process.env.NODE_ENV !== "production" && height < LOCKUP.minIconPx) {
+      console.warn(
+        `Logo: the mark should not render below ${LOCKUP.minIconPx}px (got ${height}px) — ` +
+          "the learner circle loses legibility. Brand Guidelines §04.",
+      );
+    }
+    return (
       <svg
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="flex-shrink-0 animate-fade-in"
+        className={className}
+        width={(height * MARK_BOX.width) / MARK_BOX.height}
+        height={height}
+        viewBox={`0 0 ${MARK_BOX.width} ${MARK_BOX.height}`}
+        {...a11y}
       >
-        {/* Outer Curve (U-shape) - precisely centered on 100x100 grid */}
-        <path
-          d="M14 11V53C14 72.88 30.12 89 50 89C69.88 89 86 72.88 86 53V45"
-          stroke={outerColor}
-          strokeWidth="11"
-          strokeLinecap="round"
-          className="transition-colors duration-300"
-        />
-        {/* Inner Ring - nested centered circle */}
-        <circle
-          cx="50"
-          cy="53"
-          r="14.5"
-          stroke={innerColor}
-          strokeWidth="9"
-          className="transition-colors duration-300"
-        />
+        <Mark ink={ink} accent={accent} />
       </svg>
-      {!iconOnly && (
-        <div className="flex flex-col justify-center">
-          <span
-            className={`font-display font-semibold tracking-tight leading-none ${
-              variant === "light" ? "text-navy text-[17px]" : "text-white text-[19px]"
-            }`}
-          >
-            Mentor<span className="text-sage">MAMA</span>
-          </span>
-          {variant === "dark" && (
-            <span className="text-[9px] font-medium text-sage tracking-wider mt-1 uppercase">
-              Better mentorship. Better outcomes.
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+    );
+  }
+
+  if (lockup === "stacked") {
+    const { markHeight, gapToWordmark } = LOCKUP.stacked;
+    const markWidth = (markHeight * MARK_BOX.width) / MARK_BOX.height;
+    const wordTop = markHeight + gapToWordmark;
+    const boxHeight =
+      wordTop + (showTagline ? TAGLINE_BOX.top + TAGLINE_BOX.height : WORDMARK_BOX.capHeight);
+    return (
+      <svg
+        className={className}
+        width={(height * WORDMARK_BOX.width) / boxHeight}
+        height={height}
+        viewBox={`0 0 ${WORDMARK_BOX.width} ${boxHeight}`}
+        {...a11y}
+      >
+        <g
+          transform={`translate(${(WORDMARK_BOX.width - markWidth) / 2} 0) scale(${
+            markHeight / MARK_BOX.height
+          })`}
+        >
+          <Mark ink={ink} accent={accent} />
+        </g>
+        <g transform={`translate(0 ${wordTop})`}>
+          <Wordmark ink={ink} accent={accent} accentWord={accentWord} />
+          {showTagline && <path d={TAGLINE_PATH} fill={accent} />}
+        </g>
+      </svg>
+    );
+  }
+
+  const { markHeight, gap } = LOCKUP.horizontal;
+  const markWidth = (markHeight * MARK_BOX.width) / MARK_BOX.height;
+  const boxWidth = markWidth + gap + WORDMARK_BOX.width;
+  return (
+    <svg
+      className={className}
+      width={(height * boxWidth) / markHeight}
+      height={height}
+      viewBox={`0 0 ${boxWidth} ${markHeight}`}
+      {...a11y}
+    >
+      <g transform={`scale(${markHeight / MARK_BOX.height})`}>
+        <Mark ink={ink} accent={accent} />
+      </g>
+      <g transform={`translate(${markWidth + gap} ${(markHeight - WORDMARK_BOX.capHeight) / 2})`}>
+        <Wordmark ink={ink} accent={accent} accentWord={accentWord} />
+      </g>
+    </svg>
+  );
+}
+
+function Wordmark({ ink, accent, accentWord }: { ink: string; accent: string; accentWord: boolean }) {
+  if (!accentWord) return <path d={WORDMARK_PATH} fill={ink} />;
+  return (
+    <>
+      <path d={WORDMARK_MENTOR_PATH} fill={ink} />
+      <path d={WORDMARK_MAMA_PATH} fill={accent} />
+    </>
+  );
+}
+
+function Mark({ ink, accent }: { ink: string; accent: string }) {
+  return (
+    <>
+      <path d={MARK_PATH} fill={ink} />
+      <circle
+        cx={MARK_RING.cx}
+        cy={MARK_RING.cy}
+        r={MARK_RING.r}
+        fill="none"
+        stroke={accent}
+        strokeWidth={MARK_RING.strokeWidth}
+      />
+    </>
   );
 }

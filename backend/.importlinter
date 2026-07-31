@@ -1,0 +1,306 @@
+# Module boundary contracts (MA-01 .. MA-11). Run: lint-imports
+#
+# `core` is the platform layer and is public in full (audit, outbox, errors,
+# idempotency, http). Every domain module below exposes only api.py and
+# events.py; its internals are private to it.
+[importlinter]
+root_packages =
+    apps
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Module layers point downward only
+type = layers
+layers =
+    apps.analytics | apps.notifications
+    apps.induction | apps.mentorship | apps.assessments | apps.safeguarding
+    apps.placements
+    apps.institutions | apps.facilities | apps.learning | apps.content
+    apps.identity
+    apps.core
+
+[importlinter:contract:private-institutions]
+name = institutions internals are private to institutions
+type = forbidden
+source_modules =
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.institutions.models
+    apps.institutions.services
+    apps.institutions.state_machine
+    apps.institutions.selectors
+    apps.institutions.blockers
+    apps.institutions.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-facilities]
+name = facilities internals are private to facilities
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.facilities.models
+    apps.facilities.services
+    apps.facilities.state_machine
+    apps.facilities.selectors
+    apps.facilities.blockers
+    apps.facilities.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-learning]
+name = learning internals are private to learning
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.learning.models
+    apps.learning.services
+    apps.learning.state_machine
+    apps.learning.selectors
+    apps.learning.blockers
+    apps.learning.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-content]
+name = content internals are private to content
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.content.models
+    apps.content.services
+    apps.content.state_machine
+    apps.content.selectors
+    apps.content.blockers
+    apps.content.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-placements]
+name = placements internals are private to placements
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.placements.models
+    apps.placements.services
+    apps.placements.state_machine
+    apps.placements.selectors
+    apps.placements.blockers
+    apps.placements.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-induction]
+name = induction internals are private to induction
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.induction.models
+    apps.induction.services
+    apps.induction.state_machine
+    apps.induction.selectors
+    apps.induction.blockers
+    apps.induction.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-mentorship]
+name = mentorship internals are private to mentorship
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.mentorship.models
+    apps.mentorship.services
+    apps.mentorship.state_machine
+    apps.mentorship.selectors
+    apps.mentorship.blockers
+    apps.mentorship.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-assessments]
+name = assessments internals are private to assessments
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.safeguarding
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.assessments.models
+    apps.assessments.services
+    apps.assessments.state_machine
+    apps.assessments.selectors
+    apps.assessments.blockers
+    apps.assessments.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-safeguarding]
+name = safeguarding internals are private to safeguarding
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.analytics
+    apps.notifications
+forbidden_modules =
+    apps.safeguarding.models
+    apps.safeguarding.services
+    apps.safeguarding.state_machine
+    apps.safeguarding.selectors
+    apps.safeguarding.blockers
+    apps.safeguarding.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-analytics]
+name = analytics internals are private to analytics
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.notifications
+forbidden_modules =
+    apps.analytics.models
+    apps.analytics.services
+    apps.analytics.state_machine
+    apps.analytics.selectors
+    apps.analytics.blockers
+    apps.analytics.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True
+
+[importlinter:contract:private-notifications]
+name = notifications internals are private to notifications
+type = forbidden
+source_modules =
+    apps.institutions
+    apps.facilities
+    apps.learning
+    apps.content
+    apps.placements
+    apps.induction
+    apps.mentorship
+    apps.assessments
+    apps.safeguarding
+    apps.analytics
+forbidden_modules =
+    apps.notifications.models
+    apps.notifications.services
+    apps.notifications.state_machine
+    apps.notifications.selectors
+    apps.notifications.blockers
+    apps.notifications.views
+# Public surface: api.py, events.py, and ports.py (a port exists to be
+# implemented by a higher layer, so it must be importable — see ADR 0002).
+# api.py may use its own internals; only direct reaches across the boundary count.
+allow_indirect_imports = True

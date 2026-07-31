@@ -25,7 +25,7 @@ function CommunityHero() {
 
       <div ref={ref} className="relative z-20 content-max-width container-padding pt-16 w-full">
         <div className="max-w-2xl">
-          <span data-reveal className="text-overline text-gold">Community</span>
+          <span data-reveal className="text-overline text-sage">Community</span>
           <h1 data-reveal className="text-h1 text-white mt-3">
             Connected by purpose, supported by peers
           </h1>
@@ -54,7 +54,7 @@ const communityFeatures = [
   {
     icon: Users,
     overline: "Mentorship Matching",
-    overlineColor: "text-gold",
+    overlineColor: "text-sage",
     bg: "bg-sage/5",
     title: "Find your perfect mentor",
     description:

@@ -4,7 +4,16 @@ import prettier from "eslint-config-prettier";
 
 export default [
   {
-    ignores: ["dist/**", "build/**", "node_modules/**", ".next/**", "out/**"],
+    // .vite holds Vite's pre-bundled dependency cache — third-party output that
+    // is not ours to lint, and which otherwise buries real findings.
+    ignores: [
+      "dist/**",
+      "build/**",
+      "node_modules/**",
+      ".next/**",
+      "out/**",
+      ".vite/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

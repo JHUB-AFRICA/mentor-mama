@@ -1,5 +1,15 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
+import {
+  BRAND_ACCENT,
+  MARK_BOX,
+  MARK_PATH,
+  MARK_RING,
+  TAGLINE_PATH,
+  WORDMARK_BOX,
+  WORDMARK_PATH,
+  TAGLINE_BOX,
+} from "./brand/marks";
 
 interface PreloaderProps {
   onComplete: () => void;
@@ -17,14 +27,16 @@ export default function Preloader({ onComplete }: PreloaderProps) {
   const wave2Ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Precise SVG path/circle dimensions
-    const pathLength = 165;
-    const circleLength = 92;
+    // Measured from the real artwork rather than hardcoded: the mark is a filled
+    // outline, so we trace its contour and then fade the fill in behind it.
+    const pathLength = pathRef.current?.getTotalLength() ?? 0;
+    const circleLength = 2 * Math.PI * MARK_RING.r;
 
     // Set initial stroke dasharray & offsets for clean vector drawing
     gsap.set(pathRef.current, {
       strokeDasharray: pathLength,
       strokeDashoffset: pathLength,
+      fill: "rgba(255,255,255,0)",
     });
     
     gsap.set(circleRef.current, {
@@ -59,9 +71,9 @@ export default function Preloader({ onComplete }: PreloaderProps) {
         duration: 0.8,
         ease: "power3.out",
       })
-      .fromTo(textRef.current, 
-        { letterSpacing: "0.22em" },
-        { letterSpacing: "0.02em", duration: 1.1, ease: "power2.out" },
+      .fromTo(textRef.current,
+        { scale: 0.96 },
+        { scale: 1, duration: 1.1, ease: "power2.out", transformOrigin: "center" },
         "-=0.8"
       )
       .to(containerRef.current, {
@@ -114,12 +126,18 @@ export default function Preloader({ onComplete }: PreloaderProps) {
       },
     });
 
-    // 1. Draw outer U-curve
+    // 1. Trace the mark's contour
     introTl.to(pathRef.current, {
       strokeDashoffset: 0,
       duration: 1.4,
       ease: "power3.inOut",
     })
+    // 1b. Settle into the solid mark
+    .to(pathRef.current, {
+      fill: "rgba(255,255,255,1)",
+      duration: 0.5,
+      ease: "power2.out",
+    }, "-=0.35")
     // 2. Draw inner Teal circle
     .to(circleRef.current, {
       strokeDashoffset: 0,
@@ -159,43 +177,45 @@ export default function Preloader({ onComplete }: PreloaderProps) {
           className="absolute w-24 h-24 rounded-full border border-sage/20 opacity-0 scale-50 pointer-events-none -top-2 left-1/2 -translate-x-1/2" 
         />
 
-        {/* Animated Vector Logo Icon */}
+        {/* The master mark — traced, then filled (see ./brand/marks) */}
         <svg
           ref={svgRef}
-          width="80"
-          height="80"
-          viewBox="0 0 100 100"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
+          width="88"
+          height={(88 * MARK_BOX.height) / MARK_BOX.width}
+          viewBox={`0 0 ${MARK_BOX.width} ${MARK_BOX.height}`}
           className="mb-8 drop-shadow-[0_0_12px_rgba(29,140,140,0.35)]"
+          aria-hidden
         >
-          {/* Outer Curve */}
           <path
             ref={pathRef}
-            d="M14 11V53C14 72.88 30.12 89 50 89C69.88 89 86 72.88 86 53V45"
+            d={MARK_PATH}
+            fill="rgba(255,255,255,0)"
             stroke="#FFFFFF"
-            strokeWidth="11"
-            strokeLinecap="round"
+            strokeWidth="14"
           />
-          {/* Inner Ring */}
           <circle
             ref={circleRef}
-            cx="50"
-            cy="53"
-            r="14.5"
-            stroke="#1D8C8C"
-            strokeWidth="9"
+            cx={MARK_RING.cx}
+            cy={MARK_RING.cy}
+            r={MARK_RING.r}
+            fill="none"
+            stroke={BRAND_ACCENT}
+            strokeWidth={MARK_RING.strokeWidth}
           />
         </svg>
 
-        {/* Wordmark and Tagline */}
-        <div ref={textRef} className="space-y-4">
-          <h2 className="font-display font-semibold text-2xl tracking-wide leading-none text-white uppercase">
-            Mentor<span className="text-sage">MAMA</span>
-          </h2>
-          <p className="text-[9px] font-medium text-sage tracking-[0.25em] uppercase">
-            Better mentorship. Better outcomes.
-          </p>
+        {/* Logotype and tagline — master outlines, never re-set as live type */}
+        <div ref={textRef}>
+          <svg
+            width="230"
+            height={(230 * (TAGLINE_BOX.top + TAGLINE_BOX.height)) / WORDMARK_BOX.width}
+            viewBox={`0 0 ${WORDMARK_BOX.width} ${TAGLINE_BOX.top + TAGLINE_BOX.height}`}
+            role="img"
+            aria-label="MentorMAMA — Better mentorship. Better outcomes."
+          >
+            <path d={WORDMARK_PATH} fill="#FFFFFF" />
+            <path d={TAGLINE_PATH} fill={BRAND_ACCENT} />
+          </svg>
         </div>
       </div>
     </div>

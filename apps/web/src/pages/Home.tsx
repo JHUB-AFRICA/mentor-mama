@@ -132,7 +132,7 @@ function Hero() {
           <div className="lg:col-span-5 xl:col-span-6 hidden lg:block">
             <div
               ref={imageContainerRef}
-              className="relative overflow-hidden rounded-refined border border-gold/15 shadow-editorial-hover"
+              className="relative overflow-hidden rounded-refined border border-cream-dark shadow-editorial-hover"
             >
               <img
                 src="/images/two-african-american-pharmacist-working-drugstore-hospital-pharmacy-african-healthcare.jpg"

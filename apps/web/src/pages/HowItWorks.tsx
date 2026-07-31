@@ -26,7 +26,7 @@ function HowItWorksHero() {
 
       <div ref={ref} className="relative z-20 content-max-width container-padding pt-16 w-full">
         <div className="max-w-2xl">
-          <span data-reveal className="text-overline text-gold">How It Works</span>
+          <span data-reveal className="text-overline text-sage">How It Works</span>
           <h1 data-reveal className="text-h1 text-white mt-3">
             Structured for consistency and impact
           </h1>
@@ -126,7 +126,7 @@ const mainFeatures = [
   },
   {
     overline: "Expert Mentorship",
-    overlineColor: "text-gold",
+    overlineColor: "text-sage",
     bg: "bg-sage/5",
     title: "Learn from experienced professionals",
     description:

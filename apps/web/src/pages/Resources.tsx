@@ -24,7 +24,7 @@ function ResourcesHero() {
 
       <div className="relative z-20 content-max-width container-padding pt-16 w-full">
         <div className="max-w-2xl">
-          <span className="text-overline text-gold">Resources</span>
+          <span className="text-overline text-sage">Resources</span>
           <h1 className="text-h1 text-white mt-3">
             Learning resources for every stage
           </h1>
@@ -105,7 +105,7 @@ function Spotlight() {
     <section className="bg-sage/5 relative z-10 border-b border-cream-dark/10">
       <div ref={ref} className="content-max-width container-padding section-padding">
         <div data-reveal className="mb-10">
-          <span className="text-overline text-gold">Featured</span>
+          <span className="text-overline text-sage">Featured</span>
           <h2 className="text-h2 text-navy mt-2">Resource Spotlight</h2>
         </div>
         <div data-reveal className="bg-white border border-sage/20 rounded-refined overflow-hidden shadow-editorial">
@@ -118,7 +118,7 @@ function Spotlight() {
               />
             </div>
             <div className="p-8 lg:p-10 flex flex-col justify-center">
-              <span className="text-overline text-gold">Most Popular</span>
+              <span className="text-overline text-sage">Most Popular</span>
               <h3 className="text-h3 text-navy mt-2 mb-3">
                 Maternal Emergency Protocols
               </h3>
