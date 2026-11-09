@@ -1,0 +1,80 @@
+import { expect, test } from "@playwright/test";
+import { signInAsProgramAdmin } from "./helpers/program-admin-auth";
+
+test("Phase 2: create institution, facility contacts, and a facility-scoped ward", async ({ page }) => {
+  test.setTimeout(90_000);
+  test.skip(!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD || !process.env.E2E_TOTP_SECRET);
+  await signInAsProgramAdmin(page);
+  await page.goto("/admin/settings?section=directory");
+  await expect(page.getByRole("heading", { name: "Directory" })).toBeVisible();
+  const suffix = Date.now().toString();
+  const institutionName = `Acceptance Institution ${suffix}`;
+  const facilityName = `Acceptance Facility ${suffix}`;
+  const wardName = `Acceptance Ward ${suffix}`;
+  const institutionEmail = `institution-${suffix}@example.test`;
+  const facilityEmail = `facility-${suffix}@example.test`;
+
+  await page.getByRole("button", { name: "Add institution", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: "Add institution" });
+  await dialog.locator('input[name="name"]').fill(institutionName);
+  await dialog.locator('input[name="type"]').fill("Acceptance training institution");
+  await dialog.locator('input[name="county"]').fill("Nairobi");
+  await dialog.locator('input[name="contact_person"]').fill("Acceptance Contact");
+  await dialog.locator('input[name="contact_email"]').fill(institutionEmail);
+  await dialog.locator('input[name="contact_phone"]').fill("+254700000101");
+  await dialog.getByRole("button", { name: "Add institution", exact: true }).click();
+  const institutionRow = page.getByRole("row").filter({ hasText: institutionName });
+  await expect(institutionRow).toBeVisible();
+  await institutionRow.getByRole("button", { name: "View details" }).click();
+  await expect(page.getByRole("heading", { name: institutionName, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: institutionEmail })).toBeVisible();
+  const institutionUrl = page.url();
+  await page.getByRole("button", { name: "Archive record" }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Archive record" }).click();
+  await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/admin/settings?section=directory");
+  await page.getByRole("button", { name: "Facilities" }).click();
+  await page.getByRole("button", { name: "Add facility" }).click();
+  dialog = page.getByRole("dialog", { name: "Add facility" });
+  await dialog.locator('input[name="name"]').fill(facilityName);
+  await dialog.locator('input[name="level"]').fill("Acceptance facility");
+  await dialog.locator('input[name="county"]').fill("Nairobi");
+  await dialog.locator('input[name="maternity_unit_name"]').fill("Acceptance maternity unit");
+  await dialog.locator('input[name="contact_person"]').fill("Facility Acceptance Contact");
+  await dialog.locator('input[name="contact_email"]').fill(facilityEmail);
+  await dialog.locator('input[name="contact_phone"]').fill("+254700000102");
+  await dialog.getByRole("button", { name: "Add facility", exact: true }).click();
+  const facilityRow = page.getByRole("row").filter({ hasText: facilityName });
+  await expect(facilityRow).toBeVisible();
+  await facilityRow.getByRole("button", { name: "View details" }).click();
+  await expect(page.getByRole("heading", { name: facilityName, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: facilityEmail })).toBeVisible();
+  const facilityUrl = page.url();
+  const facilityId = new URL(facilityUrl).searchParams.get("record_id");
+  expect(facilityId).toBeTruthy();
+
+  await page.getByRole("button", { name: "Add ward" }).click();
+  dialog = page.getByRole("dialog", { name: "Add ward" });
+  await expect(dialog.locator('select[name="facility_id"]')).toHaveValue(facilityId!);
+  await dialog.locator('input[name="name"]').fill(wardName);
+  await dialog.locator('input[name="max_students"]').fill("3");
+  await dialog.locator('input[name="shift_pattern"]').fill("Acceptance day shift");
+  await dialog.getByRole("button", { name: "Add ward" }).click();
+  await expect(page.getByText(wardName, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: `View ${wardName} details` }).click();
+  await expect(page.getByRole("heading", { name: wardName, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capacity and availability" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Archive ward" }).click();
+  await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible();
+  await page.goto(facilityUrl);
+  await page.getByRole("button", { name: "Archive record" }).click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/currently has 0 active wards and 0 occupying placements/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Archive record" }).click();
+  await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible();
+
+  expect(institutionUrl).toContain("record_id=");
+});

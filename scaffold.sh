@@ -34,7 +34,7 @@ mkdir -p assets/brand/{logo,colors,fonts}
 mkdir -p assets/photography
 
 # --- docker ---
-mkdir -p docker/backend docker/web docker/portal docker/nginx
+mkdir -p docker/backend docker/web docker/portal docker/caddy docker/prometheus docker/grafana/provisioning/datasources docker/grafana/provisioning/dashboards docker/grafana/dashboards
 
 # --- placeholder files so empty dirs survive git ---
 find apps packages backend docs assets docker -type d -empty -exec touch {}/.gitkeep \;
@@ -64,7 +64,7 @@ touch backend/config/urls.py backend/config/asgi.py backend/config/wsgi.py
 touch backend/config/settings/base.py backend/config/settings/dev.py backend/config/settings/prod.py backend/config/settings/test.py
 touch backend/requirements/base.txt backend/requirements/dev.txt backend/requirements/prod.txt
 
-touch docker/backend/Dockerfile docker/web/Dockerfile docker/portal/Dockerfile docker/nginx/nginx.conf
+touch docker/backend/Dockerfile docker/web/Dockerfile docker/portal/Dockerfile docker/Caddyfile docker/caddy/static.Caddyfile docker/prometheus/prometheus.yml docker/prometheus/alerts.yml
 
 touch docs/onboarding/CONTRIBUTING.md
 

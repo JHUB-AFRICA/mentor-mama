@@ -1,6 +1,14 @@
 """The hospital side: facilities and wards."""
 
 from django.db import models
+from PIL import Image
+from apps.core.validators import validate_partner_logo
+
+
+def partner_logo_upload_to(instance, filename):
+    with Image.open(instance.logo.file) as image:
+        extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[image.format]
+    return f"directory/facilities/{instance.id}/logo.{extension}"
 
 from apps.core.models import BaseModel
 
@@ -12,6 +20,9 @@ class Facility(BaseModel):
     level = models.CharField(max_length=60, blank=True, default="")
     maternity_unit_name = models.CharField(max_length=200, blank=True, default="")
     contact_person = models.CharField(max_length=120, blank=True, default="")
+    contact_email = models.EmailField(blank=True, default="")
+    contact_phone = models.CharField(max_length=32, blank=True, default="")
+    logo = models.ImageField(upload_to=partner_logo_upload_to, blank=True, null=True, validators=[validate_partner_logo])
     archived_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

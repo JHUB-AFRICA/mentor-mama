@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
@@ -19,9 +19,9 @@ export function Button({
     "inline-flex items-center justify-center rounded-lg font-display font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-teal focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
   const sizes = {
-    sm: "px-4 py-2 text-caption",
-    md: "px-5 py-2.5 text-caption",
-    lg: "px-6 py-3 text-body",
+    sm: "min-h-9 px-4 py-2 text-caption",
+    md: "min-h-11 px-5 py-2.5 text-sm",
+    lg: "min-h-12 px-6 py-3 text-body",
   };
 
   const variants = {
@@ -33,8 +33,9 @@ export function Button({
   const classes = `${baseStyles} ${sizes[size]} ${variants[variant]} ${className}`;
 
   if (to) {
+    const anchorProps = props as AnchorHTMLAttributes<HTMLAnchorElement>;
     return (
-      <a href={to} className={classes} {...(props as any)}>
+      <a href={to} className={classes} {...anchorProps}>
         {children}
       </a>
     );

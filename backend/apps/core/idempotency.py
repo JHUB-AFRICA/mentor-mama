@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from django.db import IntegrityError, transaction
+
 from apps.core.models import IdempotencyKey
 
 
@@ -20,17 +22,28 @@ class Replayed(Exception):
 
 
 def claim(*, command_id: UUID, actor, command_type: str) -> IdempotencyKey:
-    """Claim a command id, or raise Replayed with the original result."""
-    existing = IdempotencyKey.objects.filter(command_id=command_id).first()
-    if existing is not None:
-        if existing.command_type != command_type:
+    """Claim a command id safely under concurrent retries.
+
+    The primary key is the arbiter.  The savepoint is essential: PostgreSQL
+    marks the surrounding transaction failed after a unique violation, so the
+    winner's row can only be read after rolling back this small inner block.
+    """
+    try:
+        with transaction.atomic():
+            return IdempotencyKey.objects.create(
+                command_id=command_id, actor=actor, command_type=command_type
+            )
+    except IntegrityError:
+        existing = IdempotencyKey.objects.get(command_id=command_id)
+        if existing.actor_id != actor.id or existing.command_type != command_type:
             from apps.core.errors import IdempotencyKeyReused
 
             raise IdempotencyKeyReused()
+        if existing.result_ref is None:
+            from apps.core.errors import CommandInProgress
+
+            raise CommandInProgress()
         raise Replayed(existing.result_ref)
-    return IdempotencyKey.objects.create(
-        command_id=command_id, actor=actor, command_type=command_type
-    )
 
 
 def record_result(key: IdempotencyKey, result_id: UUID) -> None:

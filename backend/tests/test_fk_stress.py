@@ -86,7 +86,7 @@ def test_placement_cannot_be_deleted_while_children_reference_it(active_placemen
     mentorship_services.log_session(
         mentorship_services.LogSession(
             placement_id=active_placement.id, session_date=dt.date(2026, 7, 10),
-            session_type="debrief", topics=("communication",),
+            session_type="debrief", topics=("communication",), what_was_covered="Communication practice",
         ), actor=mentor,
     )
     with pytest.raises(ProtectedError):

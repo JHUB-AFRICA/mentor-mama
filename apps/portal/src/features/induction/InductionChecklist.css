@@ -1,0 +1,99 @@
+.mentor-induction-checklist {
+  overflow: hidden;
+  border: 1px solid #dce8eb;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(16 36 61 / 4%);
+}
+
+.mentor-induction-checklist__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: .25rem 0 1.25rem;
+  border-bottom: 1px solid #e8eef1;
+}
+
+.mentor-induction-checklist__eyebrow {
+  margin: 0;
+  color: #148580;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.mentor-induction-checklist__header h3 {
+  margin: .4rem 0 .35rem;
+  color: #10243d;
+  font-size: 1.35rem;
+  font-weight: 760;
+  letter-spacing: -.025em;
+}
+
+.mentor-induction-checklist__header > div:first-child > p:last-child {
+  max-width: 44rem;
+  margin: 0;
+  color: #62758a;
+  font-size: .86rem;
+  line-height: 1.6;
+}
+
+.mentor-induction-checklist__progress {
+  display: grid;
+  min-width: 7rem;
+  gap: .1rem;
+  justify-items: end;
+  padding: .55rem .75rem;
+  border: 1px solid #d8eeeb;
+  border-radius: .85rem;
+  background: #f1faf9;
+  color: #157c78;
+}
+
+.mentor-induction-checklist__progress strong { font-size: 1rem; }
+.mentor-induction-checklist__progress span { color: #547572; font-size: .66rem; text-align: right; }
+.mentor-induction-checklist__items { display: grid; gap: .8rem; padding-top: 1rem; }
+
+.mentor-induction-checklist__item {
+  padding: 1rem 1.05rem;
+  border: 1px solid #e3eaef;
+  border-radius: 1rem;
+  background: #fbfcfd;
+}
+
+.mentor-induction-checklist__item-title { display: flex; align-items: flex-start; gap: .7rem; }
+.mentor-induction-checklist__item-title > span:first-child { display: grid; width: 2rem; height: 2rem; flex: 0 0 auto; place-items: center; border-radius: .65rem; background: #e5f4f2; color: #147d7a; font-size: .72rem; font-weight: 800; }
+.mentor-induction-checklist__item-title > div { flex: 1; min-width: 0; }
+.mentor-induction-checklist__item-title h4 { margin: .1rem 0 0; color: #172b43; font-size: .93rem; font-weight: 700; line-height: 1.5; }
+.mentor-induction-checklist__item-title h4 sup { margin-left: .2rem; color: #147d7a; }
+.mentor-induction-checklist__item-title small { display: block; margin-top: .25rem; color: #718196; font-size: .72rem; }
+.mentor-induction-checklist__saved { margin-left: auto; color: #27805e; font-size: .69rem; font-weight: 750; }
+.mentor-induction-checklist__answer-label { margin: .9rem 0 .4rem; color: #52677d; font-size: .74rem; font-weight: 700; }
+.mentor-induction-checklist__answers { display: flex; flex-wrap: wrap; gap: .45rem; }
+.mentor-induction-checklist__answers button { min-height: 2.65rem; padding: .4rem .8rem; border: 1px solid #d5e1e8; border-radius: 999px; background: white; color: #506277; font-size: .77rem; font-weight: 700; transition: border-color .15s ease, background-color .15s ease, color .15s ease; }
+.mentor-induction-checklist__answers button:hover { border-color: #168782; color: #147d7a; }
+.mentor-induction-checklist__answers button.is-active { border-color: #168782; background: #168782; color: white; }
+.mentor-induction-checklist__answers button:disabled { cursor: not-allowed; opacity: .6; }
+.mentor-induction-checklist__note { display: grid; gap: .35rem; margin-top: .9rem; color: #41566c; font-size: .73rem; font-weight: 700; }
+.mentor-induction-checklist__note span { color: #7b8999; font-weight: 400; }
+.mentor-induction-checklist__note textarea { min-height: 4rem; resize: vertical; border: 1px solid #d9e3e9; border-radius: .75rem; background: white; padding: .65rem .75rem; color: #172b43; font: inherit; font-weight: 400; }
+.mentor-induction-checklist__note textarea:focus-visible,
+.mentor-induction-checklist__answers button:focus-visible { outline: 2px solid #168782; outline-offset: 2px; }
+.mentor-induction-checklist__footer { display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e8eef1; }
+.mentor-induction-checklist__footer p { max-width: 40rem; margin: 0; color: #68798c; font-size: .75rem; line-height: 1.55; }
+.mentor-induction-checklist__sign { min-height: 2.75rem; flex: 0 0 auto; }
+
+@media (max-width: 620px) {
+  .mentor-induction-checklist__header { flex-direction: column; gap: .85rem; }
+  .mentor-induction-checklist__progress { grid-template-columns: auto 1fr; align-items: center; gap: .45rem; justify-items: start; }
+  .mentor-induction-checklist__progress span { text-align: left; }
+  .mentor-induction-checklist__footer { align-items: stretch; flex-direction: column; }
+  .mentor-induction-checklist__sign { width: 100%; }
+  .mentor-induction-checklist__answers button { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mentor-induction-checklist__answers button { transition: none; }
+}

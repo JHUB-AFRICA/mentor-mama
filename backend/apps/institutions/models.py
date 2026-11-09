@@ -1,6 +1,14 @@
 """The university side: institutions, cohorts, enrolment."""
 
 from django.db import models
+from PIL import Image
+from apps.core.validators import validate_partner_logo
+
+
+def partner_logo_upload_to(instance, filename):
+    with Image.open(instance.logo.file) as image:
+        extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[image.format]
+    return f"directory/institutions/{instance.id}/logo.{extension}"
 
 from apps.core.models import BaseModel
 
@@ -11,6 +19,9 @@ class Institution(BaseModel):
     type = models.CharField(max_length=60, blank=True, default="")
     county = models.CharField(max_length=60, blank=True, default="")
     contact_person = models.CharField(max_length=120, blank=True, default="")
+    contact_email = models.EmailField(blank=True, default="")
+    contact_phone = models.CharField(max_length=32, blank=True, default="")
+    logo = models.ImageField(upload_to=partner_logo_upload_to, blank=True, null=True, validators=[validate_partner_logo])
     is_active = models.BooleanField(default=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 
@@ -49,9 +60,31 @@ class Cohort(BaseModel):
 class CohortMembership(BaseModel):
     cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="memberships")
     student = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="cohort_memberships")
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by_id = models.UUIDField(null=True, blank=True)
+    removal_reason = models.CharField(max_length=300, blank=True, default="")
 
     class Meta:
         db_table = "institutions_cohort_membership"
         constraints = [
-            models.UniqueConstraint(fields=["cohort", "student"], name="one_membership_per_cohort")
+            models.UniqueConstraint(fields=["cohort", "student"], condition=models.Q(removed_at__isnull=True), name="one_active_membership_per_cohort"),
         ]
+
+
+class StudentProfile(BaseModel):
+    """Student-owned academic and emergency contact details.
+
+    These details are deliberately separate from the coordinator roster and
+    are not included in hospital/mentor placement projections.
+    """
+
+    student = models.OneToOneField("identity.User", on_delete=models.CASCADE, related_name="student_profile")
+    course_name = models.CharField(max_length=160, blank=True, default="")
+    year_of_study = models.PositiveSmallIntegerField(null=True, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    emergency_contact_name = models.CharField(max_length=160, blank=True, default="")
+    emergency_contact_phone = models.CharField(max_length=32, blank=True, default="")
+    emergency_contact_relationship = models.CharField(max_length=80, blank=True, default="")
+
+    class Meta:
+        db_table = "institutions_student_profile"

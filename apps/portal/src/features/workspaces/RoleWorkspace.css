@@ -1,0 +1,857 @@
+
+/* ================================================================
+   MENTORMAMA WORKSPACE
+   Application shell / navigation / responsive layout
+================================================================ */
+
+:root {
+  --workspace-sidebar-width: 248px;
+
+  --workspace-navy: #0d1b33;
+  --workspace-navy-2: #132542;
+  --workspace-teal: #1d8c8c;
+  --workspace-teal-soft: #e8f5f4;
+  --workspace-teal-bright: #45b9b3;
+
+  --workspace-text: #17243a;
+  --workspace-muted: #6b778c;
+
+  --workspace-border: #e6eaf0;
+  --workspace-background: #f8fafb;
+  --workspace-surface: #ffffff;
+
+  --workspace-radius: 12px;
+  --workspace-radius-lg: 16px;
+
+  --workspace-shadow:
+    0 1px 2px rgba(13, 27, 51, 0.03),
+    0 8px 24px rgba(13, 27, 51, 0.04);
+
+  --workspace-transition:
+    160ms ease;
+}
+
+
+/* ================================================================
+   ROOT
+================================================================ */
+
+.workspace-shell {
+  min-height: 100vh;
+  background: var(--workspace-background);
+  color: var(--workspace-text);
+}
+
+
+/* ================================================================
+   SIDEBAR
+================================================================ */
+
+.workspace-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+
+  width: var(--workspace-sidebar-width);
+
+  display: flex;
+  flex-direction: column;
+
+  z-index: 50;
+
+  padding: 22px 14px 16px;
+
+  background:
+    linear-gradient(
+      180deg,
+      var(--workspace-navy) 0%,
+      #0b1a31 100%
+    );
+
+  color: white;
+
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+
+/* ================================================================
+   BRAND
+================================================================ */
+
+.workspace-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 2px 8px;
+}
+
+.workspace-brand__link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  min-width: 0;
+
+  color: inherit;
+  text-decoration: none;
+}
+
+.workspace-brand__mark {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  border-radius: 11px;
+
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-brand__mark img {
+  width: 25px;
+  height: 25px;
+
+  object-fit: contain;
+}
+
+.workspace-brand__copy {
+  min-width: 0;
+}
+
+.workspace-brand__name {
+  display: block;
+
+  font-family: var(--font-display, inherit);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.workspace-brand__name span {
+  color: var(--workspace-teal-bright);
+}
+
+.workspace-brand__sub {
+  display: block;
+
+  margin-top: 5px;
+
+  color: rgba(255, 255, 255, 0.42);
+
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.workspace-mobile-close {
+  display: none;
+
+  width: 38px;
+  height: 38px;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 10px;
+
+  color: rgba(255, 255, 255, 0.65);
+  background: transparent;
+
+  cursor: pointer;
+}
+
+.workspace-mobile-close:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+
+/* ================================================================
+   NAVIGATION
+================================================================ */
+
+.workspace-navigation {
+  margin-top: 42px;
+}
+
+.workspace-navigation__label {
+  padding: 0 12px;
+
+  color: rgba(255, 255, 255, 0.35);
+
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 750;
+
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workspace-navigation nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  margin-top: 12px;
+}
+
+.workspace-nav-link {
+  position: relative;
+
+  min-height: 44px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 0 12px;
+
+  border-radius: 10px;
+
+  color: rgba(255, 255, 255, 0.62);
+
+  text-decoration: none;
+
+  font-family: var(--font-body, inherit);
+  font-size: 13px;
+  font-weight: 600;
+
+  transition:
+    background var(--workspace-transition),
+    color var(--workspace-transition);
+}
+
+.workspace-nav-link:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.workspace-nav-link__icon {
+  width: 20px;
+  height: 20px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+}
+
+.workspace-nav-link__label {
+  flex: 1;
+}
+
+.workspace-nav-link__indicator {
+  width: 4px;
+  height: 20px;
+
+  position: absolute;
+  right: 0;
+
+  border-radius: 4px 0 0 4px;
+
+  background: var(--workspace-teal-bright);
+}
+
+.workspace-nav-link--active {
+  color: var(--workspace-navy);
+  background: white;
+}
+
+.workspace-nav-link--active:hover {
+  color: var(--workspace-navy);
+  background: white;
+}
+
+.workspace-nav-link--active .workspace-nav-link__icon {
+  color: var(--workspace-teal);
+}
+
+
+/* ================================================================
+   SIDEBAR BOTTOM
+================================================================ */
+
+.workspace-sidebar__bottom {
+  margin-top: auto;
+}
+
+.workspace-account-link,
+.workspace-signout {
+  width: 100%;
+  min-height: 42px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  padding: 0 11px;
+
+  border-radius: 10px;
+
+  color: rgba(255, 255, 255, 0.58);
+
+  font-family: var(--font-body, inherit);
+  font-size: 13px;
+  font-weight: 600;
+
+  text-decoration: none;
+
+  transition:
+    color var(--workspace-transition),
+    background var(--workspace-transition);
+}
+
+.workspace-account-link:hover,
+.workspace-signout:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.workspace-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin: 10px 4px 8px;
+  padding: 13px 8px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-user__details {
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-user__name {
+  overflow: hidden;
+
+  color: rgba(255, 255, 255, 0.92);
+
+  font-size: 12px;
+  font-weight: 650;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-user__role {
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color: rgba(255, 255, 255, 0.38);
+
+  font-size: 10px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  text-transform: capitalize;
+}
+
+.workspace-user__status {
+  width: 7px;
+  height: 7px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+
+  background: #55c49d;
+  box-shadow: 0 0 0 3px rgba(85, 196, 157, 0.1);
+}
+
+
+/* ================================================================
+   AVATAR
+================================================================ */
+
+.workspace-avatar {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  border-radius: 11px;
+
+  color: white;
+  background: var(--workspace-teal);
+
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.workspace-avatar--small {
+  width: 36px;
+  height: 36px;
+
+  border-radius: 10px;
+
+  font-size: 11px;
+}
+
+
+/* ================================================================
+   MAIN
+================================================================ */
+
+.workspace-main {
+  min-height: 100vh;
+  min-width: 0;
+
+  margin-left: var(--workspace-sidebar-width);
+}
+
+
+/* ================================================================
+   HEADER
+================================================================ */
+
+.workspace-header {
+  position: sticky;
+  top: 0;
+
+  z-index: 30;
+
+  min-height: 72px;
+
+  background: rgba(255, 255, 255, 0.94);
+
+  border-bottom: 1px solid var(--workspace-border);
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.workspace-header__inner {
+  width: 100%;
+  max-width: 1500px;
+
+  min-height: 72px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+
+  margin: 0 auto;
+
+  padding: 0 32px;
+}
+
+.workspace-header__left {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.workspace-page-heading {
+  min-width: 0;
+}
+
+.workspace-page-heading__eyebrow {
+  overflow: hidden;
+
+  color: var(--workspace-teal);
+
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-page-heading__title {
+  margin: 5px 0 0;
+
+  overflow: hidden;
+
+  color: var(--workspace-navy);
+
+  font-family: var(--font-display, inherit);
+  font-size: 19px;
+  line-height: 1.1;
+  font-weight: 750;
+
+  letter-spacing: -0.025em;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-header__right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+
+  flex: 0 0 auto;
+}
+
+.workspace-header__divider {
+  width: 1px;
+  height: 28px;
+
+  background: var(--workspace-border);
+}
+
+.workspace-header-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0;
+}
+
+.workspace-header-user__details {
+  max-width: 160px;
+  min-width: 0;
+}
+
+.workspace-header-user__name,
+.workspace-header-user__role {
+  overflow: hidden;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-header-user__name {
+  color: var(--workspace-navy);
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-header-user__role {
+  margin-top: 3px;
+
+  color: var(--workspace-muted);
+
+  font-size: 10px;
+}
+
+
+/* ================================================================
+   MOBILE MENU BUTTON
+================================================================ */
+
+.workspace-menu-button {
+  width: 40px;
+  height: 40px;
+
+  display: none;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+
+  color: var(--workspace-navy);
+  background: white;
+
+  cursor: pointer;
+
+  transition:
+    border-color var(--workspace-transition),
+    color var(--workspace-transition),
+    box-shadow var(--workspace-transition);
+}
+
+.workspace-menu-button:hover {
+  color: var(--workspace-teal);
+  border-color: rgba(29, 140, 140, 0.35);
+  box-shadow: 0 3px 10px rgba(13, 27, 51, 0.05);
+}
+
+
+/* ================================================================
+   CONTENT
+================================================================ */
+
+.workspace-content {
+  width: 100%;
+  max-width: 1500px;
+
+  min-height: calc(100vh - 72px);
+
+  margin: 0 auto;
+
+  padding: 36px 32px 56px;
+}
+
+.workspace-content--mentor {
+  padding-bottom: 56px;
+}
+
+/* Student screens already share the workspace shell's gutters and width.
+   Their inner page wrapper used to add a second max-width and another 30px
+   of padding, leaving the dashboard cramped and pushed down. */
+.workspace-content--student {
+  padding-top: 28px;
+}
+
+.workspace-content--student > .student-page-container {
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+  padding: 0 0 48px;
+}
+
+
+/* ================================================================
+   MOBILE OVERLAY
+================================================================ */
+
+.workspace-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 45;
+
+  border: 0;
+
+  background: rgba(8, 19, 38, 0.48);
+
+  cursor: pointer;
+
+  backdrop-filter: blur(2px);
+}
+
+
+/* ================================================================
+   MOBILE NAV
+================================================================ */
+
+.workspace-mobile-nav {
+  display: none;
+}
+
+
+/* ================================================================
+   FOCUS STATES
+================================================================ */
+
+.workspace-nav-link:focus-visible,
+.workspace-account-link:focus-visible,
+.workspace-signout:focus-visible,
+.workspace-menu-button:focus-visible,
+.workspace-mobile-close:focus-visible,
+.workspace-mobile-link:focus-visible {
+  outline: 2px solid var(--workspace-teal-bright);
+  outline-offset: 2px;
+}
+
+
+/* ================================================================
+   TABLET
+================================================================ */
+
+@media (max-width: 1024px) {
+  :root {
+    --workspace-sidebar-width: 228px;
+  }
+
+  .workspace-header__inner {
+    padding: 0 24px;
+  }
+
+  .workspace-content {
+    padding: 30px 24px 48px;
+  }
+}
+
+
+/* ================================================================
+   MOBILE SIDEBAR
+================================================================ */
+
+@media (max-width: 767px) {
+  .workspace-sidebar {
+    width: min(286px, 88vw);
+
+    transform: translateX(-100%);
+
+    box-shadow: none;
+  }
+
+  .workspace-sidebar--open {
+    transform: translateX(0);
+
+    box-shadow:
+      12px 0 40px rgba(5, 17, 36, 0.18);
+  }
+
+  .workspace-mobile-close {
+    display: flex;
+  }
+
+  .workspace-main {
+    margin-left: 0;
+  }
+
+  .workspace-menu-button {
+    display: flex;
+  }
+
+  .workspace-header {
+    min-height: 64px;
+  }
+
+  .workspace-header__inner {
+    min-height: 64px;
+
+    padding: 0 16px;
+  }
+
+  .workspace-page-heading__title {
+    font-size: 17px;
+  }
+
+  .workspace-header__right {
+    gap: 8px;
+  }
+
+  .workspace-header__divider,
+  .workspace-header-user {
+    display: none;
+  }
+
+  .workspace-content {
+    min-height: calc(100vh - 64px);
+
+    padding: 24px 16px 96px;
+  }
+
+  .workspace-content--student {
+    padding-top: 20px;
+  }
+
+  .workspace-content--student > .student-page-container {
+    padding-bottom: 36px;
+  }
+
+  .workspace-mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+
+    z-index: 40;
+
+    height: 70px;
+
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+
+    padding:
+      7px
+      max(7px, env(safe-area-inset-left))
+      calc(7px + env(safe-area-inset-bottom))
+      max(7px, env(safe-area-inset-right));
+
+    border-top: 1px solid var(--workspace-border);
+
+    background: rgba(255, 255, 255, 0.96);
+
+    box-shadow:
+      0 -8px 30px rgba(13, 27, 51, 0.07);
+
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .workspace-mobile-link {
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    border-radius: 10px;
+
+    color: var(--workspace-muted);
+
+    font-size: 9px;
+    font-weight: 700;
+
+    text-decoration: none;
+
+    transition:
+      color var(--workspace-transition),
+      background var(--workspace-transition);
+  }
+
+  .workspace-mobile-link__icon {
+    display: flex;
+  }
+
+  .workspace-mobile-link--active {
+    color: var(--workspace-teal);
+    background: var(--workspace-teal-soft);
+  }
+}
+
+
+/* ================================================================
+   SMALL MOBILE
+================================================================ */
+
+@media (max-width: 420px) {
+  .workspace-header__inner {
+    gap: 10px;
+  }
+
+  .workspace-page-heading__eyebrow {
+    font-size: 8px;
+  }
+
+  .workspace-page-heading__title {
+    font-size: 16px;
+  }
+
+  .workspace-content {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+
+/* ================================================================
+   REDUCED MOTION
+================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar,
+  .workspace-nav-link,
+  .workspace-account-link,
+  .workspace-signout,
+  .workspace-menu-button,
+  .workspace-mobile-link {
+    transition: none;
+  }
+}

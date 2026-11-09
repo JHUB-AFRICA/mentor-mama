@@ -426,14 +426,15 @@ one failed item in a batch of twelve should not fail the other eleven.
 
 | Method & path | Notes |
 | --- | --- |
-| `POST /placements/{id}/feedback` † | `mode: confidential \| anonymous`. Anonymous routes to the detached table (ADR 0008) |
+| `POST /placements/{id}/feedback` † | Confidential feedback only; placement-linked and protected by generic actor-scoped idempotency |
+| `POST /feedback/anonymous` † | Placement ID is transient JSON input, never in the URL; fixed ratings only; keyed digest replay guard; response has no record ID |
 | `POST /placements/{id}/assessments` † | `kind: baseline_confidence \| final_confidence \| exit_survey` |
 | `GET /placements/{id}/assessments` | Own placement, or facility/institution scope |
 | `GET /me/feedback-summary` | Mentor aggregates only, suppressed below n = 3, no breakdowns (POL-013a) |
 
-The anonymous path deserves an API-level note: the response returns **no identifier** for an anonymous
-submission. There is nothing to return that would not create a handle for re-identification, and a client that
-cannot reference it cannot accidentally build a feature that does.
+`GET /reports/anonymous-feedback` returns only ward aggregates after three submissions, scoped to a
+Coordinator's institution or a Nurse Manager's facility. It never returns response rows or comments. The
+anonymous submit endpoint returns **no identifier**; its replay receipt stores keyed digests and a date only.
 
 ### 7.7 Safeguarding
 

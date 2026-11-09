@@ -62,7 +62,7 @@ module.exports = {
       /* -------------------------------------------------------------------------- */
 
       fontFamily: {
-        display: ['"Manrope"', "sans-serif"],
+        display: ['"Inter"', "sans-serif"],
 
         body: ['"Inter"', "sans-serif"],
       },

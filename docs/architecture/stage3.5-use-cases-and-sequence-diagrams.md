@@ -191,23 +191,23 @@ sequenceDiagram
 
 | Field | Detail |
 | --- | --- |
-| Primary actor | University Coordinator (Program Admin may act on their behalf during pilot setup) |
-| Trigger | Coordinator allocates a named student to a named ward |
+| Primary actors | University Coordinator creates the placement; Nurse Manager allocates the ward |
+| Trigger | Coordinator creates a named student placement; facility operations admits it to a ward |
 | Preconditions | Cohort exists; Student enrolled; Facility and Ward exist |
 | Commands | `CreatePlacement`, `AllocateWard`, `TransferWard` |
 | Rules exercised | POL-001, POL-004, POL-006, POL-007, INV-01, INV-12, INV-16, INV-17, T-01 |
 
-This is the workflow where the two-institution boundary bites: the Coordinator allocates the ward, but the
-Nurse Manager assigns the mentor (W-03). Neither can complete the placement alone, and neither may press the
-other's button. That is why `T-01 (Draft → Scheduled)` is **system-derived** — it fires when the assignment set
-becomes complete, whichever institution completed it (WFR-002).
+This is the workflow where the two-institution boundary bites: the Coordinator creates the placement, while the
+Nurse Manager allocates the ward and assigns the mentor (W-03). Neither can complete the placement alone, and
+neither may press the other's button. That is why `T-01 (Draft → Scheduled)` is **system-derived** — it fires when
+the assignment set becomes complete, whichever side completed its assignment (WFR-002).
 
 ### 4.1 Step table
 
 | # | Actor | Step | Guards checked | Writes | Events |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Coordinator | `CreatePlacement` (student, cohort, dates) | Cohort in institution scope; student is a member; `start < end` | Placement (`Draft`); Student Assignment; Audit | `PlacementCreated` |
-| 2 | Coordinator | `AllocateWard` (ward) | Ward exists; **lock Ward row**; active placements < `max_students` (INV-16) | Ward Assignment (active); derived `facility_id` (INV-17); Audit | `WardAllocated` |
+| 2 | Nurse Manager | `AllocateWard` (ward) | Ward is in facility scope; **lock Ward row**; active placements < `max_students` (INV-16) | Ward Assignment (active); derived `facility_id` (INV-17); Audit | `WardAllocated` |
 | 3 | System | Evaluate T-01 under the same lock | Student + Ward + Mentor assignments all present; dates valid; capacity held | Placement → `Scheduled` | `PlacementScheduled` |
 | 4 | Outbox | Post-commit | — | — | Notify Nurse Manager that a placement awaits a mentor |
 
@@ -217,6 +217,7 @@ becomes complete, whichever institution completed it (WFR-002).
 sequenceDiagram
     autonumber
     participant Coord as Coordinator
+    participant NM as Nurse Manager
     participant Gate
     participant Placement
     participant DB
@@ -228,7 +229,7 @@ sequenceDiagram
     Placement->>DB: insert Placement(Draft) + StudentAssignment (INV-01)
     Placement->>DB: COMMIT
 
-    Coord->>Gate: AllocateWard(ward)
+    NM->>Gate: AllocateWard(ward)
     Placement->>DB: BEGIN
     Placement->>DB: SELECT ward FOR UPDATE
     Placement->>Placement: count active placements < max_students? (INV-16)
@@ -814,7 +815,7 @@ contexts and treat the existing app list as scaffolding to be replaced.
 | `InvitePlacementParticipant` | Placement | Coordinator | W-01 |
 | `ConfirmPlacement` | Placement | Student | W-01 |
 | `CreatePlacement` | Placement | Coordinator | W-02 |
-| `AllocateWard`, `TransferWard` | Placement | Coordinator | W-02 |
+| `AllocateWard`, `TransferWard` | Placement | Nurse Manager | W-02 |
 | `AssignMentor`, `ReassignMentor` | Placement | Nurse Manager | W-03 |
 | `RecordOrientationProgress` | Learning | Student | W-04 |
 | `OpenInduction`, `CompleteChecklistItem`, `SignInduction` | Induction | Mentor / NM | W-04 |

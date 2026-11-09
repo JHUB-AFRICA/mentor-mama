@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <p><strong>{{ record.user.full_name|default:record.user.email }}</strong> · {{ record.user.email }} · {{ record.user.program.name|default:"No programme" }}</p>
+  <p><strong>Request:</strong> {{ record.reason }}</p>
+  <p><strong>Received:</strong> {{ record.created_at }}</p>
+  <p>Resetting removes the current authenticator and signs out active sessions. The person must set up a new authenticator after signing in.</p>
+  <form method="post">{% csrf_token %}{{ form.as_p }}
+    <div class="submit-row"><input type="submit" value="Record decision" class="default"><a href="{{ cancel_url }}">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

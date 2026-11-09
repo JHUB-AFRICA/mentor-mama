@@ -6,7 +6,7 @@ no re-identifying column cannot leak through a forgotten WHERE clause.
 
 from django.db import models
 
-from apps.core.models import BaseModel
+from apps.core.models import BaseModel, new_id
 
 
 class AssessmentKind(models.TextChoices):
@@ -43,7 +43,7 @@ class FeedbackConfidential(BaseModel):
         db_table = "assessments_feedback_confidential"
 
 
-class FeedbackAnonymous(BaseModel):
+class FeedbackAnonymous(models.Model):
     """No placement, no student — there is no column to re-identify through.
 
     A placement identifies exactly one student, so anonymous feedback linked to a
@@ -52,11 +52,11 @@ class FeedbackAnonymous(BaseModel):
     the row back to a session.
     """
 
+    id = models.UUIDField(primary_key=True, default=new_id, editable=False)
     cohort = models.ForeignKey("institutions.Cohort", on_delete=models.PROTECT, related_name="anonymous_feedback")
     facility = models.ForeignKey("facilities.Facility", on_delete=models.PROTECT, related_name="anonymous_feedback")
     ward = models.ForeignKey("facilities.Ward", on_delete=models.PROTECT, related_name="anonymous_feedback")
     submitted_on = models.DateField()
-    comments = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = "assessments_feedback_anonymous"
@@ -64,6 +64,8 @@ class FeedbackAnonymous(BaseModel):
 
 class Response(BaseModel):
     """Scores as rows, so a new survey instrument is data, not a migration."""
+
+    id = models.UUIDField(primary_key=True, default=new_id, editable=False)
 
     class Scale(models.TextChoices):
         LIKERT_1_5 = "likert_1_5", "Likert 1-5"
@@ -75,9 +77,6 @@ class Response(BaseModel):
     )
     feedback_confidential = models.ForeignKey(
         FeedbackConfidential, on_delete=models.PROTECT, null=True, blank=True, related_name="responses"
-    )
-    feedback_anonymous = models.ForeignKey(
-        FeedbackAnonymous, on_delete=models.PROTECT, null=True, blank=True, related_name="responses"
     )
     question_code = models.CharField(max_length=60)
     scale = models.CharField(max_length=20, choices=Scale.choices)
@@ -97,3 +96,50 @@ class Response(BaseModel):
                 name="assessment_score_in_range",
             ),
         ]
+
+
+class AnonymousResponse(models.Model):
+    """Timestamp-free rating row owned only by an anonymous group submission."""
+
+    id = models.UUIDField(primary_key=True, default=new_id, editable=False)
+    feedback_anonymous = models.ForeignKey(
+        FeedbackAnonymous, on_delete=models.PROTECT, related_name="responses"
+    )
+    question_code = models.CharField(max_length=60)
+    scale = models.CharField(max_length=20, choices=Response.Scale.choices)
+    value_numeric = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    value_boolean = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        db_table = "assessments_anonymous_response"
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(scale="likert_1_5", value_numeric__gte=1, value_numeric__lte=5)
+                    | models.Q(scale="score_0_100", value_numeric__gte=0, value_numeric__lte=100)
+                    | models.Q(scale="yes_no", value_numeric=None, value_boolean__isnull=False)
+                ),
+                name="anonymous_assessment_score_in_range",
+            ),
+        ]
+
+
+class AnonymousFeedbackCommand(models.Model):
+    """Date-only, keyed-digest replay guard with no actor or result reference."""
+
+    command_digest = models.CharField(max_length=64, primary_key=True)
+    payload_digest = models.CharField(max_length=64, blank=True, default="")
+    received_on = models.DateField()
+
+    class Meta:
+        db_table = "assessments_anonymous_feedback_command"
+
+
+class AnonymousFeedbackAuditDay(models.Model):
+    """Daily system-wide count; deliberately has no actor, scope, or row link."""
+
+    submitted_on = models.DateField(primary_key=True)
+    submissions = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "assessments_anonymous_feedback_audit_day"

@@ -1,0 +1,9 @@
+import { useEffect, useState } from "react";
+import { Card } from "@mentormama/ui";
+import { getPlacementActivity, type PlacementActivityEntry } from "../../services/api";
+
+export function PlacementHistory({ placementId }: { placementId: string }) {
+  const [entries, setEntries] = useState<PlacementActivityEntry[]>([]);
+  useEffect(() => { void getPlacementActivity(placementId).then(setEntries).catch(() => setEntries([])); }, [placementId]);
+  return <Card padding="lg"><div className="flex items-start justify-between gap-4"><div><p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">Placement record</p><h2 className="mt-1 font-display text-xl font-bold text-navy">Recent activity</h2></div><span className="rounded-full bg-mist px-3 py-1 font-body text-xs font-semibold text-navy-muted">{entries.length} event{entries.length === 1 ? "" : "s"}</span></div>{entries.length ? <ol className="mt-6 space-y-5 border-l border-border pl-5">{entries.map((entry) => <li key={entry.id} className="relative"><span className="absolute -left-[1.65rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-teal shadow-[0_0_0_1px_#168f91]" /><div className="flex flex-col justify-between gap-1 sm:flex-row"><p className="font-body text-sm font-semibold text-navy">{entry.action.replaceAll(".", " · ").replaceAll("_", " ")}</p><time className="font-body text-xs text-navy-muted">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(entry.occurred_at))}</time></div><p className="mt-1 font-body text-xs text-navy-muted">{entry.actor_role.replaceAll("_", " ")}</p>{entry.override_reason && <p className="mt-2 rounded-lg bg-warm/40 px-3 py-2 font-body text-xs text-navy-muted">Reason: {entry.override_reason}</p>}</li>)}</ol> : <p className="mt-6 rounded-xl bg-mist px-4 py-3 font-body text-sm text-navy-muted">No activity has been recorded yet.</p>}</Card>;
+}

@@ -32,14 +32,30 @@ jobs:
           pip install -r requirements/dev.txt
 
       - name: Run Ruff
-        run: ruff check apps/accounts
+        run: ruff check apps tests
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mentormama
+          POSTGRES_USER: mentormama
+          POSTGRES_PASSWORD: mentormama
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U mentormama -d mentormama"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: postgres://mentormama:mentormama@localhost:5432/mentormama
     steps:
       - uses: actions/checkout@v4
 

@@ -13,6 +13,8 @@ from django.db.utils import ProgrammingError
 
 from apps.core import errors
 from apps.core.models import AuditEntry, OutboxEvent
+from apps.assessments import services as assessment_services
+from apps.assessments.models import Assessment, AssessmentKind, Response
 from apps.mentorship import services as mentorship_services
 from apps.mentorship.models import Session
 from apps.placements import services as placement_services
@@ -77,7 +79,15 @@ def test_inv02_placement_cannot_activate_without_complete_induction(
     from apps.induction.models import TemplateItem
 
     placement_services.transition(scheduled_placement.id, State.AWAITING_STUDENT, actor=coordinator)
-    placement_services.transition(scheduled_placement.id, State.ORIENTATION, actor=student)
+    placement_services.transition(
+        scheduled_placement.id, State.ORIENTATION, actor=student,
+        asserted_by="student.confirm_placement",
+    )
+    induction_services.acknowledge_orientation(
+        scheduled_placement.id, actor=student,
+        understands_placement_details=True, understands_emergency_process=True,
+        understands_safeguarding=True,
+    )
     checklist = induction_services.open_induction(scheduled_placement.id, actor=mentor)
 
     # answer only one of three required items
@@ -104,6 +114,7 @@ def test_inv05_session_refused_when_placement_not_active(scheduled_placement, me
             mentorship_services.LogSession(
                 placement_id=scheduled_placement.id, session_date=dt.date(2026, 7, 10),
                 session_type="bedside_teaching", topics=("labour_monitoring",),
+                what_was_covered="Handover practice",
             ), actor=mentor,
         )
 
@@ -127,6 +138,7 @@ def test_inv04_session_outside_the_window_is_refused(active_placement, mentor):
             mentorship_services.LogSession(
                 placement_id=active_placement.id, session_date=dt.date(2026, 10, 14),
                 session_type="bedside_teaching", topics=("documentation",),
+                what_was_covered="Documentation review",
             ), actor=mentor,
         )
 
@@ -143,6 +155,7 @@ def test_inv04_session_inside_a_pause_is_refused(active_placement, mentor, nurse
             mentorship_services.LogSession(
                 placement_id=active_placement.id, session_date=dt.date(2026, 7, 15),
                 session_type="debrief", topics=("communication",),
+                what_was_covered="Communication practice",
             ), actor=mentor,
         )
 
@@ -153,6 +166,7 @@ def test_session_only_by_the_currently_assigned_mentor(active_placement, other_m
             mentorship_services.LogSession(
                 placement_id=active_placement.id, session_date=dt.date(2026, 7, 10),
                 session_type="debrief", topics=("communication",),
+                what_was_covered="Communication practice",
             ), actor=other_mentor,
         )
 
@@ -170,7 +184,7 @@ def test_wfr009_session_requires_at_least_one_topic(active_placement, mentor):
 def test_wfr014_duplicate_session_within_the_window_is_refused(active_placement, mentor):
     command = mentorship_services.LogSession(
         placement_id=active_placement.id, session_date=dt.date(2026, 7, 10),
-        session_type="debrief", topics=("communication",),
+        session_type="debrief", topics=("communication",), what_was_covered="Communication practice",
     )
     mentorship_services.log_session(command, actor=mentor)
     with pytest.raises(errors.DuplicateSession):
@@ -182,7 +196,7 @@ def test_happy_path_session_is_logged_with_audit_and_event(active_placement, men
         mentorship_services.LogSession(
             placement_id=active_placement.id, session_date=dt.date(2026, 7, 10),
             session_type="bedside_teaching", topics=("labour_monitoring", "documentation"),
-            duration_minutes=20,
+            duration_minutes=20, what_was_covered="Handover and documentation practice",
         ), actor=mentor,
     )
     assert session.topics.count() == 2
@@ -216,6 +230,64 @@ def test_completion_succeeds_once_blockers_clear(active_placement, exit_survey, 
     )
     assert placement.state == State.COMPLETED
     assert placement.completed_at is not None
+
+
+def test_programme_admin_can_archive_completed_placement(active_placement, exit_survey, nurse_manager, program):
+    from apps.identity.models import Role, Status, User
+
+    admin = User.objects.create_user(
+        email="archive-admin@example.test", password="pw", first_name="Archive",
+        last_name="Admin", role=Role.PROGRAM_ADMIN, status=Status.ACTIVE, program=program,
+    )
+    placement_services.transition(active_placement.id, State.COMPLETED, actor=nurse_manager)
+    archived = placement_services.transition(
+        active_placement.id,
+        State.ARCHIVED,
+        actor=admin,
+        asserted_by="programme_admin.archive_placement",
+    )
+    assert archived.state == State.ARCHIVED
+    assert archived.archived_at is not None
+
+
+def test_final_assessment_submission_creates_immutable_exit_and_endline_records(
+    active_placement, student, monkeypatch
+):
+    monkeypatch.setattr(
+        assessment_services.timezone, "localdate", lambda: dt.date(2026, 9, 2)
+    )
+    submitted = assessment_services.submit_final(
+        assessment_services.FinalAssessment(
+            placement_id=active_placement.id,
+            confidence_score=82,
+            overall_experience=5,
+        ),
+        actor=student,
+    )
+    assert submitted.kind == AssessmentKind.EXIT_SURVEY
+    assert Assessment.objects.filter(
+        placement=active_placement, kind=AssessmentKind.FINAL_CONFIDENCE
+    ).count() == 1
+    assert Response.objects.filter(
+        assessment__placement=active_placement, question_code="endline_confidence",
+        value_numeric=82,
+    ).exists()
+    assert assessment_services.final_status(active_placement.id, actor=student)["submitted"] is True
+
+
+def test_final_assessment_is_blocked_before_effective_end(active_placement, student, monkeypatch):
+    from apps.assessments import services as assessment_services
+
+    monkeypatch.setattr(
+        assessment_services.timezone, "localdate", lambda: dt.date(2026, 8, 31)
+    )
+    with pytest.raises(errors.AssessmentOutOfWindow):
+        assessment_services.submit_final(
+            assessment_services.FinalAssessment(
+                placement_id=active_placement.id, confidence_score=70, overall_experience=4
+            ),
+            actor=student,
+        )
 
 
 # --- INV-09 ----------------------------------------------------------------
@@ -280,10 +352,13 @@ def test_inv16_ward_capacity_is_enforced(cohort, ward, coordinator, nurse_manage
                 planned_start=dt.date(2026, 7, 1), planned_end=dt.date(2026, 9, 1),
             ), actor=coordinator,
         )
-        placement_services.allocate_ward(placement.id, ward.id, actor=coordinator)
+        placement_services.allocate_ward(placement.id, ward.id, actor=nurse_manager)
         placement_services.assign_mentor(placement.id, mentor.id, actor=nurse_manager)
         placement_services.transition(placement.id, State.AWAITING_STUDENT, actor=coordinator)
-        placement_services.transition(placement.id, State.ORIENTATION, actor=coordinator)
+        placement_services.transition(
+            placement.id, State.ORIENTATION, actor=person,
+            asserted_by="student.confirm_placement",
+        )
         return placement
 
     place(1)
@@ -293,9 +368,9 @@ def test_inv16_ward_capacity_is_enforced(cohort, ward, coordinator, nurse_manage
 
 
 # --- INV-11 / INV-17 / WFR-025 -------------------------------------------
-def test_inv17_scope_columns_are_derived_not_supplied(draft_placement, cohort, ward, coordinator):
+def test_inv17_scope_columns_are_derived_not_supplied(draft_placement, cohort, ward, nurse_manager):
     assert draft_placement.institution_id == cohort.institution_id
-    placement_services.allocate_ward(draft_placement.id, ward.id, actor=coordinator)
+    placement_services.allocate_ward(draft_placement.id, ward.id, actor=nurse_manager)
     draft_placement.refresh_from_db()
     assert draft_placement.facility_id == ward.facility_id
 
@@ -344,6 +419,6 @@ def test_pause_extends_actual_end_and_records_a_countable_reason(
     assert pause.resumed_by_id == nurse_manager.id
 
 
-def test_invalid_transition_is_refused(draft_placement, nurse_manager):
+def test_invalid_transition_is_refused(scheduled_placement, nurse_manager):
     with pytest.raises(errors.InvalidTransition):
-        placement_services.transition(draft_placement.id, State.COMPLETED, actor=nurse_manager)
+        placement_services.transition(scheduled_placement.id, State.COMPLETED, actor=nurse_manager)

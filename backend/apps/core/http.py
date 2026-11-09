@@ -6,27 +6,61 @@ Views stay thin: parse, delegate, serialise, map errors (§2.1 of the rules).
 from __future__ import annotations
 
 import uuid
+import logging
 
 from django.db import IntegrityError
+from django.db import transaction
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from apps.core import idempotency
 from apps.core.errors import DomainError, IdempotencyKeyRequired, translate_integrity_error
 
+logger = logging.getLogger(__name__)
+
 
 def domain_exception_handler(exc, context):
     """Render domain errors, and translate constraint violations (DB-01, ERR-01)."""
     if isinstance(exc, DomainError):
+        if exc.status >= 500:
+            logger.error("Internal domain error: %s", exc.code)
+            return Response({"error": {
+                "code": exc.code,
+                "message": "MentorMAMA is having a brief problem. Please try again shortly.",
+                "retryable": True,
+            }}, status=exc.status)
         return Response(exc.as_dict(), status=exc.status)
     if isinstance(exc, IntegrityError):
         translated = translate_integrity_error(exc)
         if translated is not None:
             return Response(translated.as_dict(), status=translated.status)
-        # Unmapped constraint: re-raise so it surfaces loudly rather than as a
-        # silent 400. A contract test asserts every constraint is mapped.
-        raise exc
-    return drf_exception_handler(exc, context)
+        # Keep unexpected database details in server logs only. Contract tests
+        # still assert all known constraints are mapped to domain errors.
+        logger.error("Unhandled database integrity error", exc_info=(type(exc), exc, exc.__traceback__))
+        return Response({"error": {
+            "code": "InternalError",
+            "message": "MentorMAMA is having a brief problem. Please try again shortly.",
+            "retryable": True,
+        }}, status=500)
+    response = drf_exception_handler(exc, context)
+    if response is not None:
+        return response
+
+    # DRF's default handler returns None for unexpected exceptions, which lets
+    # Django's DEBUG page (including traceback and local paths) escape from API
+    # endpoints. Keep diagnostics in server logs and return a stable contract.
+    logger.error(
+        "Unhandled API exception",
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return Response(
+        {"error": {
+            "code": "InternalError",
+            "message": "MentorMAMA is having a brief problem. Please try again shortly.",
+            "retryable": True,
+        }},
+        status=500,
+    )
 
 
 def require_command_id(request) -> uuid.UUID:
@@ -52,6 +86,10 @@ class IdempotentCommand:
         self.result_ref = None
 
     def __enter__(self):
+        # The idempotency row, domain write, audit row and outbox event are one
+        # commit.  Nested service transactions are savepoints, not new commits.
+        self._transaction = transaction.atomic()
+        self._transaction.__enter__()
         try:
             self.key = idempotency.claim(
                 command_id=self.command_id, actor=self.actor, command_type=self.command_type
@@ -59,10 +97,16 @@ class IdempotentCommand:
         except idempotency.Replayed as replay:
             self.replayed = True
             self.result_ref = replay.result_ref
+        except BaseException as exc:
+            # If __enter__ itself raises, Python never calls __exit__.  Close
+            # the outer command transaction explicitly or that failed request
+            # poisons Django's connection for the next one.
+            self._transaction.__exit__(type(exc), exc, exc.__traceback__)
+            raise
         return self
 
-    def __exit__(self, *exc):
-        return False
+    def __exit__(self, exc_type, exc, traceback):
+        return self._transaction.__exit__(exc_type, exc, traceback)
 
     def record(self, result_id):
         if self.key is not None:

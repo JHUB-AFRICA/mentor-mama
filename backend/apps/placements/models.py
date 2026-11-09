@@ -5,7 +5,7 @@ from django.contrib.postgres.fields import DateRangeField, RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q, Value
 
-from apps.core.models import BaseModel
+from apps.core.models import BaseModel, new_id
 
 
 class State(models.TextChoices):
@@ -108,6 +108,54 @@ class Placement(BaseModel):
 
     def __str__(self):
         return f"Placement {self.id} ({self.state})"
+
+
+class PlacementAcknowledgement(models.Model):
+    """Immutable student signature for the issued placement assignment."""
+
+    id = models.UUIDField(primary_key=True, default=new_id, editable=False)
+    placement = models.OneToOneField(
+        Placement, on_delete=models.PROTECT, related_name="student_acknowledgement"
+    )
+    student = models.ForeignKey(
+        "identity.User", on_delete=models.PROTECT, related_name="placement_acknowledgements"
+    )
+    signed_name = models.CharField(max_length=240)
+    signed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "placements_acknowledgement"
+
+
+class PlacementNote(BaseModel):
+    """Operational note owned by a placement and visible to scoped staff."""
+    placement = models.ForeignKey(Placement, on_delete=models.PROTECT, related_name="notes")
+    author = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="placement_notes")
+    body = models.TextField()
+
+    class Meta:
+        db_table = "placements_note"
+        ordering = ["-created_at"]
+
+
+class PlacementBatch(BaseModel):
+    """Durable progress record for cohort placement creation."""
+
+    STATUS_CHOICES = [(value, value) for value in ("queued", "processing", "completed", "failed")]
+    actor_id = models.UUIDField()
+    cohort_id = models.UUIDField()
+    planned_start = models.DateField()
+    planned_end = models.DateField()
+    student_ids = models.JSONField(default=list)
+    all_eligible = models.BooleanField(default=False)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="queued")
+    created_placement_ids = models.JSONField(default=list)
+    skipped = models.JSONField(default=list)
+    error_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "placements_placement_batch"
+        indexes = [models.Index(fields=["actor_id", "-created_at"], name="placements__actor_i_4b30f6_idx")]
 
 
 class _Assignment(BaseModel):

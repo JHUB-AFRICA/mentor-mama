@@ -22,6 +22,19 @@ class WardAllocated:
 @dataclass(frozen=True)
 class PlacementScheduled:
     placement_id: UUID
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementInvitationIssued:
+    placement_id: UUID
+    student_id: UUID
+
+
+@dataclass(frozen=True)
+class PlacementAcknowledgementReminderRequested:
+    placement_id: UUID
+    student_id: UUID
 
 
 @dataclass(frozen=True)
@@ -35,6 +48,7 @@ class MentorReassigned:
     placement_id: UUID
     mentor_id: UUID
     previous_mentor_id: UUID
+    recipient_user_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,19 +60,23 @@ class PlacementActivated:
 class PlacementPaused:
     placement_id: UUID
     reason: str
+    recipient_user_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
 class PlacementResumed:
     placement_id: UUID
+    recipient_user_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
 class PlacementCompleted:
     placement_id: UUID
+    recipient_user_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
 class PlacementWithdrawn:
     placement_id: UUID
     reason: str
+    recipient_user_ids: tuple[UUID, ...] = ()

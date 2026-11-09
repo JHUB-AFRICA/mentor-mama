@@ -18,11 +18,27 @@ class SessionType(models.TextChoices):
     DEBRIEF = "debrief", "Debrief"
     FEEDBACK = "feedback", "Feedback"
     CASE_REFLECTION = "case_reflection", "Case reflection"
+    CASE_REVIEW = "case_review", "Case review"
+    PLANNING = "planning", "Placement planning"
+    WELLBEING_SUPPORT = "wellbeing_support", "Wellbeing support"
+    CAREER_DEVELOPMENT = "career_development", "Career development"
     OTHER = "other", "Other"
+
+
+class SessionBatch(BaseModel):
+    """One mentor command that records the same encounter for attendees."""
+
+    created_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="session_batches")
+
+    class Meta:
+        db_table = "mentorship_session_batch"
 
 
 class Session(BaseModel):
     placement = models.ForeignKey("placements.Placement", on_delete=models.PROTECT, related_name="sessions")
+    batch = models.ForeignKey(
+        SessionBatch, on_delete=models.PROTECT, null=True, blank=True, related_name="sessions"
+    )
     mentor_assignment = models.ForeignKey(
         "placements.MentorAssignment", on_delete=models.PROTECT, related_name="sessions"
     )
@@ -88,4 +104,19 @@ class SessionTopic(models.Model):
         db_table = "mentorship_session_topic"
         constraints = [
             models.UniqueConstraint(fields=["session", "topic"], name="one_row_per_session_topic")
+        ]
+
+
+class SessionBatchResult(models.Model):
+    """Idempotent per-placement result, including already-satisfied duplicates."""
+
+    batch = models.ForeignKey(SessionBatch, on_delete=models.CASCADE, related_name="results")
+    session = models.ForeignKey(Session, on_delete=models.PROTECT, related_name="batch_results")
+    placement = models.ForeignKey("placements.Placement", on_delete=models.PROTECT, related_name="session_batch_results")
+    duplicate = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "mentorship_session_batch_result"
+        constraints = [
+            models.UniqueConstraint(fields=["batch", "placement"], name="one_result_per_batch_placement"),
         ]

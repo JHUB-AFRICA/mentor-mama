@@ -1,0 +1,3 @@
+export function LoadingOverlay({ label = "Loading…" }: { label?: string }) {
+  return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-navy/35 p-4 backdrop-blur-[2px]" role="status" aria-live="polite" aria-label={label}><div className="flex min-w-[12rem] flex-col items-center rounded-2xl bg-white px-8 py-7 shadow-2xl"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-light"><span className="h-6 w-6 animate-spin rounded-full border-[3px] border-teal/25 border-t-teal" /></span><p className="mt-4 font-body text-sm font-semibold text-navy">{label}</p><span className="mt-3 h-1 w-24 overflow-hidden rounded-full bg-mist"><span className="block h-full w-1/2 animate-pulse rounded-full bg-teal" /></span></div></div>;
+}

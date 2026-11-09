@@ -92,9 +92,9 @@ def checklist_template(program):
         program=program, version=1, published_at=dt.datetime.now(dt.timezone.utc)
     )
     for position, label in enumerate(
-        ["Student welcomed and introduced to the ward team",
-         "Ward layout, emergency exits and PPE shown",
-         "Emergency escalation protocols briefed"], start=1
+        ["Welcome the student and introduce the ward team.",
+         "Show the student key ward areas, reporting contacts, emergency exits, and PPE.",
+         "Explain how to get urgent help and raise a safeguarding concern."], start=1
     ):
         TemplateItem.objects.create(template=template, position=position, label=label)
     return template
@@ -114,7 +114,7 @@ def draft_placement(cohort, student, coordinator):
 @pytest.fixture
 def scheduled_placement(draft_placement, ward, mentor, coordinator, nurse_manager):
     """T-01 fires when the assignment set completes — see WFR-002."""
-    placement_services.allocate_ward(draft_placement.id, ward.id, actor=coordinator)
+    placement_services.allocate_ward(draft_placement.id, ward.id, actor=nurse_manager)
     placement_services.assign_mentor(draft_placement.id, mentor.id, actor=nurse_manager)
     draft_placement.refresh_from_db()
     return draft_placement
@@ -127,7 +127,17 @@ def active_placement(scheduled_placement, checklist_template, coordinator, stude
     from apps.induction.models import TemplateItem as Item
 
     placement_services.transition(scheduled_placement.id, State.AWAITING_STUDENT, actor=coordinator)
-    placement_services.transition(scheduled_placement.id, State.ORIENTATION, actor=student)
+    placement_services.transition(
+        scheduled_placement.id, State.ORIENTATION, actor=student,
+        asserted_by="student.confirm_placement",
+    )
+    induction_services.acknowledge_orientation(
+        scheduled_placement.id,
+        actor=student,
+        understands_placement_details=True,
+        understands_emergency_process=True,
+        understands_safeguarding=True,
+    )
     checklist = induction_services.open_induction(scheduled_placement.id, actor=mentor)
     for item in Item.objects.filter(template=checklist.template):
         induction_services.answer_item(checklist.id, item.id, "yes", actor=mentor)

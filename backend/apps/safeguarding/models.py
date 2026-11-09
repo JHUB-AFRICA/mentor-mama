@@ -19,6 +19,12 @@ class Severity(models.TextChoices):
     HIGH = "high", "High"
 
 
+class ResolutionOutcome(models.TextChoices):
+    INTERNAL_ACTION = "internal_action", "Internal action"
+    REFERRED_EXTERNALLY = "referred_externally", "Referred externally"
+    NO_ACTION_REQUIRED = "no_action_required", "No action required"
+
+
 class Escalation(BaseModel):
     placement = models.ForeignKey(
         "placements.Placement", on_delete=models.PROTECT, null=True, blank=True, related_name="escalations"
@@ -36,6 +42,8 @@ class Escalation(BaseModel):
     finding = models.TextField(null=True, blank=True)          # RESTRICTED
     action_taken = models.TextField(null=True, blank=True)     # RESTRICTED
     closure_date = models.DateField(null=True, blank=True)
+    resolution_outcome = models.CharField(max_length=32, choices=ResolutionOutcome.choices, null=True, blank=True)
+    referral_note = models.TextField(null=True, blank=True)  # RESTRICTED
     related_escalation = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="recurrences"
     )

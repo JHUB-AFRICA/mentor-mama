@@ -50,6 +50,32 @@ MentorMAMA enforces strict data protection boundaries designed for healthcare en
 
 Ensure you have **Node.js** (v18+) and **pnpm** installed.
 
+### Start the complete local stack in Docker
+
+With Docker Compose installed, start PostgreSQL, Redis, the API, workers,
+scheduler, and the portal together:
+
+```bash
+pnpm dev:full
+```
+
+Open `http://localhost:5173`. Compose waits for healthy dependencies, applies
+database migrations, and routes portal API requests to the API container. The
+database and Redis data stay in named Docker volumes. Press `Ctrl+C` to stop
+the foreground services; use `docker compose -f docker-compose.dev.yml down`
+to stop and remove containers while keeping those volumes.
+
+To run only backend containers and keep the portal in a separate host terminal,
+use `pnpm dev:stack` and `pnpm --filter @mentormama/portal dev --host 0.0.0.0`.
+
+### Managed-VPS production stack
+
+The production Docker Compose setup, deployment inputs, scaling, monitoring,
+backups, and restore steps are documented in
+[`docs/operations/managed-vps-runbook.md`](docs/operations/managed-vps-runbook.md).
+It uses Caddy for HTTPS and same-host API balancing. It has not been built or
+accepted on a staging VPS yet; do not treat the files as a completed release.
+
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/JHUB-AFRICA/mentor-mama.git

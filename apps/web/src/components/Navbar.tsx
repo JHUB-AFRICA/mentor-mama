@@ -11,6 +11,8 @@ const navLinks = [
   { label: "Contact", href: "/contact" },
 ];
 
+const portalUrl = import.meta.env.VITE_PORTAL_URL ?? "http://localhost:5174";
+
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -56,6 +58,12 @@ export default function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center">
+            <a
+              href={portalUrl}
+              className="mr-6 text-[14px] font-medium tracking-[0.02em] text-charcoal transition-colors hover:text-sage"
+            >
+              Portal sign in
+            </a>
             <Link
               to="/contact"
               className="bg-sage text-white px-6 py-2.5 rounded-pill text-[14px] font-semibold hover:bg-sage/90 transition-all hover:scale-[1.02]"
@@ -108,6 +116,17 @@ export default function Navbar() {
               transform: mobileOpen ? "translateY(0)" : "translateY(16px)",
             }}
           >
+            <a
+              href={portalUrl}
+              className="font-display text-h2 text-navy transition-colors hover:text-sage"
+              style={{
+                transitionDelay: mobileOpen ? "300ms" : "0ms",
+                opacity: mobileOpen ? 1 : 0,
+                transform: mobileOpen ? "translateY(0)" : "translateY(16px)",
+              }}
+            >
+              Portal sign in
+            </a>
             <Link
               to="/contact"
               className="bg-sage text-white px-8 py-3 rounded-pill text-body font-semibold hover:bg-sage/90 transition-colors"

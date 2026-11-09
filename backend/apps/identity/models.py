@@ -1,5 +1,7 @@
 """Identity: who is acting, and what they are scoped to."""
 
+import uuid
+
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
@@ -11,12 +13,34 @@ class Program(BaseModel):
     """The programme a deployment belongs to. Program Admins are scoped here."""
 
     name = models.CharField(max_length=120)
+    short_name = models.CharField(max_length=40, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    academic_year = models.CharField(max_length=20, blank=True, default="")
+    owner = models.ForeignKey("User", null=True, blank=True, on_delete=models.SET_NULL, related_name="owned_programmes")
+    require_mentor_training_before_placement = models.BooleanField(default=True)
+    directory_reviewed_at = models.DateTimeField(null=True, blank=True)
+    directory_reviewed_by = models.ForeignKey(
+        "User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_programme_directories",
+    )
 
     class Meta:
         db_table = "identity_program"
 
     def __str__(self):
         return self.name
+
+
+class BootstrapEvent(BaseModel):
+    """Auditable infrastructure bootstrap action before a human actor exists."""
+
+    program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="bootstrap_events")
+    email = models.EmailField()
+    action = models.CharField(max_length=64)
+    details = models.JSONField(default=dict)
+
+    class Meta:
+        db_table = "identity_bootstrap_event"
 
 
 class Role(models.TextChoices):
@@ -61,10 +85,25 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=32, blank=True, default="")
+    # University-owned identifier. It is unique within an institution, not
+    # globally, because institutions may use overlapping numbering schemes.
+    registration_number = models.CharField(max_length=64, blank=True, default="")
     first_name = models.CharField(max_length=120)
     last_name = models.CharField(max_length=120)
     role = models.CharField(max_length=32, choices=Role.choices)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.INVITED)
+    # Facility mentors can pause new allocations without losing their account.
+    accepting_students = models.BooleanField(default=True)
+    max_active_placements = models.PositiveIntegerField(default=5)
+
+    # Rotating nonces invalidate outstanding links without storing raw secrets.
+    invitation_nonce = models.UUIDField(default=uuid.uuid4, editable=False)
+    invitation_sent_at = models.DateTimeField(null=True, blank=True)
+    password_reset_nonce = models.UUIDField(default=uuid.uuid4, editable=False)
+    email_verification_nonce = models.UUIDField(default=uuid.uuid4, editable=False)
+    email_verification_code_hash = models.CharField(max_length=128, blank=True, default="")
+    email_verification_sent_at = models.DateTimeField(null=True, blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
 
     program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="users")
 
@@ -107,7 +146,15 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
                     )
                 ),
                 name="user_one_organisation",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["institution_id", "registration_number"],
+                condition=(
+                    models.Q(role="student")
+                    & models.Q(registration_number__gt="")
+                ),
+                name="unique_student_registration_per_institution",
+            ),
         ]
 
     @property
@@ -116,3 +163,38 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class UserSession(BaseModel):
+    """Server-side session inventory; secrets remain in Django's session store."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_sessions")
+    session_key = models.CharField(max_length=64, unique=True)
+    device_label = models.CharField(max_length=160, blank=True, default="")
+    user_agent = models.TextField(blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    last_seen_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "identity_user_session"
+        indexes = [
+            models.Index(fields=["user", "revoked_at", "-last_seen_at"]),
+        ]
+
+
+class MFARecoveryRequest(BaseModel):
+    """Support-reviewed request to restore access to an MFA-protected account."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        REVIEWED = "reviewed", "Reviewed"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_recovery_requests")
+    reason = models.CharField(max_length=1000)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+
+    class Meta:
+        db_table = "identity_mfa_recovery_request"
+        indexes = [models.Index(fields=["user", "status", "-created_at"])]

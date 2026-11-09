@@ -1,0 +1,9 @@
+{
+  "name": "MentorMAMA Portal",
+  "short_name": "MentorMAMA",
+  "description": "Clinical mentorship programme portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAF8",
+  "theme_color": "#112B4A"
+}

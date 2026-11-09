@@ -264,8 +264,8 @@ out is `Withdrawn` — visible, reason-bearing, and auditable — not a silent d
 
 **WFR-002 — System-derived transitions.** T-01, T-06, T-10, and T-17 are not buttons. They fire when their
 guard becomes satisfiable, and are audited against the actor whose action completed the guard. This matters
-for T-01 specifically: the assignment set is completed by *two different institutions* (Coordinator allocates
-the ward, Nurse Manager assigns the mentor), and neither has authority to press the other's button.
+for T-01 specifically: the assignment set is completed by *two different institutions*: the Coordinator creates the
+placement, while the Nurse Manager allocates the ward and mentor. Neither has authority to press the other's button.
 
 **WFR-003 — Pause semantics.** A Pause Interval is a first-class record — `started_at` (date of interruption),
 `ended_at` (date of resumption), `reason` from the POL-021 vocabulary, free text where required, and the acting

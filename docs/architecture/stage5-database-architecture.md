@@ -577,9 +577,21 @@ CREATE TABLE assessments_feedback_anonymous (
     cohort_id    uuid NOT NULL REFERENCES institutions_cohort(id),
     facility_id  uuid NOT NULL REFERENCES facilities_facility(id),
     ward_id      uuid NOT NULL REFERENCES facilities_ward(id),
-    submitted_on date NOT NULL,          -- date, not timestamp: a timestamp plus a
+    submitted_on date NOT NULL           -- date, not timestamp: a timestamp plus a
                                          -- server log correlates back to a session
-    comments     text
+    -- Fixed score responses live in assessments_response; no free-text field.
+);
+
+-- Replay guard has no actor or feedback result reference; only keyed digests
+-- and a date are retained. The audit counter has no respondent or scope key.
+CREATE TABLE assessments_anonymous_feedback_command (
+    command_digest varchar(64) PRIMARY KEY,
+    payload_digest varchar(64) NOT NULL,
+    received_on date NOT NULL
+);
+CREATE TABLE assessments_anonymous_feedback_audit_day (
+    submitted_on date PRIMARY KEY,
+    submissions integer NOT NULL DEFAULT 0
 );
 ```
 
@@ -607,7 +619,6 @@ CREATE TABLE assessments_response (
     id uuid PRIMARY KEY,
     assessment_id uuid REFERENCES assessments_assessment(id),
     feedback_confidential_id uuid REFERENCES assessments_feedback_confidential(id),
-    feedback_anonymous_id uuid REFERENCES assessments_feedback_anonymous(id),
     question_code text NOT NULL,
     scale text NOT NULL CHECK (scale IN ('likert_1_5','score_0_100','yes_no')),
     value_numeric numeric(5,2),
@@ -620,8 +631,22 @@ CREATE TABLE assessments_response (
     -- a response belongs to exactly one parent
     CONSTRAINT one_parent CHECK (
         (assessment_id IS NOT NULL)::int
-      + (feedback_confidential_id IS NOT NULL)::int
-      + (feedback_anonymous_id IS NOT NULL)::int = 1)
+      + (feedback_confidential_id IS NOT NULL)::int = 1)
+);
+
+-- Anonymous scores have their own table so no exact timestamp can be joined
+-- to the anonymous submission through the shared response table.
+CREATE TABLE assessments_anonymous_response (
+    id uuid PRIMARY KEY,
+    feedback_anonymous_id uuid NOT NULL REFERENCES assessments_feedback_anonymous(id),
+    question_code text NOT NULL,
+    scale text NOT NULL CHECK (scale IN ('likert_1_5','score_0_100','yes_no')),
+    value_numeric numeric(5,2),
+    value_boolean boolean,
+    CONSTRAINT anonymous_score_in_range CHECK (
+        (scale = 'likert_1_5' AND value_numeric BETWEEN 1 AND 5)
+     OR (scale = 'score_0_100' AND value_numeric BETWEEN 0 AND 100)
+     OR (scale = 'yes_no' AND value_boolean IS NOT NULL AND value_numeric IS NULL))
 );
 ```
 

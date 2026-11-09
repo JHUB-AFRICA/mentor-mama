@@ -1,0 +1,277 @@
+"""Translate committed identity outbox events into transactional emails."""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.core.cache import cache
+from django.core.mail import send_mail
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+
+from apps.identity import api as identity
+from django_otp.plugins.otp_email.models import EmailDevice
+
+
+def _activation_link(user) -> str:
+    uid = urlsafe_base64_encode(force_bytes(str(user.id)))
+    return f"{settings.FRONTEND_BASE_URL}/activate?uid={uid}&token={identity.invitation_token(user)}"
+
+
+def _reset_link(user) -> str:
+    uid = urlsafe_base64_encode(force_bytes(str(user.id)))
+    return f"{settings.FRONTEND_BASE_URL}/reset-password?uid={uid}&token={identity.password_reset_token(user)}"
+
+
+def _email_content(*, eyebrow: str, title: str, intro: str, action_label: str,
+                   action_url: str, detail: str, expiry: str,
+                   accent: str = "#1d8c8c") -> str:
+    """Build accessible plain-text mail while the visual email system is redesigned."""
+    del eyebrow, accent
+    sections = ["MentorMAMA", title, intro, detail]
+    if action_url and action_url != "#":
+        sections.append(f"{action_label}: {action_url}")
+    elif action_label and action_label != "Verification code":
+        sections.append(action_label)
+    sections.extend([expiry, "Need help? Contact your programme support team."])
+    return "\n\n".join(part.strip() for part in sections if part and part.strip())
+
+
+def _optional_email_enabled(*, user_id, event_type: str) -> bool:
+    """Respect the user's email-only preferences for non-mandatory updates."""
+    from apps.notifications.models import NotificationPreference
+
+    preference = NotificationPreference.objects.filter(user_id=user_id).first()
+    if preference is None:
+        return True
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+        return preference.placement_updates
+    if event_type in {"SessionLogged"}:
+        return preference.account_activity
+    return preference.programme_updates
+
+
+def deliver_outbox_event(event) -> None:
+    """Deliver one supported event; callers mark it dispatched only on success."""
+    user_id = event.payload.get("user_id") or event.payload.get("student_id")
+    user = identity.user_of(user_id) if user_id else None
+    if event.event_type == "EmailMFAChallengeRequested" and user and user.status == identity.STATUSES.ACTIVE:
+        device = EmailDevice.objects.filter(
+            id=event.payload.get("device_id"), user_id=user.id, confirmed=True,
+        ).first()
+        if device is None or not device.token:
+            return
+        text = _email_content(
+            eyebrow="Account security", title="Your MentorMAMA verification code",
+            intro=f"Hello {user.first_name}, use this code to finish signing in.",
+            action_label="Verification code", action_url="#",
+            detail=f"Your code is {device.token}.",
+            expiry="This code expires in five minutes and can be used once.", accent="#2a6fa8",
+        )
+        send_mail("Your MentorMAMA verification code", text, settings.OTP_EMAIL_SENDER, [user.email])
+    elif event.event_type == "PlacementInvitationIssued" and user and user.status == identity.STATUSES.ACTIVE:
+        text = _email_content(
+            eyebrow="Placement invitation", title="Your placement is ready to review",
+            intro=f"Hello {user.first_name}, your programme team has assigned a clinical placement for you to review.",
+            action_label="Review placement", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+            detail="Sign in to confirm that you recognise the placement and continue to orientation.",
+            expiry="Please review this placement as soon as you can.",
+        )
+        send_mail("Your MentorMAMA placement is ready", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type == "PlacementAcknowledgementReminderRequested" and user and user.status == identity.STATUSES.ACTIVE:
+        if not _optional_email_enabled(user_id=user.id, event_type=event.event_type):
+            return
+        text = _email_content(
+            eyebrow="Placement reminder", title="Your placement acknowledgement is waiting",
+            intro=f"Hello {user.first_name}, your programme team is waiting for you to acknowledge your placement orientation.",
+            action_label="Review placement", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+            detail="Please sign in to review the placement details and acknowledge the orientation step so induction can continue.",
+            expiry="Please review this reminder when you are able.",
+        )
+        send_mail("Reminder: acknowledge your MentorMAMA placement", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type == "EmailVerificationRequested" and user and user.status == identity.STATUSES.ACTIVE:
+        code = cache.get(f"identity:email-verification:{user.email_verification_nonce}")
+        if not code:
+            return
+        text = _email_content(
+            eyebrow="Email verification", title="Confirm your email address",
+            intro="Use the verification code below to confirm the email address on your MentorMAMA account.",
+            action_label="Verification code", action_url="#",
+            detail=f"Your code is {code}.", expiry="This code expires in 15 minutes.",
+        )
+        send_mail("Confirm your MentorMAMA email", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type == "IdentityInvitationRequested" and user and user.status == identity.STATUSES.INVITED:
+        link = _activation_link(user)
+        role_copy = {
+            "program_admin": (
+                "Programme administrator workspace", "You have been invited to help oversee this programme.",
+                "Set up your account, enable the required authenticator protection, and review your programme workspace.",
+            ),
+            "coordinator": (
+                "University coordinator workspace", "You have been invited to coordinate students and placements.",
+                "Set up your account, enable authenticator protection, and prepare to manage institution-scoped work.",
+            ),
+            "nurse_manager": (
+                "Clinical operations workspace", "You have been invited to coordinate ward capacity and clinical mentors.",
+                "Set up your account, enable authenticator protection, and prepare to manage your facility workspace.",
+            ),
+            "mentor": (
+                "Clinical mentor workspace", "You have been invited to support students through their clinical learning.",
+                "Set up your account and review your mentor workspace when you are ready.",
+            ),
+            "student": (
+                "Student placement workspace", "You have been invited to continue your clinical learning with MentorMAMA.",
+                "Set up your account, then review and confirm placements assigned to you.",
+            ),
+        }
+        role_label, role_intro, role_detail = role_copy.get(
+            user.role, ("MentorMAMA workspace", "Your programme team has invited you to join MentorMAMA.", "Set up your secure account to continue."),
+        )
+        text = _email_content(
+            eyebrow=role_label, title="Your MentorMAMA workspace is ready",
+            intro=f"Hello {user.first_name}, {role_intro}",
+            action_label="Create your account", action_url=link,
+            detail=role_detail,
+            expiry="This invitation link expires in 48 hours.",
+        )
+        send_mail("You’re invited to MentorMAMA", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type == "PasswordResetRequested" and user and user.status == identity.STATUSES.ACTIVE:
+        link = _reset_link(user)
+        text = _email_content(
+            eyebrow="Account recovery", title="Reset your MentorMAMA password",
+            intro="We received a request to choose a new password for your MentorMAMA account.",
+            action_label="Reset your password", action_url=link,
+            detail="If you made this request, use the button below to continue. If not, your account remains safe and you can ignore this email.",
+            expiry="This reset link expires automatically and can be used only once.",
+        )
+        send_mail("Reset your MentorMAMA password", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type == "SecurityNotificationRequested" and user:
+        # Suspension/deactivation changes the account status before the
+        # committed outbox event is dispatched. Those security emails must
+        # still be delivered to the affected account, while other security
+        # notices remain limited to active accounts.
+        action = event.payload.get("action")
+        if action not in {"account_suspended", "account_deactivated"} and user.status != identity.STATUSES.ACTIVE:
+            return
+        security_copy = {
+            "password_changed": ("Password changed", "Your MentorMAMA password was changed successfully.", "If you did not make this change, contact your programme support team immediately."),
+            "password_reset": ("Password reset completed", "Your MentorMAMA password was reset successfully.", "If you did not request this change, contact your programme support team immediately."),
+            "mfa_enabled": ("Authenticator protection enabled", "An authenticator app is now connected to your MentorMAMA account.", "Keep your backup codes somewhere private and accessible."),
+            "mfa_recovery": ("Authenticator access reset", "Your MentorMAMA authenticator access was reset by an authorised administrator.", "Sign in and set up a new authenticator before continuing."),
+            "backup_codes_regenerated": ("Backup codes replaced", "New backup codes were created for your MentorMAMA account.", "Your previous backup codes no longer work. If you did not make this change, contact programme support."),
+            "account_access_changed": ("Account access updated", "Your MentorMAMA programme access was updated by an authorised administrator.", "For your protection, your devices were signed out. Sign in again to continue, and contact programme support if this change was unexpected."),
+            "account_sessions_revoked": ("Devices signed out", "A programme administrator signed your MentorMAMA account out of its other devices.", "Sign in again on any device you still use. Contact programme support if this was unexpected."),
+            "mfa_recovery_request_reviewed": ("Authenticator help request reviewed", "Your Programme Admin reviewed your request for help with your authenticator app.", "If you still cannot sign in, contact your programme support team."),
+            "account_suspended": ("Account access paused", "Your MentorMAMA account has been suspended.", "Contact your programme support team if you believe this is unexpected."),
+            "account_deactivated": ("Account access ended", "Your MentorMAMA account has been deactivated.", "Contact your programme support team if you need help."),
+            "account_active": ("Account access restored", "Your MentorMAMA account has been reactivated.", "You can sign in and continue using your workspace."),
+        }
+        title, intro, detail = security_copy.get(
+            action, ("Security update", "There has been a security update to your MentorMAMA account.", "If you did not expect this, contact your programme support team."),
+        )
+        text = _email_content(
+            eyebrow="Account security", title=title, intro=f"Hello {user.first_name}, {intro}",
+            action_label="Open account", action_url=f"{settings.FRONTEND_BASE_URL}/settings",
+            detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
+        )
+        send_mail(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type in {
+        "MentorAssigned", "MentorReassigned", "EscalationRaised",
+        "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",
+        "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted",
+        "PlacementScheduled", "OrientationAcknowledged", "InductionCompleted", "EscalationStatusChanged",
+    }:
+        subject, eyebrow, title, intro, detail = {
+            "MentorAssigned": (
+                "You have a new MentorMAMA placement assignment", "Placement update",
+                "A placement needs your attention", "You have been assigned to support a clinical placement.",
+                "Sign in to review the placement and complete any required setup.",
+            ),
+            "MentorReassigned": (
+                "Your MentorMAMA placement assignment changed", "Placement update",
+                "Your placement assignment changed", "A placement assignment connected to your account has changed.",
+                "Sign in to review the latest placement details.",
+            ),
+            "EscalationRaised": (
+                "A safeguarding concern needs review", "Safeguarding notice",
+                "A concern needs your review", "A safeguarding concern has been raised in a scope you support.",
+                "Sign in to review it through the restricted safeguarding workspace. No concern details are included in this email.",
+            ),
+            "FeedbackSubmitted": (
+                "New confidential feedback is ready", "Feedback update",
+                "Confidential feedback was submitted", "A student has submitted confidential feedback connected to a placement in your institution.",
+                "Sign in to review it through the authorised feedback workspace.",
+            ),
+            "SessionLogged": (
+                "A mentor follow-up needs review", "Mentorship follow-up",
+                "A session was flagged for supervisor review", "A mentor has requested supervisor follow-up on a logged mentorship session.",
+                "Sign in to review the placement context and follow-up task.",
+            ),
+            "FinalAssessmentSubmitted": (
+                "A placement is ready for close-out", "Assessment update",
+                "Final assessment submitted", "A student has submitted the final assessment for a placement in your facility.",
+                "Sign in to review the assessment and continue the close-out process.",
+            ),
+            "PlacementPaused": (
+                "Your placement has been paused", "Placement update",
+                "A placement connected to your account has been paused", "The placement team has temporarily paused this placement.",
+                "Sign in to review the latest placement status and planned next steps.",
+            ),
+            "PlacementResumed": (
+                "Your placement has resumed", "Placement update",
+                "A placement connected to your account has resumed", "The placement team has resumed this placement.",
+                "Sign in to review the updated placement window and status.",
+            ),
+            "PlacementWithdrawn": (
+                "Your placement has been withdrawn", "Placement update",
+                "A placement connected to your account has been withdrawn", "The placement team has withdrawn this placement.",
+                "Sign in to review the placement record or contact your programme support team.",
+            ),
+            "PlacementCompleted": (
+                "Your placement is complete", "Placement update",
+                "A placement connected to your account has been completed", "The placement team has marked this placement complete.",
+                "Sign in to review the placement record and any remaining close-out information.",
+            ),
+            "PlacementScheduled": (
+                "A MentorMAMA placement is scheduled", "Placement update",
+                "A placement is ready for student review", "A placement in your institution has completed its assignments and is ready for student acknowledgement.",
+                "Sign in to review the placement status.",
+            ),
+            "OrientationAcknowledged": (
+                "A student acknowledged placement orientation", "Induction update",
+                "A student is ready for induction", "A student has acknowledged placement orientation.",
+                "Sign in to open the induction checklist.",
+            ),
+            "InductionCompleted": (
+                "Your placement induction is complete", "Placement update",
+                "You are ready to begin mentorship", "Your mentor completed the placement induction checklist.",
+                "Sign in to review your active placement.",
+            ),
+            "EscalationStatusChanged": (
+                "A safeguarding report has an update", "Safeguarding update",
+                "The status of your report changed", "There is an update to a safeguarding report you submitted.",
+                "Sign in to review it through the restricted safeguarding workspace. No report details are included in this email.",
+            ),
+        }[event.event_type]
+        for recipient_id in event.payload.get("recipient_user_ids", []):
+            recipient = identity.user_of(recipient_id)
+            if not recipient or recipient.status != identity.STATUSES.ACTIVE:
+                continue
+            if not _optional_email_enabled(user_id=recipient.id, event_type=event.event_type):
+                continue
+            text = _email_content(
+                eyebrow=eyebrow, title=title, intro=f"Hello {recipient.first_name}, {intro.lower()}",
+                action_label="Open MentorMAMA", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+                detail=detail, expiry="Please review this notification when you are able.",
+            )
+            send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+
+
+def send_digest_email(*, user, unread_count: int) -> None:
+    text = _email_content(
+        eyebrow="Weekly programme digest", title="A clear view of your week",
+        intro=f"Hello {user.first_name}, here is a short summary of the updates waiting in your MentorMAMA inbox.",
+        action_label="Review notifications", action_url=f"{settings.FRONTEND_BASE_URL}/",
+        detail=f"You have {unread_count} unread programme notification{'s' if unread_count != 1 else ''}. Open MentorMAMA to review the safe summaries and any actions waiting for you.",
+        expiry="You are receiving this because weekly digest notifications are enabled in your settings.",
+    )
+    send_mail("Your MentorMAMA weekly digest", text, settings.DEFAULT_FROM_EMAIL, [user.email])

@@ -16,7 +16,16 @@ def publish(*events) -> list[OutboxEvent]:
     rows = []
     for event in events:
         payload = asdict(event) if is_dataclass(event) else dict(event.payload)
-        payload = {k: (str(v) if v is not None else None) for k, v in payload.items()}
+        def json_value(value):
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+            if isinstance(value, (list, tuple)):
+                return [json_value(item) for item in value]
+            if isinstance(value, dict):
+                return {key: json_value(item) for key, item in value.items()}
+            return str(value)
+
+        payload = {key: json_value(value) for key, value in payload.items()}
         rows.append(
             OutboxEvent.objects.create(
                 event_type=type(event).__name__,

@@ -18,6 +18,31 @@ class ChecklistTemplate(BaseModel):
         ]
 
 
+class InductionBatch(BaseModel):
+    """One mentor-led induction session shared across selected attendees."""
+
+    template = models.ForeignKey(ChecklistTemplate, on_delete=models.PROTECT, related_name="batches")
+    created_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="induction_batches")
+
+    class Meta:
+        db_table = "induction_batch"
+
+
+class OrientationAcknowledgement(BaseModel):
+    """The student's explicit acknowledgement before facility induction."""
+
+    placement = models.OneToOneField("placements.Placement", on_delete=models.PROTECT, related_name="orientation_acknowledgement")
+    student = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="orientation_acknowledgements")
+    understands_placement_details = models.BooleanField(default=False)
+    understands_emergency_process = models.BooleanField(default=False)
+    understands_safeguarding = models.BooleanField(default=False)
+    questions = models.TextField(blank=True, default="")
+    acknowledged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "induction_orientation_acknowledgement"
+
+
 class TemplateItem(BaseModel):
     template = models.ForeignKey(ChecklistTemplate, on_delete=models.PROTECT, related_name="items")
     position = models.SmallIntegerField()
@@ -76,4 +101,16 @@ class ItemResponse(BaseModel):
         db_table = "induction_item_response"
         constraints = [
             models.UniqueConstraint(fields=["checklist", "template_item"], name="one_response_per_item")
+        ]
+
+
+class InductionBatchResult(models.Model):
+    batch = models.ForeignKey(InductionBatch, on_delete=models.CASCADE, related_name="results")
+    placement = models.ForeignKey("placements.Placement", on_delete=models.PROTECT, related_name="induction_batch_results")
+    checklist = models.ForeignKey(Checklist, on_delete=models.PROTECT, related_name="batch_results")
+
+    class Meta:
+        db_table = "induction_batch_result"
+        constraints = [
+            models.UniqueConstraint(fields=["batch", "placement"], name="one_checklist_per_induction_batch_placement"),
         ]

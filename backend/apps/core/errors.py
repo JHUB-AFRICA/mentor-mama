@@ -45,6 +45,7 @@ PlacementClosed = _error("PlacementClosed", 409, "This placement is closed.")
 PlacementArchived = _error("PlacementArchived", 409, "This placement is read-only.")
 InvalidTransition = _error("InvalidTransition", 409, "That change is not allowed from the current state.")
 InductionIncomplete = _error("InductionIncomplete", 409, "The induction checklist is not complete.")
+OrientationIncomplete = _error("OrientationIncomplete", 409, "The student orientation has not been completed.")
 FinalAssessmentMissing = _error("FinalAssessmentMissing", 409, "The final assessment has not been submitted.")
 OpenEscalationBlocksCompletion = _error(
     "OpenEscalationBlocksCompletion", 409, "This placement cannot be completed while a concern is still open."
@@ -54,7 +55,16 @@ OpenEscalationBlocksCompletion = _error(
 MentorAlreadyAssigned = _error("MentorAlreadyAssigned", 409, "This placement already has an active mentor.")
 WardAlreadyAssigned = _error("WardAlreadyAssigned", 409, "This placement already has an active ward.")
 StudentAlreadyAssigned = _error("StudentAlreadyAssigned", 409, "This student already has an overlapping placement.")
+CohortOverlap = _error("CohortOverlap", 409, "This student already belongs to a cohort with overlapping dates.")
+InvalidCohortDates = _error("InvalidCohortDates", 400, "The cohort end date must be after its start date.")
 WardCapacityExceeded = _error("WardCapacityExceeded", 409, "This ward is at capacity.")
+WardCapacityBelowOccupancy = _error(
+    "WardCapacityBelowOccupancy", 409,
+    "Ward capacity cannot be lower than the number of occupying placements assigned to it.",
+)
+DirectoryImportInvalid = _error("DirectoryImportInvalid", 422, "The directory CSV contains invalid rows.")
+DirectoryImportPreviewStale = _error("DirectoryImportPreviewStale", 409, "The file or directory changed after preview. Review a fresh preview.")
+DirectoryImportWarningsUnconfirmed = _error("DirectoryImportWarningsUnconfirmed", 409, "Review and acknowledge import warnings before continuing.")
 TrainingIncomplete = _error("TrainingIncomplete", 409, "The assigned mentor has not completed required training.")
 
 # -- sessions --------------------------------------------------------------
@@ -70,7 +80,29 @@ SessionCorrectionWindowClosed = _error(
 # -- assessment ------------------------------------------------------------
 FeedbackImmutable = _error("FeedbackImmutable", 409, "Submitted feedback cannot be changed.")
 AssessmentOutOfWindow = _error("AssessmentOutOfWindow", 409, "This cannot be submitted yet.")
+AssessmentNotReady = _error(
+    "AssessmentNotReady", 409,
+    "Your final assessment is available after your placement becomes active and its end date has passed.",
+)
 ScoreOutOfRange = _error("ScoreOutOfRange", 422, "A score is outside the allowed range.")
+AcknowledgementNameMismatch = _error(
+    "AcknowledgementNameMismatch", 422,
+    "Enter your full name as it appears on your account to acknowledge this placement.",
+)
+AcknowledgementAlreadySigned = _error(
+    "AcknowledgementAlreadySigned", 409,
+    "This placement has already been acknowledged. Open the assignment to view the saved record.",
+)
+AssessmentAlreadySubmitted = _error("AssessmentAlreadySubmitted", 409, "This final assessment has already been submitted.")
+FeedbackUnavailable = _error("FeedbackUnavailable", 409, "Feedback is not available for this placement yet.")
+AnonymousFeedbackUnavailable = _error(
+    "AnonymousFeedbackUnavailable", 409,
+    "Use the dedicated anonymous feedback endpoint so submission metadata is not linked to your placement.",
+)
+EmailMFAUnavailable = _error("EmailMFAUnavailable", 409, "Email verification is not available for this account.")
+EmailMFAThrottled = _error("EmailMFAThrottled", 429, "Please wait before requesting another email code.", retryable=True)
+InvitationResendThrottled = _error("InvitationResendThrottled", 429, "This invitation has reached its resend limit. Contact programme support for help.", retryable=True)
+InvalidEmailMFA = _error("InvalidEmailMFA", 400, "The email verification code is invalid or expired.")
 
 # -- safeguarding ----------------------------------------------------------
 InvalidEscalationTransition = _error("InvalidEscalationTransition", 409, "That change is not allowed.")
@@ -81,6 +113,7 @@ ReviewerConflictOfInterest = _error(
 
 # -- platform --------------------------------------------------------------
 UnauthorizedFacilityAccess = _error("UnauthorizedFacilityAccess", 404, "Not found.")
+ExportFileUnavailable = _error("ExportFileUnavailable", 410, "This export file is no longer available. Request a fresh snapshot to download it.")
 ScopeDerivationMismatch = _error("ScopeDerivationMismatch", 500, "An internal consistency check failed.")
 UnattributedWrite = _error("UnattributedWrite", 500, "An internal consistency check failed.")
 OverrideReasonRequired = _error("OverrideReasonRequired", 422, "A reason is required.")

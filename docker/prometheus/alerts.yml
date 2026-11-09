@@ -1,0 +1,25 @@
+groups:
+  - name: mentormama-api
+    rules:
+      - alert: MentorMamaApiMetricsUnavailable
+        expr: up{job="mentormama-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: MentorMAMA API metrics scrape is failing
+          description: Prometheus cannot scrape one or more API containers.
+
+      - alert: MentorMamaHighApiErrorRate
+        expr: |
+          (
+            sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(django_http_responses_total_by_status_total[5m])), 1)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: MentorMAMA API 5xx rate is above 5%
+          description: More than 5% of API responses were 5xx for five minutes.

@@ -1,0 +1,303 @@
+name: mentormama
+
+x-backend-environment: &backend-environment
+  DJANGO_SETTINGS_MODULE: config.settings.prod
+  DEBUG: "false"
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.production}
+  ALLOWED_HOSTS: ${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env.production}
+  CSRF_TRUSTED_ORIGINS: https://${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env.production}
+  DATABASE_URL: postgres://${POSTGRES_USER:-mentormama}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/${POSTGRES_DB:-mentormama}
+  REDIS_URL: redis://:${REDIS_CACHE_PASSWORD:?Set REDIS_CACHE_PASSWORD in .env.production}@redis-cache:6379/0
+  CELERY_BROKER_URL: redis://:${REDIS_BROKER_PASSWORD:?Set REDIS_BROKER_PASSWORD in .env.production}@redis-broker:6379/0
+  CELERY_RESULT_BACKEND: redis://:${REDIS_BROKER_PASSWORD:?Set REDIS_BROKER_PASSWORD in .env.production}@redis-broker:6379/1
+  CELERY_RESULT_EXPIRES: ${CELERY_RESULT_EXPIRES:-3600}
+  USE_REDIS: "true"
+  PROMETHEUS_METRICS_ENABLED: "true"
+  GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+  GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+  SECURE_SSL_REDIRECT: "true"
+  SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-31536000}
+  CSRF_COOKIE_SECURE: "true"
+  SESSION_COOKIE_SECURE: "true"
+  FRONTEND_BASE_URL: https://${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env.production}
+  USE_MAILTRAP: "false"
+  MAILTRAP_API_TOKEN: ${MAILTRAP_API_TOKEN:-}
+  MAILTRAP_SANDBOX_ID: ${MAILTRAP_SANDBOX_ID:-}
+  MAILTRAP_WEBHOOK_SECRET: ${MAILTRAP_WEBHOOK_SECRET:-}
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:?Set DEFAULT_FROM_EMAIL in .env.production}
+  EXPORT_ROOT: /var/lib/mentormama/exports
+  PRIVATE_CONTENT_ROOT: /var/lib/mentormama/content-documents
+  EXPORT_STORAGE_BACKEND: local
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+  RELEASE_VERSION: ${RELEASE_VERSION:-local}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mentormama}
+      POSTGRES_USER: ${POSTGRES_USER:-mentormama}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+    logging: &rotating-logs
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  redis-cache:
+    image: redis:7-alpine
+    environment:
+      REDIS_CACHE_PASSWORD: ${REDIS_CACHE_PASSWORD:?Set REDIS_CACHE_PASSWORD in .env.production}
+      REDIS_CACHE_MAXMEMORY: ${REDIS_CACHE_MAXMEMORY:-256mb}
+    command: ["sh", "-c", "exec redis-server --save '' --appendonly no --requirepass \"$$REDIS_CACHE_PASSWORD\" --maxmemory \"$$REDIS_CACHE_MAXMEMORY\" --maxmemory-policy allkeys-lru"]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_CACHE_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  redis-broker:
+    image: redis:7-alpine
+    environment:
+      REDIS_BROKER_PASSWORD: ${REDIS_BROKER_PASSWORD:?Set REDIS_BROKER_PASSWORD in .env.production}
+      REDIS_BROKER_MAXMEMORY: ${REDIS_BROKER_MAXMEMORY:-256mb}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_BROKER_PASSWORD\" --maxmemory \"$$REDIS_BROKER_MAXMEMORY\" --maxmemory-policy noeviction"]
+    volumes:
+      - redis-broker-data:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_BROKER_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    environment: *backend-environment
+    volumes:
+      - private-content:/var/lib/mentormama/content-documents
+      - export-files:/var/lib/mentormama/exports
+    networks: [edge, data, monitoring]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 45s
+    stop_grace_period: 40s
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    command: ["celery", "-A", "config.celery", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    environment: *backend-environment
+    volumes:
+      - private-content:/var/lib/mentormama/content-documents
+      - export-files:/var/lib/mentormama/exports
+    networks: [data, edge]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-broker:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    stop_grace_period: 90s
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  beat:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    command: ["celery", "-A", "config.celery", "beat", "--loglevel=INFO", "--schedule=/var/lib/mentormama/beat/celerybeat-schedule"]
+    environment: *backend-environment
+    volumes:
+      - beat-data:/var/lib/mentormama/beat
+    networks: [data]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=32m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-broker:
+        condition: service_healthy
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    networks: [edge]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  portal:
+    build:
+      context: .
+      dockerfile: docker/portal/Dockerfile
+    networks: [edge]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  caddy-init:
+    image: alpine:3.24
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 10001:10001 /data /config"]
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: "no"
+
+  caddy:
+    image: caddy:2.11.9-alpine
+    user: "10001:10001"
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env.production}
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env.production}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env.production}
+      XDG_DATA_HOME: /data
+      XDG_CONFIG_HOME: /config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    depends_on:
+      caddy-init:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+      portal:
+        condition: service_started
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks: [monitoring]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=32m
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env.production}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:${GRAFANA_PORT:-3000}/
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [monitoring]
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    logging: *rotating-logs
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    environment: *backend-environment
+    networks: [data]
+    profiles: [ops]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+networks:
+  edge:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+  monitoring:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-broker-data:
+  private-content:
+  export-files:
+  beat-data:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  grafana-data:
