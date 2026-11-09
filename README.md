@@ -1,107 +1,32 @@
 <div align="center">
-  <img src="assets/brand/logo/logo.png" alt="MentorMAMA Logo" width="300" />
-  <br />
-  <p><strong>A digital mentorship toolkit for safer midwifery clinical placement</strong></p>
+  <img src="assets/brand/logo/logo.png" alt="MentorMAMA" width="300" />
+  <p><strong>Stronger mentorship for safer midwifery clinical placements.</strong></p>
 </div>
 
 ---
 
-## 📖 Overview
+## About MentorMAMA
 
-**MentorMAMA** is a mobile-first digital capacity-building and workflow platform designed to improve student mentorship in maternity units across County Referral Hospitals in Kenya. 
+MentorMAMA supports consistent, supportive mentorship for midwifery students during clinical placement. It brings students, clinical mentors, ward teams, and university coordinators together around orientation, learning, placement support, and feedback.
 
-Clinical placement is the most critical phase of midwifery education, but mentorship is often informal, inconsistent, and constrained by high student-to-mentor ratios. MentorMAMA bridges this gap by combining short digital mentor training, a structured labour ward induction checklist, mentorship session logs, student feedback, and real-time visibility dashboards for academic and facility coordinators.
+The project is being developed with JKUAT School of Nursing, JHUB Africa, and AfyaVentures.
 
-This project is developed in collaboration with:
-- **JKUAT School of Nursing** (Academic coordination & framework validation)
-- **JHUB Africa** (Technical validation & collaborative development)
-- **AfyaVentures** (Program validation & pilot support)
+## Who it supports
 
-## 🚀 Core Product Workflows
+- **Students** prepare for placement, understand expectations, and share feedback about their learning experience.
+- **Clinical mentors** support student induction, learning, and placement progress.
+- **Nurse Managers and ward teams** coordinate mentorship and follow up on placement concerns.
+- **University coordinators** support cohorts and review programme progress.
+- **Programme administrators** manage programme access and setup.
 
-The platform is role-based, supporting tailored journeys for each user:
+MentorMAMA is an educational and mentorship platform. It is not a clinical record system and is not intended to collect patient-identifying information.
 
-1. **Midwifery Students:** Receive clear clinical expectations, complete orientation, log placement activities, and submit confidential feedback regarding the safety and respect of their learning environment.
-2. **Clinical Mentors:** Access short CPD-aligned training modules, execute the labour ward induction checklist for new students, and record high-impact, 3-minute mentorship session logs.
-3. **Nurse Managers / Ward In-Charges:** Monitor induction completion, assign mentors, and review escalated safeguarding concerns in real-time.
-4. **University Coordinators:** Track cohort progress and export data for regulatory reporting.
+## Project documentation
 
-## 🛠️ Technical Architecture
+Browse the [documentation guide](docs/README.md) to find product requirements, architecture decisions, user journeys, engineering guidance, verification records, and operations documentation.
 
-The platform uses a modern, mobile-first approach, prioritizing speed, low-bandwidth accessibility, and an exceptional user experience on smartphones.
+For contributor onboarding and local development, see [Contributing to MentorMAMA](docs/onboarding/CONTRIBUTING.md). Production deployment guidance is in the [managed VPS runbook](docs/operations/managed-vps-runbook.md).
 
-- **Frontend:** Progressive Web App (PWA) built with **React**, **TypeScript**, and **Vite**.
-- **Styling:** **Tailwind CSS** implementing a strict, custom design system.
-- **Animations:** **GSAP** for premium, low-overhead UI transitions.
-- **Package Manager:** **pnpm** (Monorepo architecture using Turborepo workspaces).
+## License and confidentiality
 
-### Design System & Typography
-- **Core Colors:** Midnight Navy (`#112B4A`), Ocean Teal (`#2BA6A6`), Warm Mist (`#F8FAF8`), Soft Stone (`#E8ECEB`), Terracotta (`#E98F72`).
-- **Typography:** `Manrope` (Headings) and `Inter` (UI/Body).
-
-## 🛡️ Privacy, Security, & Ethics
-
-MentorMAMA enforces strict data protection boundaries designed for healthcare environments:
-- **No Patient Data:** The MVP explicitly prevents the collection of patient-identifiable data (e.g., EMR, phone numbers, medical record numbers). It is exclusively an educational workflow tool.
-- **Confidentiality:** Student feedback forms support anonymous and confidential escalation pathways.
-- **Role-Based Access Control (RBAC):** Mentors only see data for their assigned students, and managers only view data for their active wards.
-
-## 💻 Developer Setup
-
-Ensure you have **Node.js** (v18+) and **pnpm** installed.
-
-### Start the complete local stack in Docker
-
-With Docker Compose installed, start PostgreSQL, Redis, the API, workers,
-scheduler, and the portal together:
-
-```bash
-pnpm dev:full
-```
-
-Open `http://localhost:5173`. Compose waits for healthy dependencies, applies
-database migrations, and routes portal API requests to the API container. The
-database and Redis data stay in named Docker volumes. Press `Ctrl+C` to stop
-the foreground services; use `docker compose -f docker-compose.dev.yml down`
-to stop and remove containers while keeping those volumes.
-
-To run only backend containers and keep the portal in a separate host terminal,
-use `pnpm dev:stack` and `pnpm --filter @mentormama/portal dev --host 0.0.0.0`.
-
-### Managed-VPS production stack
-
-The production Docker Compose setup, deployment inputs, scaling, monitoring,
-backups, and restore steps are documented in
-[`docs/operations/managed-vps-runbook.md`](docs/operations/managed-vps-runbook.md).
-It uses Caddy for HTTPS and same-host API balancing. It has not been built or
-accepted on a staging VPS yet; do not treat the files as a completed release.
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/JHUB-AFRICA/mentor-mama.git
-   cd mentor-mama
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pnpm install
-   ```
-
-3. **Start the local development server:**
-   ```bash
-   pnpm --filter @mentormama/web dev
-   ```
-   *The application will typically start on `http://localhost:5173`.*
-
-4. **Lint and Build commands:**
-   ```bash
-   # Run Linter
-   pnpm --filter @mentormama/web lint
-
-   # Build for Production
-   pnpm --filter @mentormama/web build
-   ```
-
-## 📄 License & Confidentiality
-
-This repository contains proprietary information, designs, and source code. All rights are reserved by the collaborative project partners. Unauthorized copying, distribution, or adaptation is strictly prohibited.
+This repository contains proprietary project materials, designs, and source code. All rights are reserved by the collaborative project partners. Unauthorized copying, distribution, or adaptation is prohibited.

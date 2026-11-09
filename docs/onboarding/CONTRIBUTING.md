@@ -34,7 +34,7 @@ Branch names should identify the app or package and the module being changed so 
    ```bash
    pnpm lint
    pnpm build
-   cd backend && ruff check apps/accounts && pytest apps/accounts
+   cd backend && ruff check apps tests && pytest
    ```
 
 4. Open a pull request into `develop`.
@@ -55,7 +55,7 @@ Start the database:
 
 ```bash
 cp .env.example .env
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 Start the frontend apps:
