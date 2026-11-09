@@ -18,7 +18,12 @@ validation, and production image builds. JUnit and browser diagnostic artifacts
 are retained for 14 days, with a per-gate summary. Full authenticated portal
 journeys remain outside the current browser smoke job because they require
 deterministic role accounts and workflow-specific fixture state. Hosted CI
-results are pending.
+First hosted run validated backend Ruff, Django checks, migration drift, both
+frontend gates, and Compose configuration. It exposed two stale authentication
+assertions and an E2E assertion expecting HTTP 400 where the API intentionally
+returns 401; those were corrected and pushed for a follow-up run. Production
+image builds were skipped after upstream test failures. Follow-up hosted CI is
+pending.
 
 Implemented the approved single-managed-VPS Docker Compose direction for the Django API,
 public website, portal, PostgreSQL, Redis cache/broker, Celery worker/Beat, Caddy,

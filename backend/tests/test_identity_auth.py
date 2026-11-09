@@ -147,7 +147,7 @@ def test_password_change_rotates_auth_hash(coordinator):
     assert client.get("/api/v1/me").status_code == 200
     assert APIClient().post("/api/v1/auth/login", {
         "email": coordinator.email, "password": "A-valid-password-123!",
-    }, format="json").status_code == 400
+    }, format="json").status_code == 401
 
 
 def test_bootstrap_program_admin_is_idempotent(db):
@@ -180,6 +180,7 @@ def test_privileged_login_requires_totp_and_returns_recovery_codes(coordinator):
     assert login_response.json()["data"] == {
         "mfa_required": True, "mfa_setup_required": True,
         "email_mfa_available": False,
+        "recovery_contact": "programme_admin",
     }
 
     setup = client.post("/api/v1/auth/mfa/setup", {}, format="json")

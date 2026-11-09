@@ -61,7 +61,7 @@ test("invalid sign-in shows an inline error without leaving the page", async ({ 
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByText("Welcome back.")).toBeVisible();
-  expect(failedResponses.filter((item) => item.startsWith("400 "))).toHaveLength(1);
+  expect(failedResponses.filter((item) => item.startsWith("401 "))).toHaveLength(1);
 });
 
 test("programme admin can sign in with MFA and reach the workspace", async ({ page }) => {
