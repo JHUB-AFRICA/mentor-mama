@@ -27,15 +27,19 @@ class TrainingModuleWriteSerializer(serializers.Serializer):
         return value
 
     def to_internal_value(self, data):
-        if hasattr(data, "copy"):
+        if hasattr(data, "getlist"):
+            # QueryDict assignments stringify nested lists/dicts. Normalize
+            # multipart form values to a plain mapping before decoding JSON.
+            data = {key: data.get(key) for key in data}
+        else:
             data = data.copy()
-            for field in ("visible_roles", "lessons", "quiz"):
-                value = data.get(field)
-                if isinstance(value, str):
-                    try:
-                        data[field] = json.loads(value)
-                    except json.JSONDecodeError:
-                        pass
+        for field in ("visible_roles", "lessons", "quiz"):
+            value = data.get(field)
+            if isinstance(value, str):
+                try:
+                    data[field] = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
         return super().to_internal_value(data)
 
     def validate_cover_image(self, value):

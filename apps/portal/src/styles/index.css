@@ -397,7 +397,7 @@
     display: grid;
     gap: 0.55rem;
   }
-  .content-module-lesson-list button,
+  .content-module-lesson-row,
   .content-module-lesson-list-quiz {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr) auto;
@@ -411,11 +411,23 @@
     color: #263e5d;
     text-align: left;
   }
-  .content-module-lesson-list button.is-selected {
+  .content-module-lesson-row.is-selected {
     border-color: #1d9b9b;
     background: #f0fbfa;
   }
-  .content-module-lesson-list button strong {
+  .content-module-lesson-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .content-module-lesson-select {
+    display: grid;
+    grid-column: 1;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    text-align: left;
+  }
+  .content-module-lesson-select strong {
     overflow: hidden;
     font:
       600 0.78rem/1.25 "Inter",
@@ -430,6 +442,7 @@
   }
   .content-module-lesson-menu {
     position: relative;
+    grid-column: 2;
     display: inline-flex;
   }
   .content-module-lesson-menu > .content-module-more {

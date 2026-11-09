@@ -1,10 +1,25 @@
 ---
 project: mentor-mama
-current_stage: BUILD
-tier: architectural
-tier_reason: Production container runtime, load balancing, monitoring, package dependencies, and persistence model change infrastructure architecture.
-last_updated: 2026-11-09T17:10:19Z
+current_stage: VERIFY
+tier: medium
+tier_reason: User-visible learning-module creation bug spans the portal form and API serializer; no schema or authorization-boundary change.
+last_updated: 2026-11-09T18:39:25Z
 ---
+
+## Current session update — Learning module authoring repair (2026-11-09)
+
+Root cause confirmed with a failing serializer regression test: multipart fields
+`visible_roles`, `lessons`, and `quiz` are JSON strings. The serializer decoded
+them, then wrote Python lists back into Django's `QueryDict`, which stringifies
+those nested values and caused the API's HTTP 400 validation response. The
+serializer now normalizes multipart input to a plain mapping before decoding.
+Added serializer and authenticated API integration regressions. Restructured
+lesson selection and actions as sibling controls, removing invalid nested
+buttons and adding `aria-pressed`. Added a Chromium authoring journey to CI that
+checks successful draft save, multipart payload fields, and absence of the
+nested-button runtime warning. Local focused serializer test passes. Full API
+integration and browser verification are pending hosted CI; local browser
+verification is blocked by `sinaps health` at 7% disk free.
 
 ## Current session update — Managed VPS Docker production setup (2026-11-09)
 
@@ -17,8 +32,8 @@ checks/builds, portal authentication smoke journeys, production Compose
 validation, and production image builds. JUnit and browser diagnostic artifacts
 are retained for 14 days, with a per-gate summary. Full authenticated portal
 journeys remain outside the current browser smoke job because they require
-deterministic role accounts and workflow-specific fixture state. Hosted CI
-First hosted run validated backend Ruff, Django checks, migration drift, both
+deterministic role accounts and workflow-specific fixture state. First hosted
+run validated backend Ruff, Django checks, migration drift, both
 frontend gates, and Compose configuration. It exposed two stale authentication
 assertions and an E2E assertion expecting HTTP 400 where the API intentionally
 returns 401; those were corrected and pushed for a follow-up run. Production

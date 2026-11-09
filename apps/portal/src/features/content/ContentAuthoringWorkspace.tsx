@@ -829,14 +829,19 @@ function ModuleStructure({
       <h2>Module structure</h2>
       <div className="content-module-lesson-list">
         {lessons.map((lesson, index) => (
-          <button
+          <div
             key={`${index}-${lesson.title}`}
-            type="button"
-            className={selected === index ? "is-selected" : ""}
-            onClick={() => onSelect(index)}
+            className={`content-module-lesson-row ${selected === index ? "is-selected" : ""}`}
           >
-            <span className="content-authoring-lesson-number">{index + 1}</span>
-            <strong>{lesson.title || `Lesson ${index + 1}`}</strong>
+            <button
+              type="button"
+              className="content-module-lesson-select"
+              aria-pressed={selected === index}
+              onClick={() => onSelect(index)}
+            >
+              <span className="content-authoring-lesson-number">{index + 1}</span>
+              <strong>{lesson.title || `Lesson ${index + 1}`}</strong>
+            </button>
             <span className="content-module-lesson-menu">
               <button
                 type="button"
@@ -864,7 +869,7 @@ function ModuleStructure({
                 </div>
               )}
             </span>
-          </button>
+          </div>
         ))}
         {includeQuiz && (
           <div className="content-module-lesson-list-quiz">

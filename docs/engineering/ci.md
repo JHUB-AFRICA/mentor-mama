@@ -9,10 +9,11 @@ readiness check for source changes; it does not deploy or publish images.
 - **Backend:** Ruff, Django system checks, migration drift detection, and the
   complete pytest suite against PostgreSQL 16.
 - **Frontend:** web and portal lint, TypeScript checks, and production builds.
-- **Portal browser smoke:** unsigned-in authentication and recovery journeys in
-  Chromium against the migrated test database. Authenticated journeys are not
-  included in this job because they require deterministic role accounts and
-  workflow-specific fixture state.
+- **Portal browser smoke:** unsigned-in authentication/recovery journeys and a
+  mocked programme-admin learning-module authoring journey in Chromium. The
+  module creation API itself is covered by the backend multipart integration
+  test. Other authenticated journeys still require deterministic role accounts
+  and workflow-specific fixture state and are not included here.
 - **Production configuration:** validates `docker-compose.prod.yml` using the
   safe example environment file.
 - **Production images:** builds backend, web, and portal images after backend,
