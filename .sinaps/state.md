@@ -3,7 +3,7 @@ project: mentor-mama
 current_stage: VERIFY
 tier: medium
 tier_reason: User-visible learning-module creation bug spans the portal form and API serializer; no schema or authorization-boundary change.
-last_updated: 2026-11-09T18:39:25Z
+last_updated: 2026-11-09T18:43:45Z
 ---
 
 ## Current session update — Learning module authoring repair (2026-11-09)
@@ -17,9 +17,12 @@ Added serializer and authenticated API integration regressions. Restructured
 lesson selection and actions as sibling controls, removing invalid nested
 buttons and adding `aria-pressed`. Added a Chromium authoring journey to CI that
 checks successful draft save, multipart payload fields, and absence of the
-nested-button runtime warning. Local focused serializer test passes. Full API
-integration and browser verification are pending hosted CI; local browser
-verification is blocked by `sinaps health` at 7% disk free.
+nested-button runtime warning. The focused serializer regression passed locally.
+Hosted CI passed the multipart API integration and Chromium authoring journey,
+along with Ruff, portal lint/typecheck/build, backend suite, Compose validation,
+and all production image builds: run 42676089303. The UI journey mocks the API;
+the backend test exercises the real multipart endpoint. Local browser
+verification remains blocked by `sinaps health` at 7% disk free.
 
 ## Current session update — Managed VPS Docker production setup (2026-11-09)
 
