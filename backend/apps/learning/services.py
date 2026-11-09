@@ -4,7 +4,7 @@ from apps.core import audit, outbox
 from apps.learning import events
 from apps.core.errors import InvalidTransition
 from apps.identity.models import Role, Status
-from apps.learning.models import ModuleCompletion, QuizAttempt, TrainingModule
+from apps.learning.models import ModuleCompletion, QuizAttempt
 
 
 @transaction.atomic

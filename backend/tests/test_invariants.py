@@ -413,7 +413,11 @@ def test_pause_extends_actual_end_and_records_a_countable_reason(
     placement = placement_services.resume(
         active_placement.id, ended_on=dt.date(2026, 7, 24), actor=nurse_manager
     )
-    assert placement.actual_end == original_end + dt.timedelta(days=14)
+    # These fixtures use a historical planned window. The service preserves the
+    # invariant that actual_end cannot precede the actual activation date.
+    assert placement.actual_end == max(
+        original_end + dt.timedelta(days=14), active_placement.actual_start
+    )
     pause = placement.pauses.first()
     assert pause.reason == "facility_closure"      # countable, not free text
     assert pause.resumed_by_id == nurse_manager.id

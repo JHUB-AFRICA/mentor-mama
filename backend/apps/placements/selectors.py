@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from django.db.models import Count, Q
+from django.db.models import Q
 
 from apps.facilities import api as facilities
 from apps.core.models import AuditEntry

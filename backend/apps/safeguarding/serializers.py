@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.safeguarding.models import EscalationState, ResolutionOutcome, Severity
+from apps.safeguarding.models import ResolutionOutcome, Severity
 
 
 class RaiseEscalationSerializer(serializers.Serializer):

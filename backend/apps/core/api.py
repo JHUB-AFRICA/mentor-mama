@@ -2,7 +2,6 @@
 
 from django.db.models import QuerySet
 
-from apps.core import audit, idempotency, outbox
 from apps.core.errors import DomainError, translate_integrity_error  # noqa: F401
 from apps.core.models import OutboxEvent
 from apps.core.models import AuditEntry

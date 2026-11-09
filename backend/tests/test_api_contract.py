@@ -17,7 +17,6 @@ from apps.mentorship.models import Session
 from apps.induction.models import OrientationAcknowledgement
 from apps.core.models import AuditEntry, IdempotencyKey, OutboxEvent
 from apps.assessments.models import AnonymousResponse, FeedbackAnonymous, FeedbackConfidential, Response
-from apps.safeguarding.models import Escalation
 from apps.placements.models import PauseInterval
 from apps.analytics.models import ExportRecord
 
@@ -239,7 +238,9 @@ def test_student_feedback_routes_confidential_and_unlinkable_anonymous(active_pl
     assert not hasattr(detached, "placement_id")
     assert not hasattr(detached, "created_at")
     assert not hasattr(detached, "comments")
-    assert not hasattr(AnonymousResponse.objects.get(feedback_anonymous=detached), "created_at")
+    anonymous_responses = list(AnonymousResponse.objects.filter(feedback_anonymous=detached))
+    assert len(anonymous_responses) == 3
+    assert all(not hasattr(response, "created_at") for response in anonymous_responses)
     assert Response._meta.get_field("created_at")
     assert not AuditEntry.objects.filter(entity_id=detached.id).exists()
     assert not OutboxEvent.objects.filter(payload__feedback_id=str(detached.id)).exists()
@@ -283,7 +284,8 @@ def test_anonymous_feedback_reporting_requires_three_and_is_role_scoped(active_p
     assert len(coordinator_report.json()["data"][0]["scores"]) == 3
     assert "comments" not in str(coordinator_report.json())
     assert str(student.id) not in str(coordinator_report.json())
-    assert client_for(student).get("/api/v1/reports/anonymous-feedback", **HEADERS).status_code == 403
+    # Keep role-ineligible report endpoints non-disclosing, like scoped records.
+    assert client_for(student).get("/api/v1/reports/anonymous-feedback", **HEADERS).status_code == 404
 
 
 def test_escalation_list_omits_narrative_and_detail_is_reviewer_scoped(active_placement, student, nurse_manager, coordinator):

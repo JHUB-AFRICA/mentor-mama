@@ -65,20 +65,38 @@ class _EscalationCommand(APIView):
 
 
 class AssignReviewerView(_EscalationCommand):
-    command_type = "assign_escalation_reviewer"; serializer_class = serializers.ReviewerSerializer
-    def run(self, escalation_id, data, actor): return services.assign_reviewer(escalation_id, data["reviewer_id"], actor=actor)
+    command_type = "assign_escalation_reviewer"
+    serializer_class = serializers.ReviewerSerializer
+
+    def run(self, escalation_id, data, actor):
+        return services.assign_reviewer(escalation_id, data["reviewer_id"], actor=actor)
 
 
 class RecordFindingView(_EscalationCommand):
-    command_type = "record_escalation_finding"; serializer_class = serializers.FindingSerializer
-    def run(self, escalation_id, data, actor): return services.record_finding(escalation_id, data["finding"], actor=actor)
+    command_type = "record_escalation_finding"
+    serializer_class = serializers.FindingSerializer
+
+    def run(self, escalation_id, data, actor):
+        return services.record_finding(escalation_id, data["finding"], actor=actor)
 
 
 class RecordActionView(_EscalationCommand):
-    command_type = "record_escalation_action"; serializer_class = serializers.ActionSerializer
-    def run(self, escalation_id, data, actor): return services.record_action(escalation_id, data["action_taken"], actor=actor, resolution_outcome=data.get("resolution_outcome"), referral_note=data.get("referral_note"))
+    command_type = "record_escalation_action"
+    serializer_class = serializers.ActionSerializer
+
+    def run(self, escalation_id, data, actor):
+        return services.record_action(
+            escalation_id,
+            data["action_taken"],
+            actor=actor,
+            resolution_outcome=data.get("resolution_outcome"),
+            referral_note=data.get("referral_note"),
+        )
 
 
 class CloseEscalationView(_EscalationCommand):
-    command_type = "close_escalation"; serializer_class = serializers.CloseSerializer
-    def run(self, escalation_id, data, actor): return services.close(escalation_id, data["closure_date"], actor=actor)
+    command_type = "close_escalation"
+    serializer_class = serializers.CloseSerializer
+
+    def run(self, escalation_id, data, actor):
+        return services.close(escalation_id, data["closure_date"], actor=actor)

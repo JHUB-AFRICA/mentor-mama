@@ -72,11 +72,14 @@ class LibraryView(APIView):
             modules = modules.filter(category=category)
         if status:
             if status == "published":
-                content = content.filter(is_published=True, archived_at=None); modules = modules.filter(is_published=True)
+                content = content.filter(is_published=True, archived_at=None)
+                modules = modules.filter(is_published=True)
             elif status == "draft":
-                content = content.filter(is_published=False, archived_at=None); modules = modules.filter(is_published=False)
+                content = content.filter(is_published=False, archived_at=None)
+                modules = modules.filter(is_published=False)
             elif status == "archived":
-                content = content.filter(archived_at__isnull=False); modules = modules.none()
+                content = content.filter(archived_at__isnull=False)
+                modules = modules.none()
         if search:
             from django.db.models import Q
             content = content.filter(Q(title__icontains=search) | Q(summary__icontains=search) | Q(body__icontains=search))

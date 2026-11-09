@@ -136,7 +136,7 @@ def _parse_rows(text: str, kind: str) -> tuple[list[dict], list[dict]]:
             parsed.append({"row": row_number, "data": record})
         if data_rows == 0:
             errors_found.append(_issue(None, "file", "Add at least one data row below the header."))
-    except csv.Error as exc:
+    except csv.Error:
         errors_found.append(_issue(None, "file", "The CSV formatting is invalid. Check quoted values and commas."))
     return parsed, errors_found
 

@@ -2,6 +2,8 @@
 
 from django.db import models
 from PIL import Image
+
+from apps.core.models import BaseModel
 from apps.core.validators import validate_partner_logo
 
 
@@ -9,9 +11,6 @@ def partner_logo_upload_to(instance, filename):
     with Image.open(instance.logo.file) as image:
         extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[image.format]
     return f"directory/institutions/{instance.id}/logo.{extension}"
-
-from apps.core.models import BaseModel
-
 
 class Institution(BaseModel):
     program = models.ForeignKey("identity.Program", on_delete=models.PROTECT, related_name="institutions")

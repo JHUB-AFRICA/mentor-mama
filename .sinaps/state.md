@@ -8,6 +8,18 @@ last_updated: 2026-11-09T17:10:19Z
 
 ## Current session update — Managed VPS Docker production setup (2026-11-09)
 
+Follow-up CI hardening: fixed Ruff findings and backend test regressions uncovered
+by the first hosted run. Test settings now use local-memory cache when Redis is
+disabled; anonymous-feedback and placement-pause assertions match the documented
+privacy and date-clamping behavior. Replaced three overlapping workflows with
+one required CI workflow covering backend checks/tests, web and portal lint/type
+checks/builds, portal authentication smoke journeys, production Compose
+validation, and production image builds. JUnit and browser diagnostic artifacts
+are retained for 14 days, with a per-gate summary. Full authenticated portal
+journeys remain outside the current browser smoke job because they require
+deterministic role accounts and workflow-specific fixture state. Hosted CI
+results are pending.
+
 Implemented the approved single-managed-VPS Docker Compose direction for the Django API,
 public website, portal, PostgreSQL, Redis cache/broker, Celery worker/Beat, Caddy,
 Prometheus, and Grafana. Added production Dockerfiles, private Compose networks, named

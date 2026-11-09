@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from django.db import transaction
-from django.utils import timezone
 
 from apps.core import audit, errors, outbox
 from apps.identity import api as identity
@@ -155,7 +154,8 @@ def record_finding(row_id: UUID, finding: str, *, actor):
     row = _reviewer_row(row_id, actor)
     if row.state != EscalationState.UNDER_REVIEW or not finding.strip():
         raise errors.InvalidEscalationTransition()
-    row.finding = finding.strip(); row.state = EscalationState.ACTION_REQUIRED
+    row.finding = finding.strip()
+    row.state = EscalationState.ACTION_REQUIRED
     row.save(update_fields=["finding", "state", "updated_at"])
     audit.record(actor=actor, action="escalation.record_finding", entity_table="safeguarding_escalation", entity_id=row.id, changes={"state": row.state})
     outbox.publish(events.EscalationStatusChanged(escalation_id=row.id, state=row.state, recipient_user_ids=(row.submitted_by_id,)))
@@ -167,7 +167,10 @@ def record_action(row_id: UUID, action_taken: str, *, actor, resolution_outcome=
     row = _reviewer_row(row_id, actor)
     if row.state not in {EscalationState.UNDER_REVIEW, EscalationState.ACTION_REQUIRED} or not action_taken.strip():
         raise errors.InvalidEscalationTransition()
-    row.action_taken = action_taken.strip(); row.resolution_outcome = resolution_outcome; row.referral_note = referral_note; row.state = EscalationState.RESOLVED
+    row.action_taken = action_taken.strip()
+    row.resolution_outcome = resolution_outcome
+    row.referral_note = referral_note
+    row.state = EscalationState.RESOLVED
     row.save(update_fields=["action_taken", "resolution_outcome", "referral_note", "state", "updated_at"])
     audit.record(actor=actor, action="escalation.record_action", entity_table="safeguarding_escalation", entity_id=row.id, changes={"state": row.state, "resolution_outcome": resolution_outcome})
     outbox.publish(events.EscalationStatusChanged(escalation_id=row.id, state=row.state, recipient_user_ids=(row.submitted_by_id,)))
@@ -181,7 +184,8 @@ def close(row_id: UUID, closure_date, *, actor):
         raise errors.InvalidEscalationTransition()
     if row.reviewer_id not in {actor.id, None} and actor.role not in {Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}:
         raise errors.EscalationAccessDenied()
-    row.state = EscalationState.CLOSED; row.closure_date = closure_date
+    row.state = EscalationState.CLOSED
+    row.closure_date = closure_date
     row.save(update_fields=["state", "closure_date", "updated_at"])
     audit.record(actor=actor, action="escalation.close", entity_table="safeguarding_escalation", entity_id=row.id, changes={"state": row.state, "closure_date": str(closure_date)})
     outbox.publish(events.EscalationStatusChanged(escalation_id=row.id, state=row.state, recipient_user_ids=(row.submitted_by_id,)))

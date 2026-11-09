@@ -1,8 +1,6 @@
 """Public learning queries used by placement guards and the API."""
 
-from uuid import UUID
 
-from apps.identity.models import Role
 from apps.learning.models import ModuleCompletion, TrainingModule
 
 

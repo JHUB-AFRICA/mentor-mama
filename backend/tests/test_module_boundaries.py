@@ -7,7 +7,6 @@ string reference — which is exactly how cross-module relations are declared he
 
 from __future__ import annotations
 
-import pytest
 from django.apps import apps
 
 # Stage 4 §3: dependencies point downward only.
