@@ -22,8 +22,12 @@ First hosted run validated backend Ruff, Django checks, migration drift, both
 frontend gates, and Compose configuration. It exposed two stale authentication
 assertions and an E2E assertion expecting HTTP 400 where the API intentionally
 returns 401; those were corrected and pushed for a follow-up run. Production
-image builds were skipped after upstream test failures. Follow-up hosted CI is
-pending.
+image builds were skipped after upstream test failures. Follow-up hosted CI
+passed all gates: backend Ruff, system checks, migration drift, and 133 tests;
+web and portal lint/typecheck/build; three portal browser smoke journeys;
+production Compose validation; and backend, web, and portal image builds. The
+run is recorded at
+https://github.com/JHUB-AFRICA/mentor-mama/actions/runs/42669864090.
 
 Implemented the approved single-managed-VPS Docker Compose direction for the Django API,
 public website, portal, PostgreSQL, Redis cache/broker, Celery worker/Beat, Caddy,
