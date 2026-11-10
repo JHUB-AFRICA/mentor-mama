@@ -41,6 +41,7 @@ class PlacementAcknowledgementReminderRequested:
 class MentorAssigned:
     placement_id: UUID
     mentor_id: UUID
+    recipient_user_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -79,4 +80,32 @@ class PlacementCompleted:
 class PlacementWithdrawn:
     placement_id: UUID
     reason: str
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementsArranged:
+    """Batch summary for coordinators after a facility arranges incoming students."""
+
+    facility_id: UUID
+    arranged: int
+    unplaced: int
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class MentorPlacementsAssigned:
+    """One message to a mentor who received several students in one arrangement."""
+
+    mentor_id: UUID
+    count: int
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementsRequested:
+    """A coordinator asked a facility to host students (the facility's incoming queue)."""
+
+    facility_id: UUID
+    count: int
     recipient_user_ids: tuple[UUID, ...] = ()

@@ -7,6 +7,8 @@ transaction (TX-01).
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import datetime as dt
 from dataclasses import dataclass
 from uuid import UUID
@@ -371,6 +373,19 @@ def update_programme_ward(*, actor, ward_id: UUID, **data):
     return ward
 
 
+_QUIET = contextvars.ContextVar("placement_quiet_notifications", default=False)
+
+
+@contextlib.contextmanager
+def quiet_notifications():
+    """Suppress per-placement emails while a batch publishes one summary instead."""
+    token = _QUIET.set(True)
+    try:
+        yield
+    finally:
+        _QUIET.reset(token)
+
+
 def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
     identity.require_capability(actor, "assign_mentor")
     with transaction.atomic():
@@ -383,7 +398,8 @@ def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
         MentorAssignment.objects.create(placement=placement, mentor_id=mentor_id, created_by=actor)
         audit.record(actor=actor, action="placement.assign_mentor", entity_table=TABLE, entity_id=placement.id,
                      scope=_facility_scope(placement))
-        outbox.publish(events.MentorAssigned(placement_id=placement.id, mentor_id=mentor_id))
+        if not _QUIET.get():
+            outbox.publish(events.MentorAssigned(placement_id=placement.id, mentor_id=mentor_id, recipient_user_ids=(mentor_id,)))
         _maybe_schedule(placement, actor=actor)
     placement.refresh_from_db()
     return placement
@@ -727,7 +743,7 @@ def _apply(placement: Placement, target: State, *, actor, reason: str | None) ->
         State.COMPLETED: events.PlacementCompleted(placement_id=placement.id, recipient_user_ids=_placement_recipient_ids(placement)),
         State.WITHDRAWN: events.PlacementWithdrawn(placement_id=placement.id, reason=reason or "", recipient_user_ids=_placement_recipient_ids(placement)),
     }.get(target)
-    if event is not None:
+    if event is not None and not (_QUIET.get() and target == State.SCHEDULED):
         outbox.publish(event)
 
 

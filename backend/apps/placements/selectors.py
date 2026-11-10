@@ -35,7 +35,9 @@ def in_scope(scope):
     if scope.institution_id:
         return qs.filter(institution_id=scope.institution_id)
     if scope.facility_id:
-        return qs.filter(facility_id=scope.facility_id)
+        # A facility sees what it hosts, plus unallocated placements a coordinator
+        # has asked it to host (its incoming queue).
+        return qs.filter(Q(facility_id=scope.facility_id) | Q(facility_id=None, requested_facility_id=scope.facility_id))
     return qs.none()
 
 

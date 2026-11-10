@@ -61,6 +61,13 @@ class Placement(BaseModel):
         "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="placements"
     )
 
+    # The partner facility the coordinator is asking to host this student. It is a
+    # request, not an allocation: the facility is only derived (INV-17) once a
+    # ward is allocated by that facility's nurse manager.
+    requested_facility = models.ForeignKey(
+        "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="requested_placements"
+    )
+
     state = models.CharField(max_length=24, choices=State.choices, default=State.DRAFT)
 
     # OD-01 (JKUAT, 30 Jul 2026): planned dates are the original agreement;
@@ -84,6 +91,7 @@ class Placement(BaseModel):
         indexes = [
             models.Index(fields=["institution", "state"]),
             models.Index(fields=["facility", "state"]),
+            models.Index(fields=["requested_facility", "state"]),
         ]
         constraints = [
             models.CheckConstraint(
@@ -269,3 +277,22 @@ class PauseInterval(BaseModel):
                 ],
             ),
         ]
+
+
+class AllocationRun(BaseModel):
+    """One automatic arrangement, kept so an allocation is explainable and repeatable."""
+
+    class Mode(models.TextChoices):
+        FACILITY_SPLIT = "facility_split", "Split across partner facilities"
+        AUTO_ARRANGE = "auto_arrange", "Arrange into wards and mentors"
+
+    mode = models.CharField(max_length=24, choices=Mode.choices)
+    facility = models.ForeignKey("facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="allocation_runs")
+    institution = models.ForeignKey("institutions.Institution", on_delete=models.PROTECT, null=True, blank=True, related_name="allocation_runs")
+    actor = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="allocation_runs")
+    strategy = models.CharField(max_length=24)
+    seed = models.CharField(max_length=40)
+    summary = models.JSONField(default=dict)
+
+    class Meta:
+        db_table = "placements_allocation_run"

@@ -43,7 +43,7 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
     preference = NotificationPreference.objects.filter(user_id=user_id).first()
     if preference is None:
         return True
-    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
     if event_type in {"SessionLogged"}:
         return preference.account_activity
@@ -175,7 +175,7 @@ def deliver_outbox_event(event) -> None:
         )
         send_mail(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, [user.email])
     elif event.event_type in {
-        "MentorAssigned", "MentorReassigned", "EscalationRaised",
+        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested",
         "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",
         "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted",
         "PlacementScheduled", "OrientationAcknowledged", "InductionCompleted", "EscalationStatusChanged",
@@ -185,6 +185,21 @@ def deliver_outbox_event(event) -> None:
                 "You have a new MentorMAMA placement assignment", "Placement update",
                 "A placement needs your attention", "You have been assigned to support a clinical placement.",
                 "Sign in to review the placement and complete any required setup.",
+            ),
+            "MentorPlacementsAssigned": (
+                "You have new students to mentor", "Placement update",
+                "New students have been assigned to you", "Your facility has arranged new students under your mentorship.",
+                "Sign in to see who is assigned to you and what each student needs next.",
+            ),
+            "PlacementsArranged": (
+                "Students have been arranged into wards", "Placement update",
+                "A facility has arranged your students", "A partner facility has placed students from your institution into wards and mentors.",
+                "Sign in to review the placements and release them to the students.",
+            ),
+            "PlacementsRequested": (
+                "Students are waiting to be placed at your facility", "Placement update",
+                "New students are waiting for your facility", "A university coordinator has asked your facility to host students.",
+                "Sign in and use Arrange students to place them into your wards in one step.",
             ),
             "MentorReassigned": (
                 "Your MentorMAMA placement assignment changed", "Placement update",

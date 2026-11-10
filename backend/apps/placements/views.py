@@ -502,3 +502,65 @@ def _directory_review_payload(programme):
         "directory_reviewed_at": programme.directory_reviewed_at,
         "directory_reviewed_by_name": programme.directory_reviewed_by.full_name if programme.directory_reviewed_by_id else None,
     }
+
+
+class IncomingPlacementsView(APIView):
+    """Students a coordinator has asked this facility to host, not yet placed in a ward."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.placements import allocation
+
+        rows = allocation.incoming(actor=request.user, facility_id=request.query_params.get("facility_id") or None)
+        return Response({"data": serializers.PlacementSerializer(rows, many=True).data})
+
+
+class AutoArrangeView(APIView):
+    """Preview or apply an automatic arrangement of incoming students into wards and mentors."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import allocation
+
+        payload = serializers.AutoArrangeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = dict(payload.validated_data)
+        preview = data.pop("preview")
+        data["seed"] = data.get("seed") or None
+        data["facility_id"] = data.get("facility_id")
+        if preview:
+            return Response({"data": allocation.plan_auto_arrange(actor=request.user, **data)})
+        with IdempotentCommand(request, "auto_arrange_placements") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = allocation.apply_auto_arrange(actor=request.user, **data)
+            command.record(UUID(int=0))
+        return Response({"data": result}, status=status.HTTP_201_CREATED)
+
+
+class FacilityRequestView(APIView):
+    """Ask partner facilities to host draft placements, optionally splitting by declared capacity."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import allocation
+
+        payload = serializers.FacilityRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = dict(payload.validated_data)
+        preview = data.pop("preview")
+        data["seed"] = data.get("seed") or None
+        if preview:
+            return Response({"data": allocation.plan_facility_split(actor=request.user, **data)})
+        with IdempotentCommand(request, "request_facilities") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            if len(data["facility_ids"]) == 1:
+                result = allocation.request_facility(actor=request.user, placement_ids=data["placement_ids"], facility_id=data["facility_ids"][0])
+            else:
+                result = allocation.apply_facility_split(actor=request.user, **data)
+            command.record(UUID(int=0))
+        return Response({"data": result}, status=status.HTTP_201_CREATED)

@@ -15,6 +15,8 @@ CAPABILITY_ROLES: dict[str, frozenset[str]] = {
     "create_placement": frozenset({Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "release_placement": frozenset({Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "allocate_ward": frozenset({Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}),
+    "arrange_placements": frozenset({Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}),
+    "request_facility": frozenset({Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "assign_mentor": frozenset({Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}),
     "pause_placement": frozenset({Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "resume_placement": frozenset({Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}),

@@ -485,3 +485,107 @@ def test_report_insights_are_scoped_aggregate_and_suppress_small_groups(active_p
         client = APIClient()
         client.force_authenticate(outsider)
         assert client.get("/api/v1/reports/insights").status_code == 404
+
+
+def _requested_drafts(program, institution, cohort, coordinator, facility, count):
+    """Create enrolled students with draft placements already requested of `facility`."""
+    import datetime as dt
+
+    from apps.identity.models import Role, Status, User
+    from apps.institutions.models import CohortMembership
+    from apps.placements import services as svc
+    from apps.placements.models import Placement
+
+    ids = []
+    for index in range(count):
+        student = User.objects.create_user(
+            email=f"auto-{index}@students.jkuat.ac.ke", password="pw", first_name=f"Auto{index}", last_name="Student",
+            role=Role.STUDENT, status=Status.ACTIVE, program=program, institution_id=institution.id,
+        )
+        CohortMembership.objects.create(cohort=cohort, student=student)
+        placement = svc.create_placement(
+            svc.CreatePlacement(cohort_id=cohort.id, student_id=student.id, planned_start=dt.date(2026, 9, 1), planned_end=dt.date(2026, 11, 1)),
+            actor=coordinator,
+        )
+        ids.append(placement.id)
+    Placement.objects.filter(id__in=ids).update(requested_facility=facility)
+    return ids
+
+
+def test_nurse_manager_sees_incoming_and_auto_arranges_within_ward_and_mentor_capacity(program, institution, cohort, coordinator, nurse_manager, facility, ward, mentor, other_mentor):
+    from rest_framework.test import APIClient
+
+    from apps.notifications.models import Notification  # noqa: F401
+    from apps.core.models import OutboxEvent
+    from apps.placements.models import MentorAssignment, Placement, State, WardAssignment
+
+    ids = _requested_drafts(program, institution, cohort, coordinator, facility, 3)  # ward holds 2
+    manager = APIClient()
+    manager.force_authenticate(nurse_manager)
+
+    incoming = manager.get("/api/v1/placements/incoming")
+    assert incoming.status_code == 200 and len(incoming.json()["data"]) == 3
+
+    preview = manager.post("/api/v1/placements/auto-arrange", {"preview": True, "seed": "abc12345"}, format="json")
+    assert preview.status_code == 200, preview.content
+    plan = preview.json()["data"]
+    assert plan["summary"]["arranged"] == 2 and plan["summary"]["unplaced"] == 1
+    assert Placement.objects.filter(id__in=ids, state=State.DRAFT, facility=None).count() == 3  # preview changes nothing
+
+    import uuid
+
+    applied = manager.post("/api/v1/placements/auto-arrange", {"seed": "abc12345"}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert applied.status_code == 201, applied.content
+    result = applied.json()["data"]
+    assert result["summary"]["arranged"] == 2
+    assert WardAssignment.objects.filter(placement_id__in=ids, ended_at=None).count() == 2
+    assert MentorAssignment.objects.filter(placement_id__in=ids, ended_at=None).count() == 2
+    # Ward + mentor complete => system-derived scheduling, one summary email instead of one per student.
+    assert Placement.objects.filter(id__in=ids, state=State.SCHEDULED).count() == 2
+    types = list(OutboxEvent.objects.values_list("event_type", flat=True))
+    assert "MentorPlacementsAssigned" in types and "PlacementsArranged" in types
+    assert "PlacementScheduled" not in types[-6:] or types.count("PlacementScheduled") == 0
+
+
+def test_only_the_requested_facility_sees_and_arranges_a_request(program, institution, cohort, coordinator, nurse_manager, facility):
+    from rest_framework.test import APIClient
+
+    from apps.facilities.models import Facility
+
+    other = Facility.objects.create(program=program, name="Other Hospital")
+    ids = _requested_drafts(program, institution, cohort, coordinator, other, 1)
+    manager = APIClient()
+    manager.force_authenticate(nurse_manager)
+    assert manager.get("/api/v1/placements/incoming").json()["data"] == []
+    assert manager.get(f"/api/v1/placements/{ids[0]}").status_code == 404
+    student_client = APIClient()
+    coord = APIClient()
+    coord.force_authenticate(coordinator)
+    assert coord.post("/api/v1/placements/auto-arrange", {"preview": True}, format="json").status_code == 404
+    del student_client
+
+
+def test_coordinator_splits_a_batch_across_facilities_by_declared_capacity(program, institution, cohort, coordinator, facility, ward):
+    from rest_framework.test import APIClient
+
+    from apps.facilities.models import Facility, Ward
+    from apps.placements.models import Placement
+
+    big = Facility.objects.create(program=program, name="Big Hospital")
+    Ward.objects.create(facility=big, name="Big Ward", max_students=6)
+    ids = _requested_drafts(program, institution, cohort, coordinator, facility, 4)
+    Placement.objects.filter(id__in=ids).update(requested_facility=None)
+    client = APIClient()
+    client.force_authenticate(coordinator)
+    body = {"placement_ids": [str(i) for i in ids], "facility_ids": [str(facility.id), str(big.id)], "mode": "capacity", "seed": "seed1234"}
+    preview = client.post("/api/v1/placements/facility-requests", {**body, "preview": True}, format="json")
+    assert preview.status_code == 200, preview.content
+    by_facility = {row["facility_id"]: row["requested"] for row in preview.json()["data"]["facilities"]}
+    assert by_facility[str(big.id)] > by_facility[str(facility.id)]  # 6 free vs 2 free
+    assert sum(by_facility.values()) == 4
+
+    import uuid
+
+    applied = client.post("/api/v1/placements/facility-requests", body, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert applied.status_code == 201, applied.content
+    assert Placement.objects.filter(id__in=ids, requested_facility__isnull=False).count() == 4

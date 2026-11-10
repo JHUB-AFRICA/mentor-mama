@@ -49,6 +49,7 @@ class PlacementSerializer(serializers.ModelSerializer):
     cohort_name = serializers.CharField(source="cohort.name", read_only=True)
     institution_name = serializers.CharField(source="cohort.institution.name", read_only=True)
     facility_name = serializers.CharField(source="facility.name", read_only=True, allow_null=True)
+    requested_facility_name = serializers.CharField(source="requested_facility.name", read_only=True, allow_null=True)
     student = serializers.SerializerMethodField()
     mentor = serializers.SerializerMethodField()
     ward = serializers.SerializerMethodField()
@@ -56,7 +57,8 @@ class PlacementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Placement
         fields = [
-            "id", "cohort_id", "cohort_name", "institution_id", "institution_name", "facility_id", "facility_name", "state",
+            "id", "cohort_id", "cohort_name", "institution_id", "institution_name", "facility_id", "facility_name",
+            "requested_facility_id", "requested_facility_name", "state",
             "planned_start", "planned_end", "actual_start", "actual_end",
             "withdrawal_reason", "completed_at", "archived_at", "version", "active_mentor_id", "student", "mentor", "ward",
         ]
@@ -148,3 +150,20 @@ class TransitionSerializer(serializers.Serializer):
 
 class WithdrawalSerializer(serializers.Serializer):
     reason = serializers.ChoiceField(choices=WithdrawalReason.choices)
+
+
+class AutoArrangeSerializer(serializers.Serializer):
+    facility_id = serializers.UUIDField(required=False)
+    placement_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False, max_length=500)
+    strategy = serializers.ChoiceField(choices=["balanced", "fill"], default="balanced")
+    seed = serializers.RegexField(r"^[a-zA-Z0-9]{4,40}$", required=False, allow_blank=True)
+    assign_mentors = serializers.BooleanField(required=False, default=True)
+    preview = serializers.BooleanField(required=False, default=False)
+
+
+class FacilityRequestSerializer(serializers.Serializer):
+    placement_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False, max_length=500)
+    facility_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False, max_length=20)
+    mode = serializers.ChoiceField(choices=["capacity", "even"], default="capacity")
+    seed = serializers.RegexField(r"^[a-zA-Z0-9]{4,40}$", required=False, allow_blank=True)
+    preview = serializers.BooleanField(required=False, default=False)
