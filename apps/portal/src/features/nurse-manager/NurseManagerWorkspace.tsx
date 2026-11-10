@@ -7,11 +7,11 @@ import { NurseManagerPlacementWorkspace } from "./NurseManagerPlacementWorkspace
 import { NurseManagerPlacementDetail } from "./NurseManagerPlacementDetail";
 import { NurseManagerMentorOperations } from "./NurseManagerMentorOperations";
 import { NurseManagerMentorDetail } from "./NurseManagerMentorDetail";
-import { NurseManagerReports } from "./NurseManagerReports";
-import { NurseManagerSafeguarding } from "./NurseManagerSafeguarding";
+import { ReportsDashboard } from "../reports/ReportsDashboard";
+import { ConcernQueue } from "../safeguarding/ConcernQueue";
 import { NurseManagerActivity } from "./NurseManagerActivity";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface NurseManagerWorkspaceProps {
   user: CurrentUser;
@@ -27,6 +27,7 @@ export function NurseManagerWorkspace({
   onUserUpdated,
 }: NurseManagerWorkspaceProps) {
   const location = useLocation();
+  const go = useNavigate();
   const path = location.pathname;
   const normalizedPath = path.replace(/\/+$/, "");
   if (path.startsWith("/placements")) {
@@ -57,10 +58,18 @@ export function NurseManagerWorkspace({
     return <NurseManagerWardOperations user={user} onError={onError} />;
   }
   if (normalizedPath === "/facility/reports") {
-    return <NurseManagerReports user={user} onError={onError} />;
+    return (
+      <FacilityWorkspaceFrame user={user} active="reports" title="Reports" onError={onError}>
+        <ReportsDashboard user={user} onError={onError} onOpenSafeguarding={() => go("/facility/safeguarding")} />
+      </FacilityWorkspaceFrame>
+    );
   }
   if (normalizedPath === "/facility/safeguarding") {
-    return <NurseManagerSafeguarding user={user} onError={onError} />;
+    return (
+      <FacilityWorkspaceFrame user={user} active="safeguarding" title="Safeguarding" onError={onError}>
+        <ConcernQueue user={user} onError={onError} />
+      </FacilityWorkspaceFrame>
+    );
   }
   if (normalizedPath === "/facility/activity") {
     return <NurseManagerActivity user={user} onError={onError} />;

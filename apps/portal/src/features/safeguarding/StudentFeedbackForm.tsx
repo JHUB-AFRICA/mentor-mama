@@ -33,13 +33,17 @@ function RatingRow({ code, label, value, onChange }: { code: string; label: stri
           <label
             key={option.value}
             title={option.label}
-            className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-lg border px-1 py-2 text-center font-body text-xs transition ${value === option.value ? "border-teal bg-teal-light text-navy" : "border-border text-navy-muted hover:border-teal/50"}`}
+            className={`flex cursor-pointer items-center justify-center rounded-lg border py-2 font-body text-sm font-bold transition ${value === option.value ? "border-teal bg-teal text-white" : "border-border text-navy-muted hover:border-teal/50"}`}
           >
             <input type="radio" className="sr-only" name={code} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
-            <strong className="text-sm">{option.value}</strong>
-            <span className="hidden leading-tight sm:block">{option.label}</span>
+            <span aria-hidden="true">{option.value}</span>
+            <span className="sr-only">{option.value} — {option.label}</span>
           </label>
         ))}
+      </div>
+      <div className="mt-1.5 flex justify-between font-body text-[0.68rem] text-navy-muted" aria-hidden="true">
+        <span>Strongly disagree</span>
+        <span>Strongly agree</span>
       </div>
     </fieldset>
   );

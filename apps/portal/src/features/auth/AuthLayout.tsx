@@ -89,7 +89,7 @@ function StepFocus({ children, focus }: { children: ReactNode; focus: "heading" 
 
 function BrandPanel() {
   return (
-    <aside className="auth-brand auth-brand-pad relative hidden overflow-hidden px-12 py-12 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col xl:px-16">
+    <aside className="auth-brand auth-brand-pad relative hidden overflow-hidden px-12 py-12 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:self-start lg:flex-col xl:px-16">
       <div className="auth-blob auth-blob--a" aria-hidden="true" />
       <div className="auth-blob auth-blob--b" aria-hidden="true" />
       <div className="auth-lines" aria-hidden="true" />

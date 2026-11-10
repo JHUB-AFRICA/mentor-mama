@@ -2702,3 +2702,67 @@ export async function submitBaselineAssessment(
     body: JSON.stringify({ confidence_score: confidenceScore }),
   });
 }
+
+export interface ReportInsights {
+  filters: { from: string; to: string; cohort_id: string | null; facility_id: string | null };
+  scope: { role: string; breakdown_kind: "facility" | "cohort" };
+  options: { cohorts: Array<{ id: string; name: string }>; facilities: Array<{ id: string; name: string }> };
+  kpis: {
+    students: number;
+    active_students: number;
+    placements: number;
+    mentors: number;
+    induction: { numerator: number; denominator: number; rate: number | null };
+    training: { numerator: number; denominator: number; rate: number | null };
+    sessions: number;
+    sessions_previous: number;
+    sessions_per_student_week: number | null;
+    students_with_sessions: number;
+    open_concerns: number;
+    overdue_concerns: number;
+    feedback_score: number | null;
+    confidence_change: number | null;
+    in_progress: number;
+  };
+  funnel: Array<{ state: string; label: string; count: number }>;
+  sessions_weekly: Array<{ week: string; sessions: number }>;
+  session_types: Array<{ type: string; count: number }>;
+  topics: Array<{ topic: string; count: number }>;
+  training: { mentors: number; required_modules: number; modules: Array<{ title: string; required: boolean; completed: number; total: number }> };
+  feedback: {
+    submissions: number;
+    overall_mean: number | null;
+    questions: Array<{ code: string; label: string; responses: number; mean: number | null }>;
+    follow_ups_flagged: number;
+    min_group: number;
+  };
+  confidence: { pairs: number; min_group: number; baseline_mean: number | null; endline_mean: number | null; change: number | null };
+  safeguarding: {
+    open: number;
+    overdue: number;
+    raised_in_period: number;
+    resolved_in_period: number;
+    overdue_after_days: number;
+    by_category: Array<{ category: string; count: number }>;
+    by_state: Array<{ state: string; count: number }>;
+    by_severity: Array<{ severity: string; count: number }>;
+  };
+  breakdown: Array<{
+    id: string;
+    name: string;
+    placements: number;
+    active_students: number;
+    induction_rate: number | null;
+    sessions: number;
+    sessions_per_student_week: number | null;
+    open_concerns: number;
+  }>;
+}
+
+export async function getReportInsights(params: { from: string; to: string; cohort_id?: string; facility_id?: string }): Promise<ReportInsights> {
+  const query = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.cohort_id) query.set("cohort_id", params.cohort_id);
+  if (params.facility_id) query.set("facility_id", params.facility_id);
+  const response = await request<{ data: ReportInsights }>(`/api/v1/reports/insights?${query.toString()}`);
+  return response.data;
+}

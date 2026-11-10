@@ -8,6 +8,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Settings2,
+  ShieldAlert,
   Users,
 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
@@ -27,6 +28,7 @@ export type ProgrammeAdminNav =
   | "content"
   | "placements"
   | "reports"
+  | "safeguarding"
   | "activity"
   | "settings";
 
@@ -157,7 +159,10 @@ export function ProgrammeAdminFrame({
           },
           {
             label: "Review",
-            items: [{ id: "activity", label: "Activity", icon: <Activity />, onSelect: () => navigate("activity") }],
+            items: [
+              { id: "safeguarding", label: "Safeguarding", icon: <ShieldAlert />, onSelect: () => navigate("safeguarding") },
+              { id: "activity", label: "Activity", icon: <Activity />, onSelect: () => navigate("activity") },
+            ],
           },
         ]}
         footerItems={[{ id: "settings", label: "Settings", icon: <Settings2 />, onSelect: onSettings }]}

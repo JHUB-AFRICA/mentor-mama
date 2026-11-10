@@ -1,38 +1,39 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import type { CurrentUser } from "../../services/api";
 import { AccountSettings } from "../auth/AccountSettings";
-import { CoordinatorDashboard } from "./CoordinatorDashboard";
-import { CohortManagement } from "./CohortManagement";
-import { CoordinatorPlacementRegister } from "./CoordinatorPlacementRegister";
-import { CoordinatorPlacementDetail } from "./CoordinatorPlacementDetail";
-import { CoordinatorPlacementCreate } from "./CoordinatorPlacementCreate";
+import { ConcernQueue } from "../safeguarding/ConcernQueue";
+import { ReportsDashboard } from "../reports/ReportsDashboard";
 import { CoordinatorActivity } from "./CoordinatorActivity";
-import { CoordinatorReports } from "./CoordinatorReports";
-import { CoordinatorStudentInvites } from "./CoordinatorStudentInvites";
-import { CoordinatorStudentManagement } from "./CoordinatorStudentManagement";
-import { CoordinatorBatchManagement } from "./CoordinatorBatchManagement";
 import { CoordinatorBatchDetail } from "./CoordinatorBatchDetail";
+import { CoordinatorBatchManagement } from "./CoordinatorBatchManagement";
 import { CoordinatorCohortDetail } from "./CoordinatorCohortDetail";
+import { CoordinatorCohorts } from "./CoordinatorCohorts";
+import { CoordinatorDashboard } from "./CoordinatorDashboard";
 import { CoordinatorFrame, type CoordinatorNav } from "./CoordinatorFrame";
-import { useLocation, useNavigate } from "react-router-dom";
+import { CoordinatorPlacementCreate } from "./CoordinatorPlacementCreate";
+import { CoordinatorPlacementDetail } from "./CoordinatorPlacementDetail";
+import { CoordinatorPlacementRegister } from "./CoordinatorPlacementRegister";
+import { CoordinatorStudentInvites } from "./CoordinatorStudentInvites";
+import { CoordinatorStudents } from "./CoordinatorStudents";
 
-type View = CoordinatorNav | "account";
 type AccountTab = "security" | "profile" | "notifications" | "recovery";
-function viewFromPath(path: string): View {
-  if (path.endsWith("/cohorts")) return "cohorts";
-  if (path.endsWith("/reports")) return "reports";
-  if (path.endsWith("/activity")) return "activity";
-  if (path.endsWith("/account")) return "account";
-  return "overview";
+
+interface Route {
+  nav: CoordinatorNav;
+  title: string;
+  crumbs?: string[];
+  render: () => React.ReactNode;
 }
+
 function accountTab(search: string): AccountTab {
   const value = new URLSearchParams(search).get("tab");
-  return value === "profile" ||
-    value === "notifications" ||
-    value === "recovery"
-    ? value
-    : "security";
+  return value === "profile" || value === "notifications" || value === "recovery" ? value : "security";
 }
 
+/**
+ * Coordinator workspace router. Every page sits in the same frame; list pages
+ * use the shared kit, and creation or editing happens in dialogs where it can.
+ */
 export function CoordinatorWorkspace({
   user,
   onError,
@@ -45,230 +46,135 @@ export function CoordinatorWorkspace({
   onUserUpdated: (user: CurrentUser) => void;
 }) {
   const location = useLocation();
-  const routerNavigate = useNavigate();
-  function navigateTo(destination: CoordinatorNav) {
-    routerNavigate(
-      destination === "overview"
-        ? "/coordinator"
-        : `/coordinator/${destination}`,
-    );
+  const go = useNavigate();
+  const path = location.pathname.replace(/\/+$/, "");
+
+  const navigateTo = (destination: CoordinatorNav) => go(destination === "overview" ? "/coordinator" : `/coordinator/${destination}`);
+  const openAccount = (tab: AccountTab = "security") => go(`/coordinator/account?tab=${tab}`);
+
+  const placementState = (state?: string) => go(state ? `/coordinator/placements?state=${state}` : "/coordinator/placements");
+
+  function resolve(): Route {
+    const match = (pattern: RegExp) => path.match(pattern)?.[1];
+
+    if (path === "/coordinator/students/invite")
+      return {
+        nav: "students", title: "Invite students", crumbs: ["Students"],
+        render: () => <CoordinatorStudentInvites user={user} onBack={() => go("/coordinator/students")} onError={onError} />,
+      };
+    if (path === "/coordinator/students" || path === "/coordinator/cohorts/students")
+      return {
+        nav: "students", title: "Students",
+        render: () => <CoordinatorStudents onInvite={() => go("/coordinator/students/invite")} onError={onError} />,
+      };
+
+    const cohortId = match(/^\/coordinator\/cohorts\/([^/]+)$/);
+    if (cohortId)
+      return {
+        nav: "cohorts", title: "Cohort", crumbs: ["Cohorts"],
+        render: () => (
+          <CoordinatorCohortDetail
+            id={cohortId}
+            onBack={() => go("/coordinator/cohorts")}
+            onManageStudents={() => go("/coordinator/students?cohort_status=unassigned")}
+            onInviteStudents={() => go("/coordinator/students/invite")}
+            onError={onError}
+          />
+        ),
+      };
+    if (path === "/coordinator/cohorts")
+      return {
+        nav: "cohorts", title: "Cohorts",
+        render: () => <CoordinatorCohorts onOpenCohort={(id) => go(`/coordinator/cohorts/${id}`)} onError={onError} />,
+      };
+
+    if (path === "/coordinator/placements/batches")
+      return {
+        nav: "placements", title: "Batch activity", crumbs: ["Placements"],
+        render: () => <CoordinatorBatchManagement onOpen={(id) => go(`/coordinator/placements/batches/${id}`)} />,
+      };
+    const batchId = match(/^\/coordinator\/placements\/batches\/([^/]+)$/);
+    if (batchId)
+      return {
+        nav: "placements", title: "Batch detail", crumbs: ["Placements", "Batch activity"],
+        render: () => <CoordinatorBatchDetail id={batchId} onBack={() => go("/coordinator/placements/batches")} />,
+      };
+    const placementId = match(/^\/coordinator\/placements\/([^/]+)$/);
+    if (placementId === "new")
+      return {
+        nav: "placements", title: "New placement", crumbs: ["Placements"],
+        render: () => (
+          <CoordinatorPlacementCreate
+            onBack={() => go("/coordinator/placements")}
+            onError={onError}
+            onOpenBatch={(id) => go(`/coordinator/placements/batches/${id}`)}
+          />
+        ),
+      };
+    if (placementId)
+      return {
+        nav: "placements", title: "Placement", crumbs: ["Placements"],
+        render: () => <CoordinatorPlacementDetail id={placementId} onBack={() => go("/coordinator/placements")} onError={onError} />,
+      };
+    if (path === "/coordinator/placements")
+      return {
+        nav: "placements", title: "Placements",
+        render: () => (
+          <CoordinatorPlacementRegister
+            user={user}
+            onError={onError}
+            onOpen={(id) => go(`/coordinator/placements/${id}`)}
+            onCreate={() => go("/coordinator/placements/new")}
+            onOpenBatches={() => go("/coordinator/placements/batches")}
+          />
+        ),
+      };
+
+    if (path === "/coordinator/safeguarding")
+      return { nav: "safeguarding", title: "Safeguarding", render: () => <ConcernQueue user={user} onError={onError} /> };
+    if (path === "/coordinator/reports")
+      return {
+        nav: "reports", title: "Reports",
+        render: () => <ReportsDashboard user={user} onError={onError} onOpenSafeguarding={() => go("/coordinator/safeguarding")} />,
+      };
+    if (path === "/coordinator/activity")
+      return { nav: "activity", title: "Activity", render: () => <CoordinatorActivity user={user} /> };
+    if (path === "/coordinator/account")
+      return {
+        nav: "account", title: "Account settings",
+        render: () => (
+          <AccountSettings user={user} onSignedOut={onSignedOut} onError={onError} onUserUpdated={onUserUpdated} initialTab={accountTab(location.search)} />
+        ),
+      };
+
+    return {
+      nav: "overview", title: "Overview",
+      render: () => (
+        <CoordinatorDashboard
+          user={user}
+          onNavigate={navigateTo}
+          onCreatePlacement={() => go("/coordinator/placements/new")}
+          onInvite={() => go("/coordinator/students/invite")}
+          onOpenCohort={(id) => go(`/coordinator/cohorts/${id}`)}
+          onOpenPlacements={placementState}
+        />
+      ),
+    };
   }
-  function openAccount(nextTab: AccountTab = "security") {
-    routerNavigate(`/coordinator/account?tab=${nextTab}`);
-  }
-  if (location.pathname === "/coordinator/placements")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="placements"
-        title="Placements"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorPlacementRegister
-          user={user}
-          onError={onError}
-          onOpen={(id) => routerNavigate(`/coordinator/placements/${id}`)}
-          onCreate={() => routerNavigate("/coordinator/placements/new")}
-          onOpenBatches={() =>
-            routerNavigate("/coordinator/placements/batches")
-          }
-        />
-      </CoordinatorFrame>
-    );
-  const coordinatorPlacementId = location.pathname.match(
-    /^\/coordinator\/placements\/([^/]+)$/,
-  )?.[1];
-  const coordinatorBatchId = location.pathname.match(
-    /^\/coordinator\/placements\/batches\/([^/]+)$/,
-  )?.[1];
-  const coordinatorCohortId = location.pathname.match(
-    /^\/coordinator\/cohorts\/([^/]+)$/,
-  )?.[1];
-  if (location.pathname === "/coordinator/placements/batches")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="placements"
-        title="Batch activity"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorBatchManagement
-          onOpen={(id) =>
-            routerNavigate(`/coordinator/placements/batches/${id}`)
-          }
-        />
-      </CoordinatorFrame>
-    );
-  if (coordinatorBatchId)
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="placements"
-        title="Batch detail"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorBatchDetail
-          id={coordinatorBatchId}
-          onBack={() => routerNavigate("/coordinator/placements/batches")}
-        />
-      </CoordinatorFrame>
-    );
-  if (coordinatorCohortId)
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="cohorts"
-        title="Cohort detail"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorCohortDetail
-          id={coordinatorCohortId}
-          onBack={() => routerNavigate("/coordinator/cohorts")}
-          onManageStudents={() => routerNavigate("/coordinator/students")}
-          onInviteStudents={() =>
-            routerNavigate("/coordinator/students/invite")
-          }
-        />
-      </CoordinatorFrame>
-    );
-  if (location.pathname === "/coordinator/students/invite")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="cohorts"
-        title="Invite students"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorStudentInvites
-          user={user}
-          onBack={() => routerNavigate("/coordinator/cohorts")}
-          onError={onError}
-        />
-      </CoordinatorFrame>
-    );
-  if (location.pathname === "/coordinator/students")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="cohorts"
-        title="Manage students"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorStudentManagement
-          user={user}
-          onInvite={() => routerNavigate("/coordinator/students/invite")}
-          onBack={() => routerNavigate("/coordinator/cohorts")}
-          onError={onError}
-        />
-      </CoordinatorFrame>
-    );
-  if (coordinatorPlacementId === "new")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="placements"
-        title="Create placement"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorPlacementCreate
-          onBack={() => routerNavigate("/coordinator/placements")}
-          onError={onError}
-          onOpenBatch={(id) =>
-            routerNavigate(`/coordinator/placements/batches/${id}`)
-          }
-        />
-      </CoordinatorFrame>
-    );
-  if (coordinatorPlacementId && coordinatorPlacementId !== "new")
-    return (
-      <CoordinatorFrame
-        user={user}
-        active="placements"
-        title="Placement detail"
-        onNavigate={navigateTo}
-        onAccount={openAccount}
-        onSignedOut={onSignedOut}
-        onError={onError}
-      >
-        <CoordinatorPlacementDetail
-          id={coordinatorPlacementId}
-          onBack={() => routerNavigate("/coordinator/placements")}
-          onError={onError}
-        />
-      </CoordinatorFrame>
-    );
-  const view = viewFromPath(location.pathname);
-  const tab = accountTab(location.search);
-  const navigate = navigateTo;
-  const title =
-    view === "overview"
-      ? "Institution overview"
-      : view === "cohorts"
-        ? "Cohorts & students"
-        : view === "reports"
-          ? "Reports"
-          : view === "activity"
-            ? "Institution activity"
-            : "Account settings";
-  const content =
-    view === "account" ? (
-      <AccountSettings
-        user={user}
-        onSignedOut={onSignedOut}
-        onError={onError}
-        onUserUpdated={onUserUpdated}
-        initialTab={tab}
-      />
-    ) : view === "cohorts" ? (
-      <CohortManagement
-        onError={onError}
-        onInviteStudents={() => routerNavigate("/coordinator/students/invite")}
-        onManageStudents={() => routerNavigate("/coordinator/students")}
-        onOpenCohort={(id) => routerNavigate(`/coordinator/cohorts/${id}`)}
-      />
-    ) : view === "reports" ? (
-      <CoordinatorReports user={user} onError={onError} />
-    ) : view === "activity" ? (
-      <CoordinatorActivity user={user} />
-    ) : (
-      <CoordinatorDashboard
-        user={user}
-        onError={onError}
-        onNavigate={navigate}
-      />
-    );
+
+  const route = resolve();
   return (
     <CoordinatorFrame
       user={user}
-      active={view}
-      title={title}
+      active={route.nav}
+      title={route.title}
+      crumbs={route.crumbs}
       onNavigate={navigateTo}
       onAccount={openAccount}
       onSignedOut={onSignedOut}
       onError={onError}
     >
-      {content}
+      {route.render()}
     </CoordinatorFrame>
   );
 }

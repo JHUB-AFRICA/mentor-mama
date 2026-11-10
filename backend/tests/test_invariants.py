@@ -453,3 +453,35 @@ def test_default_induction_template_is_seeded_once_and_never_overwrites(program)
     again, created_again = ensure_default_template(program)
     assert created_again is False and again.id == template.id
     assert ChecklistTemplate.objects.filter(program=program).count() == 1
+
+
+def test_report_insights_are_scoped_aggregate_and_suppress_small_groups(active_placement, coordinator, nurse_manager, mentor, student):
+    from rest_framework.test import APIClient
+
+    from apps.assessments.models import FeedbackConfidential, Response
+
+    feedback = FeedbackConfidential.objects.create(placement=active_placement, comments="private text")
+    Response.objects.create(feedback_confidential=feedback, question_code="orientation", scale="likert_1_5", value_numeric=4)
+
+    coordinator_client = APIClient()
+    coordinator_client.force_authenticate(coordinator)
+    response = coordinator_client.get("/api/v1/reports/insights")
+    assert response.status_code == 200, response.content
+    data = response.json()["data"]
+    assert data["scope"]["breakdown_kind"] == "facility"
+    assert data["kpis"]["placements"] == 1
+    assert data["kpis"]["mentors"] == 1
+    assert data["kpis"]["induction"]["denominator"] == 1
+    # One response is below the minimum group size, so no score is revealed.
+    assert data["feedback"]["overall_mean"] is None
+    assert all(item["mean"] is None for item in data["feedback"]["questions"])
+    assert "private text" not in response.content.decode()
+
+    manager_client = APIClient()
+    manager_client.force_authenticate(nurse_manager)
+    assert manager_client.get("/api/v1/reports/insights").json()["data"]["scope"]["breakdown_kind"] == "cohort"
+
+    for outsider in (mentor, student):
+        client = APIClient()
+        client.force_authenticate(outsider)
+        assert client.get("/api/v1/reports/insights").status_code == 404

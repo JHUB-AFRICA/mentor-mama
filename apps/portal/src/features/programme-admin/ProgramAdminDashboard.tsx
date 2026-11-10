@@ -72,8 +72,11 @@ const ProgrammeSettings = lazy(() =>
     default: module.ProgrammeSettings,
   })),
 );
-const Reports = lazy(() =>
-  import("./Reports").then((module) => ({ default: module.Reports })),
+const ReportsDashboard = lazy(() =>
+  import("../reports/ReportsDashboard").then((module) => ({ default: module.ReportsDashboard })),
+);
+const ConcernQueue = lazy(() =>
+  import("../safeguarding/ConcernQueue").then((module) => ({ default: module.ConcernQueue })),
 );
 const ContentLibrary = lazy(() =>
   import("../content/ContentLibrary").then((module) => ({
@@ -100,6 +103,7 @@ type AdminView =
   | "content-detail"
   | "content-authoring"
   | "reports"
+  | "safeguarding"
   | "activity"
   | "account";
 type AccountTab =
@@ -151,6 +155,7 @@ function viewFromPath(pathname: string): AdminView {
   if (pathname.endsWith("/people")) return "people";
   if (pathname.endsWith("/activity")) return "activity";
   if (pathname.endsWith("/reports")) return "reports";
+  if (pathname.endsWith("/safeguarding")) return "safeguarding";
   if (pathname.endsWith("/content")) return "content";
   if (pathname.endsWith("/account")) return "account";
   if (pathname.endsWith("/settings")) return "setup";
@@ -172,7 +177,9 @@ function titleForView(view: AdminView) {
           ? "Content library"
           : view === "reports"
             ? "Reports"
-            : view === "account"
+            : view === "safeguarding"
+              ? "Safeguarding"
+              : view === "account"
               ? "Account settings"
               : "Activity";
 }
@@ -287,7 +294,9 @@ export function ProgramAdminDashboard({
     ) : view === "recovery" ? (
       <MFARecoveryInbox />
     ) : view === "reports" ? (
-      <Reports user={user} onError={onError} />
+      <ReportsDashboard user={user} onError={onError} onOpenSafeguarding={() => navigate("safeguarding")} />
+    ) : view === "safeguarding" ? (
+      <ConcernQueue user={user} onError={onError} />
     ) : view === "activity" ? (
       <ActivityTimeline />
     ) : (

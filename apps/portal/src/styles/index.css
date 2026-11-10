@@ -54,25 +54,6 @@
   }
 }
 
-/* Coordinator workspace chrome stays anchored while operational pages scroll. */
-.coordinator-shell .programme-admin-header {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 50;
-}
-
-.coordinator-shell main {
-  padding-top: 5.3rem;
-}
-
-@media (min-width: 1024px) {
-  .coordinator-shell .programme-admin-header {
-    left: 17rem;
-  }
-}
-
 @layer base {
   html {
     @apply bg-mist text-navy;

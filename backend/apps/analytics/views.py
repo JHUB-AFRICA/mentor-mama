@@ -38,6 +38,39 @@ class ReportOverviewView(APIView):
         return Response({"data": selectors.report_overview(actor=request.user, period_start=start, period_end=end)})
 
 
+class ReportInsightsView(APIView):
+    """Charts and indicators for the Reports screens (admin, coordinator, nurse manager)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import uuid
+        from datetime import timedelta
+
+        from apps.analytics import insights
+
+        today = timezone.localdate()
+        end = parse_date(request.query_params.get("to", "")) or today
+        start = parse_date(request.query_params.get("from", "")) or (end - timedelta(days=89))
+        if start > end or (end - start).days > 366:
+            return Response({"error": {"code": "invalid_report_period", "message": "Choose a valid reporting period of one year or less."}}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _uuid(name):
+            raw = request.query_params.get(name)
+            if not raw:
+                return None
+            try:
+                return uuid.UUID(raw)
+            except ValueError:
+                return None
+
+        data = insights.insights(
+            actor=request.user, start=start, end=end,
+            cohort_id=_uuid("cohort_id"), facility_id=_uuid("facility_id"),
+        )
+        return Response({"data": data})
+
+
 class InterruptionDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 

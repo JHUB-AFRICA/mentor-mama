@@ -131,7 +131,7 @@ export function FacilityWorkspaceFrame({
   }
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-[#f7fbfb] text-navy">
+    <div className="min-h-screen overflow-x-clip bg-white text-navy">
       <a
         href="#facility-main"
         className="sr-only z-[60] rounded-md bg-white px-3 py-2 text-sm font-semibold text-navy focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
@@ -162,11 +162,8 @@ export function FacilityWorkspaceFrame({
           accountItems={[{ label: "Account & security", icon: <Settings2 aria-hidden="true" />, onSelect: openAccount }]}
           onSignOut={() => void signOut()}
         />
-        <main
-          id="facility-main"
-          className="mx-auto max-w-[94rem] px-5 pb-8 pt-8 sm:px-8 sm:pb-10 sm:pt-10 lg:pb-12"
-        >
-          {children}
+        <main id="facility-main" className="min-h-[calc(100vh-4.25rem)] bg-white">
+          <div className="programme-admin-content w-full py-6 sm:py-7 lg:py-8">{children}</div>
         </main>
       </div>
     </div>

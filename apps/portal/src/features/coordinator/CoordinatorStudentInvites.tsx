@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { AdminPageHeader } from "../programme-admin/ui/AdminKit";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -130,7 +131,7 @@ export function CoordinatorStudentInvites({
   }
   return (
     <section
-      className="mx-auto max-w-6xl space-y-6 sm:space-y-8"
+      className="mx-auto w-full max-w-[75rem] space-y-5"
       aria-labelledby="student-invites-heading"
     >
       <button
@@ -139,26 +140,13 @@ export function CoordinatorStudentInvites({
         className="inline-flex min-h-10 items-center gap-2 font-body text-sm font-semibold text-teal hover:text-navy"
       >
         <ArrowLeft size={16} />
-        Back to cohorts & students
+        Students
       </button>
-      <header className="relative overflow-hidden rounded-2xl bg-navy px-6 py-7 text-white shadow-[0_18px_42px_rgb(11_27_58/12%)] sm:px-8 sm:py-9">
-        <div className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full border-[3rem] border-teal/15" />
-        <div className="relative">
-          <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-            Student access ·{" "}
-            {user.scope?.institution_name ?? "Your institution"}
-          </p>
-          <h2
-            id="student-invites-heading"
-            className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl"
-          >
-            {mode === "batch" ? "Invite students in one reviewable batch" : "Invite one student securely"}
-          </h2>
-          <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-slate-300">
-            {mode === "batch" ? "Import your institution roster, review every student before sending, and keep invitations scoped to your institution." : "Enter one student’s details, review the server checks, and send an institution-scoped invitation."}
-          </p>
-        </div>
-      </header>
+      <AdminPageHeader
+        eyebrow={`Student access · ${user.scope?.institution_name ?? "Your institution"}`}
+        title={mode === "batch" ? "Invite students in one reviewable batch" : "Invite one student securely"}
+        description={mode === "batch" ? "Import your institution roster, review every student before sending, and keep invitations scoped to your institution." : "Enter one student’s details, review the server checks, and send an institution-scoped invitation."}
+      />
       <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.25fr)_minmax(17rem,0.75fr)] lg:gap-6">
         <Card padding="lg">
           <div className="flex items-start gap-4">

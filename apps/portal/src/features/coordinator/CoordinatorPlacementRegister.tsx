@@ -1,19 +1,38 @@
 import { useEffect, useState } from "react";
-import { ClipboardList, Plus, Search } from "lucide-react";
-import { Button, Skeleton } from "@mentormama/ui";
-import {
-  ApiError,
-  getPlacements,
-  getPlacementOptions,
-  type CurrentUser,
-  type Placement,
-  type PlacementPage,
-  type PlacementOptions,
-} from "../../services/api";
+import { useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ClipboardList, Layers, Plus } from "lucide-react";
+import { Skeleton } from "@mentormama/ui";
+import { getPlacementOptions, getPlacements, type CurrentUser, type Placement } from "../../services/api";
+import { PortalErrorState } from "../../components/PortalErrorState";
+import { AdminButton, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { ServerPager } from "../programme-admin/ui/DataTable";
+import { placementStateLabel, placementStateTone } from "../placements/placementJourney";
 
+const STAGES = [
+  { value: "", label: "All stages" },
+  { value: "draft", label: "Draft" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "awaiting_student", label: "Awaiting student" },
+  { value: "orientation", label: "Orientation" },
+  { value: "induction", label: "Induction" },
+  { value: "active", label: "Active" },
+  { value: "paused", label: "Paused" },
+  { value: "completed", label: "Completed" },
+];
+const QUICK = [
+  { value: "", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "awaiting_student", label: "Awaiting student" },
+  { value: "scheduled", label: "Upcoming" },
+  { value: "completed", label: "Completed" },
+];
+
+const fmt = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** Every placement in the institution, filterable by stage, cohort and facility. */
 export function CoordinatorPlacementRegister({
   user,
-  onError,
   onOpen,
   onCreate,
   onOpenBatches,
@@ -24,263 +43,149 @@ export function CoordinatorPlacementRegister({
   onCreate: () => void;
   onOpenBatches?: () => void;
 }) {
-  const [rows, setRows] = useState<Placement[]>([]);
-  const [pagination, setPagination] = useState<
-    PlacementPage["pagination"] | null
-  >(null);
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
-  const [state, setState] = useState("");
-  const [cohort, setCohort] = useState("");
-  const [facility, setFacility] = useState("");
-  const [options, setOptions] = useState<PlacementOptions | null>(null);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const state = params.get("state") ?? "";
+  const cohort = params.get("cohort") ?? "";
+  const facility = params.get("facility") ?? "";
+  const page = Number(params.get("page") ?? "1") || 1;
+  const [text, setText] = useState(params.get("q") ?? "");
+  const search = params.get("q") ?? "";
+
+  function patch(next: Record<string, string>) {
+    const copy = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(next)) {
+      if (value) copy.set(key, value);
+      else copy.delete(key);
+    }
+    if (!("page" in next)) copy.delete("page");
+    setParams(copy, { replace: true });
+  }
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setSearch(query);
-      setPage(1);
+      if (text !== search) patch({ q: text });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [query]);
-  useEffect(() => {
-    void getPlacementOptions().then(setOptions).catch(() => undefined);
-  }, []);
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setFailed(false);
-    void getPlacements({ page, pageSize: 20, search, state, cohort, facility })
-      .then((result) => {
-        if (!active) return;
-        setRows(result.results);
-        setPagination(result.pagination);
-      })
-      .catch((cause) => {
-        if (!active) return;
-        setFailed(true);
-        onError(
-          cause instanceof ApiError
-            ? cause.message
-            : "We could not load your institution placements.",
-        );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page, search, state, cohort, facility, onError]);
+  }, [text]);
+
+  const options = useQuery({ queryKey: ["placement-options"], queryFn: getPlacementOptions, staleTime: 5 * 60_000 });
+  const list = useQuery({
+    queryKey: ["coordinator-placements", page, search, state, cohort, facility],
+    queryFn: () => getPlacements({ page, pageSize: 15, search, state, cohort, facility }),
+    placeholderData: (previous) => previous,
+  });
+  const facilities = [...new Map((options.data?.wards ?? []).map((item) => [item.facility_id, item.facility_name])).entries()];
   const hasFilters = Boolean(search || state || cohort || facility);
+  const rows: Placement[] = list.data?.results ?? [];
+
   return (
-    <section
-      className="space-y-8"
-      aria-labelledby="coordinator-placements-heading"
-    >
-      <header className="flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row sm:items-end">
-        <div>
-          <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-            Institution register
-          </p>
-          <h2
-            id="coordinator-placements-heading"
-            className="mt-2 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl"
-          >
-            Placements
-          </h2>
-          <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-            Follow each student’s handoff from cohort preparation to active
-            placement.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-        {onOpenBatches && <Button type="button" size="sm" variant="tertiary" onClick={onOpenBatches}>Batch activity</Button>}
-        {user.capabilities.create_placement && (
-          <Button type="button" size="sm" onClick={onCreate}>
-            <Plus size={16} className="mr-2" aria-hidden="true" />
-            New placement
-          </Button>
-        )}</div>
-      </header>
-      <div className="flex flex-col gap-3 border-y border-border py-4 sm:flex-row">
-        <label className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-white px-3 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/20">
-          <Search
-            size={18}
-            className="shrink-0 text-navy-muted"
-            aria-hidden="true"
-          />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search student, cohort, or facility"
-            className="min-w-0 flex-1 bg-transparent font-body text-sm text-navy outline-none placeholder:text-navy-muted/70"
-            aria-label="Search placements"
-          />
-        </label>
-        <select
-          value={state}
-          onChange={(event) => {
-            setState(event.target.value);
-            setPage(1);
-          }}
-          className="auth-control min-h-11 sm:w-52"
-          aria-label="Filter placements by state"
-        >
-          <option value="">All placement stages</option>
-          <option value="draft">Preparing</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="awaiting_student">Awaiting student</option>
-          <option value="orientation">Orientation</option>
-          <option value="induction">Induction</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="completed">Completed</option>
-        </select>
-        <select value={cohort} onChange={(event) => { setCohort(event.target.value); setPage(1); }} className="auth-control sm:w-52" aria-label="Filter placements by cohort">
-          <option value="">All cohorts</option>
-          {options?.cohorts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
-        <select value={facility} onChange={(event) => { setFacility(event.target.value); setPage(1); }} className="auth-control sm:w-52" aria-label="Filter placements by facility">
-          <option value="">All facilities</option>
-          {[...new Map((options?.wards ?? []).map((item) => [item.facility_id, item.facility_name])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-      </div>
-      <div className="overflow-hidden rounded-2xl border border-border bg-white">
-        {loading ? (
-          <div className="space-y-3 p-5">
-            <Skeleton className="h-14" />
-            <Skeleton className="h-14" />
-            <Skeleton className="h-14" />
-          </div>
-        ) : failed ? (
-          <Retry
-            onRetry={() => {
-              setPage((value) => value);
-            }}
-          />
-        ) : rows.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <ClipboardList
-              size={25}
-              className="mx-auto text-teal"
-              aria-hidden="true"
-            />
-            <p className="mt-3 font-display text-xl font-bold text-navy">
-              {hasFilters ? "No placements match" : "No placements yet"}
-            </p>
-            <p className="mx-auto mt-2 max-w-md font-body text-sm leading-6 text-navy-muted">
-              {hasFilters
-                ? "Try another search or placement stage."
-                : "Create a placement from an enrolled student when your cohort is ready."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[54rem] text-left">
-              <thead className="border-b border-border bg-mist/40">
+    <AdminPage>
+      <AdminPageHeader
+        eyebrow="Institution register"
+        title="Placements"
+        description="Follow each student from cohort preparation to active placement. Open a row for its full record."
+        actions={
+          <>
+            {onOpenBatches && (
+              <AdminButton variant="secondary" size="sm" icon={<Layers />} onClick={onOpenBatches}>
+                Batch activity
+              </AdminButton>
+            )}
+            {user.capabilities.create_placement && (
+              <AdminButton size="sm" icon={<Plus />} onClick={onCreate}>
+                New placement
+              </AdminButton>
+            )}
+          </>
+        }
+      />
+      <AdminTabs label="Quick stage filter" tabs={QUICK} value={QUICK.some((q) => q.value === state) ? state : "__other"} onChange={(value) => patch({ state: value })} />
+      <Toolbar filters={3}>
+        <SearchField label="Search placements" placeholder="Search student, cohort or facility" value={text} onChange={setText} />
+        <SelectField label="Stage" value={state} onChange={(value) => patch({ state: value })} options={STAGES} />
+        <SelectField label="Cohort" value={cohort} onChange={(value) => patch({ cohort: value })} options={[{ value: "", label: "All cohorts" }, ...(options.data?.cohorts ?? []).map((item) => ({ value: item.id, label: item.name }))]} />
+        {facilities.length > 1 && (
+          <SelectField label="Facility" value={facility} onChange={(value) => patch({ facility: value })} options={[{ value: "", label: "All facilities" }, ...facilities.map(([id, name]) => ({ value: id, label: name }))]} />
+        )}
+      </Toolbar>
+
+      {list.isPending ? (
+        <Skeleton className="h-72" />
+      ) : list.isError ? (
+        <PortalErrorState onRetry={() => void list.refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardList />}
+          title={hasFilters ? "No placements match" : "No placements yet"}
+          text={hasFilters ? "Try another stage, cohort or search term." : "Create a placement from an enrolled student when your cohort is ready."}
+          action={
+            hasFilters ? (
+              <AdminButton variant="secondary" size="sm" onClick={() => { setText(""); setParams({}, { replace: true }); }}>
+                Clear filters
+              </AdminButton>
+            ) : user.capabilities.create_placement ? (
+              <AdminButton size="sm" icon={<Plus />} onClick={onCreate}>
+                New placement
+              </AdminButton>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="pa-table-wrap" aria-busy={list.isFetching}>
+          <div className="pa-table-scroll">
+            <table className="pa-table">
+              <caption className="sr-only">Institution placements</caption>
+              <thead>
                 <tr>
-                  <th className="px-5 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
-                    Student / cohort
-                  </th>
-                  <th className="px-5 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
-                    Facility
-                  </th>
-                  <th className="px-5 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
-                    Handoff
-                  </th>
-                  <th className="px-5 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
-                    Dates
-                  </th>
+                  <th scope="col">Student</th>
+                  <th scope="col">Cohort</th>
+                  <th scope="col">Facility · ward</th>
+                  <th scope="col">Mentor</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Dates</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {rows.map((placement) => (
                   <tr
                     key={placement.id}
-                    onClick={() => onOpen(placement.id)}
+                    className="is-clickable"
                     tabIndex={0}
+                    onClick={() => onOpen(placement.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         onOpen(placement.id);
                       }
                     }}
-                    className="cursor-pointer transition hover:bg-mist/35 focus:bg-mist/35 focus:outline-none"
                   >
-                    <td className="px-5 py-4">
-                      <p className="font-body text-sm font-semibold text-navy">
-                        {placement.student?.name ?? "Student pending"}
-                      </p>
-                      <p className="mt-1 font-body text-xs text-navy-muted">
-                        {placement.cohort_name ?? "Cohort pending"}
-                      </p>
+                    <td>
+                      <div className="pa-cell-title">
+                        <span>
+                          <strong>{placement.student?.name ?? "Student pending"}</strong>
+                          <small>{placement.student?.registration_number ?? placement.student?.email ?? ""}</small>
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-5 py-4 font-body text-sm text-navy-muted">
+                    <td>{placement.cohort_name ?? "—"}</td>
+                    <td>
                       {placement.facility_name ?? "Not allocated"}
+                      {placement.ward?.name && <small className="pa-sub">{placement.ward.name}</small>}
                     </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`rounded-full px-2.5 py-1 font-body text-xs font-semibold capitalize ${placement.state === "active" ? "bg-teal-light text-teal" : placement.state === "paused" ? "bg-warning/15 text-warning" : "bg-mist text-navy-muted"}`}
-                      >
-                        {placement.state.replaceAll("_", " ")}
-                      </span>
+                    <td>{placement.mentor?.name ?? <span className="pa-muted">Not assigned</span>}</td>
+                    <td>
+                      <StatusPill tone={placementStateTone(placement.state)}>{placementStateLabel(placement.state, "staff")}</StatusPill>
                     </td>
-                    <td className="px-5 py-4 whitespace-nowrap font-body text-xs text-navy-muted">
-                      {placement.planned_start} → {placement.planned_end}
+                    <td className="pa-nowrap">
+                      {fmt(placement.planned_start)} – {fmt(placement.planned_end)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-        {pagination && pagination.total_pages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
-            <span className="font-body text-xs text-navy-muted">
-              Page {pagination.page} of {pagination.total_pages}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="tertiary"
-                disabled={!pagination.has_previous}
-                onClick={() => setPage((value) => value - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="tertiary"
-                disabled={!pagination.has_next}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-function Retry({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div
-      role="alert"
-      className="flex items-center justify-between gap-3 px-5 py-8"
-    >
-      <p className="font-body text-sm text-error">
-        We could not load placements.
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="font-body text-sm font-bold text-teal"
-      >
-        Try again
-      </button>
-    </div>
+          {list.data && <ServerPager pagination={list.data.pagination} onPage={(next) => patch({ page: String(next) })} noun="placements" />}
+        </div>
+      )}
+    </AdminPage>
   );
 }

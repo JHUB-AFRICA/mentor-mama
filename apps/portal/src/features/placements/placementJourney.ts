@@ -168,3 +168,25 @@ export function placementJourney(state: string, audience: JourneyAudience = "lea
     closed: isPlacementClosed(state),
   };
 }
+
+export type StatePillTone = "success" | "warning" | "danger" | "info" | "teal" | "neutral";
+
+/** Status pill colour for a placement state, shared by every table and card. */
+export function placementStateTone(state: string): StatePillTone {
+  switch (state) {
+    case "active":
+      return "success";
+    case "awaiting_student":
+    case "orientation":
+    case "induction":
+      return "info";
+    case "paused":
+      return "warning";
+    case "withdrawn":
+      return "danger";
+    case "completed":
+      return "teal";
+    default:
+      return "neutral";
+  }
+}

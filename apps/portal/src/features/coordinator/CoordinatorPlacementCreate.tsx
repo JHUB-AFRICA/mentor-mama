@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AdminPageHeader } from "../programme-admin/ui/AdminKit";
 import {
   ArrowLeft,
   CalendarPlus,
@@ -192,7 +193,7 @@ export function CoordinatorPlacementCreate({
   }
   return (
     <section
-      className="space-y-8 pt-6 sm:pt-8"
+      className="mx-auto w-full max-w-[75rem] space-y-5"
       aria-labelledby="create-coordinator-placement-heading"
     >
       <button
@@ -203,22 +204,11 @@ export function CoordinatorPlacementCreate({
         <ArrowLeft size={16} aria-hidden="true" />
         All placements
       </button>
-      <header className="border-b border-border pb-7">
-        <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-          Placement setup
-        </p>
-        <h2
-          id="create-coordinator-placement-heading"
-          className="mt-2 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl"
-        >
-          Create a placement
-        </h2>
-        <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-          Choose an enrolled student and define the planned placement window.
-          Facility allocation and mentor assignment remain with the operational
-          facility team.
-        </p>
-      </header>
+      <AdminPageHeader
+        eyebrow="Placement setup"
+        title="Create a placement"
+        description="Choose an enrolled student and define the planned placement window. Facility allocation and mentor assignment remain with the operational facility team."
+      />
       <Card
         padding="lg"
         className="max-w-4xl rounded-2xl border-border shadow-[0_4px_18px_rgba(13,27,51,0.05)]"

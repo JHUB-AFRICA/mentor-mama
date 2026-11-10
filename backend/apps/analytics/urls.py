@@ -4,6 +4,7 @@ from apps.analytics import views
 
 urlpatterns = [
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    path("reports/insights", views.ReportInsightsView.as_view(), name="report-insights"),
     path("reports/overview", views.ReportOverviewView.as_view(), name="report-overview"),
     path("dashboard/interruptions", views.InterruptionDashboardView.as_view(), name="dashboard-interruptions"),
     path("dashboard/feedback", views.FeedbackDashboardView.as_view(), name="dashboard-feedback"),
