@@ -26,6 +26,7 @@ import { AccountSecurity } from "./AccountSecurity";
 import { NotificationPreferences } from "./NotificationPreferences";
 import { useToast } from "../../components/ToastProvider";
 import { StudentProfileSettings } from "./StudentProfileSettings";
+import { MentorProfileSettings } from "./MentorProfileSettings";
 import { Field, FieldRow, SelectInput, TextArea, TextInput } from "../../components/kit";
 import {
   AdminButton,
@@ -180,6 +181,7 @@ export function AccountSettings({
                 <>
                   <ProfileSettings user={user} onUserUpdated={onUserUpdated} onError={onError} />
                   {user.role === "student" && <StudentProfileSettings onError={onError} onComplete={onStudentProfileComplete} />}
+                  {user.role === "mentor" && <MentorProfileSettings onError={onError} />}
                 </>
               )}
               {tab === "notifications" && <NotificationPreferences onError={onError} />}

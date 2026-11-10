@@ -441,3 +441,15 @@ def test_completed_placement_is_closed_to_mentor_and_ward_changes(active_placeme
         placement_services.assign_mentor(active_placement.id, other_mentor.id, actor=nurse_manager)
     with pytest.raises(errors.PlacementClosed):
         placement_services.allocate_ward(active_placement.id, ward.id, actor=nurse_manager)
+
+
+def test_default_induction_template_is_seeded_once_and_never_overwrites(program):
+    from apps.induction.models import ChecklistTemplate
+    from apps.induction.services import DEFAULT_CHECKLIST_ITEMS, ensure_default_template
+
+    template, created = ensure_default_template(program)
+    assert created is True
+    assert template.items.count() == len(DEFAULT_CHECKLIST_ITEMS) == 8
+    again, created_again = ensure_default_template(program)
+    assert created_again is False and again.id == template.id
+    assert ChecklistTemplate.objects.filter(program=program).count() == 1

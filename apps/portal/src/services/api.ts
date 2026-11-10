@@ -260,6 +260,15 @@ export interface StudentProfile {
   emergency_contact_relationship: string;
 }
 
+export interface MentorProfile {
+  cadre: string;
+  department: string;
+  years_of_practice: number | null;
+  mentorship_experience_years: number | null;
+  cpd_identifier: string;
+  digital_literacy: number | null;
+}
+
 export interface StudentInvitationRow {
   email: string;
   first_name: string;
@@ -559,6 +568,7 @@ export interface ApprovedFeedback {
   facility_name: string;
   ward_name: string;
   comments: string;
+  improvement_suggestion?: string;
   unresolved_concern: boolean;
   submitted_at: string;
 }
@@ -930,7 +940,16 @@ export type FeedbackMode = "confidential" | "anonymous";
 
 export async function submitPlacementFeedback(
   placementId: string,
-  input: { mode: FeedbackMode; comments: string; responses?: { question_code: string; scale: "likert_1_5"; value_numeric: number }[] },
+  input: {
+    mode: FeedbackMode;
+    comments: string;
+    unresolved_concern?: boolean;
+    improvement?: string;
+    responses?: Array<
+      | { question_code: string; scale: "likert_1_5"; value_numeric: number }
+      | { question_code: string; scale: "yes_no"; value_boolean: boolean }
+    >;
+  },
   commandId: string = crypto.randomUUID(),
 ): Promise<void> {
   const anonymous = input.mode === "anonymous";
@@ -1708,6 +1727,19 @@ export async function updateStudentProfile(
       body: JSON.stringify(input),
     },
   );
+  return response.data;
+}
+
+export async function getMentorProfile(): Promise<MentorProfile> {
+  const response = await request<{ data: MentorProfile }>("/api/v1/mentor/profile");
+  return response.data;
+}
+
+export async function updateMentorProfile(input: Partial<MentorProfile>): Promise<MentorProfile> {
+  const response = await request<{ data: MentorProfile }>("/api/v1/mentor/profile", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
   return response.data;
 }
 
@@ -2651,3 +2683,22 @@ export function isRetryableRequestFailure(cause: unknown): boolean {
 }
 
 export { ApiError };
+
+export async function getBaselineAssessmentStatus(placementId: string): Promise<{ submitted: boolean; can_submit: boolean }> {
+  const response = await request<{ data: { submitted: boolean; can_submit: boolean } }>(
+    `/api/v1/placements/${placementId}/assessments/baseline`,
+  );
+  return response.data;
+}
+
+export async function submitBaselineAssessment(
+  placementId: string,
+  confidenceScore: number,
+  commandId: string = crypto.randomUUID(),
+): Promise<void> {
+  await request(`/api/v1/placements/${placementId}/assessments/baseline`, {
+    method: "POST",
+    headers: { "Idempotency-Key": commandId },
+    body: JSON.stringify({ confidence_score: confidenceScore }),
+  });
+}

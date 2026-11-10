@@ -35,6 +35,7 @@ class FeedbackConfidential(BaseModel):
     submitted_at = models.DateTimeField(auto_now_add=True)
     unresolved_concern = models.BooleanField(default=False)
     comments = models.TextField(null=True, blank=True)
+    improvement_suggestion = models.TextField(blank=True, default="")
     revises = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="revisions"
     )

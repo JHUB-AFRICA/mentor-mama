@@ -165,3 +165,22 @@ def test_weekly_digest_is_opt_in_and_throttled(student):
     send_weekly_digest_task.run()
     preference.refresh_from_db()
     assert preference.last_digest_at is not None
+
+
+def test_mentor_profile_is_owned_by_the_mentor_and_validated(mentor, student):
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_authenticate(mentor)
+    saved = client.patch(
+        "/api/v1/mentor/profile",
+        {"cadre": "Registered nurse-midwife", "department": "Labour ward", "years_of_practice": 9,
+         "mentorship_experience_years": 3, "digital_literacy": 4},
+        format="json",
+    )
+    assert saved.status_code == 200, saved.content
+    assert client.get("/api/v1/mentor/profile").json()["data"]["department"] == "Labour ward"
+    assert client.patch("/api/v1/mentor/profile", {"digital_literacy": 9}, format="json").status_code == 400
+    other = APIClient()
+    other.force_authenticate(student)
+    assert other.get("/api/v1/mentor/profile").status_code == 404

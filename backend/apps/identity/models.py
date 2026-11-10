@@ -198,3 +198,29 @@ class MFARecoveryRequest(BaseModel):
     class Meta:
         db_table = "identity_mfa_recovery_request"
         indexes = [models.Index(fields=["user", "status", "-created_at"])]
+
+
+class MentorProfile(BaseModel):
+    """Mentor-owned professional details (concept note section 8).
+
+    Everything is optional; CPD identifiers in particular must stay optional
+    unless a regulator approves collecting them. Not a placement gate.
+    """
+
+    class DigitalLiteracy(models.IntegerChoices):
+        BASIC = 1, "Basic"
+        DEVELOPING = 2, "Developing"
+        COMFORTABLE = 3, "Comfortable"
+        CONFIDENT = 4, "Confident"
+        ADVANCED = 5, "Advanced"
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="mentor_profile")
+    cadre = models.CharField(max_length=120, blank=True, default="")
+    department = models.CharField(max_length=120, blank=True, default="")
+    years_of_practice = models.PositiveSmallIntegerField(null=True, blank=True)
+    mentorship_experience_years = models.PositiveSmallIntegerField(null=True, blank=True)
+    cpd_identifier = models.CharField(max_length=64, blank=True, default="")
+    digital_literacy = models.PositiveSmallIntegerField(null=True, blank=True, choices=DigitalLiteracy.choices)
+
+    class Meta:
+        db_table = "identity_mentor_profile"

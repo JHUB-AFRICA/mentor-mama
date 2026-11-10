@@ -184,3 +184,12 @@ class MFARecoverySerializer(serializers.Serializer):
 class MFARecoveryDecisionSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["recover", "close"])
     reason = serializers.CharField(max_length=500, min_length=5, trim_whitespace=True)
+
+
+class MentorProfileSerializer(serializers.Serializer):
+    cadre = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    department = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    years_of_practice = serializers.IntegerField(min_value=0, max_value=70, required=False, allow_null=True)
+    mentorship_experience_years = serializers.IntegerField(min_value=0, max_value=70, required=False, allow_null=True)
+    cpd_identifier = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    digital_literacy = serializers.IntegerField(min_value=1, max_value=5, required=False, allow_null=True)

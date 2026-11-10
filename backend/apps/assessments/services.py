@@ -44,6 +44,8 @@ class SubmitFeedback:
     mode: str
     comments: str | None = None
     responses: tuple[dict, ...] = ()
+    unresolved_concern: bool = False
+    improvement: str | None = None
 
 
 @transaction.atomic
@@ -58,6 +60,7 @@ def submit_feedback(cmd: SubmitFeedback, *, actor):
         raise errors.AnonymousFeedbackUnavailable("Use the anonymous feedback command so identity metadata is not persisted.")
     feedback = FeedbackConfidential.objects.create(
         placement_id=authority.placement_id, comments=cmd.comments,
+        unresolved_concern=cmd.unresolved_concern, improvement_suggestion=(cmd.improvement or "").strip(),
     )
     for response in cmd.responses:
         Response.objects.create(feedback_confidential=feedback, **response)
@@ -239,6 +242,7 @@ def approved_feedback(*, actor) -> list[dict]:
             "facility_name": placement.facility.name if placement.facility else "Unassigned facility",
             "ward_name": ward_assignment.ward.name if ward_assignment else "Unassigned ward",
             "comments": row.comments or "",
+            "improvement_suggestion": row.improvement_suggestion,
             "unresolved_concern": row.unresolved_concern,
             "submitted_at": row.submitted_at.isoformat(),
         })
@@ -251,3 +255,41 @@ def approved_feedback(*, actor) -> list[dict]:
             changes={"placement_id": str(placement.id)},
         )
     return result
+
+
+BASELINE_STATES = {State.ORIENTATION, State.INDUCTION, State.ACTIVE, State.PAUSED}
+
+
+def baseline_status(placement_id: UUID, *, actor) -> dict:
+    authority = placements.verify_assessment_write(placement_id, actor=actor)
+    submitted = Assessment.objects.filter(
+        placement_id=placement_id, kind=AssessmentKind.BASELINE_CONFIDENCE
+    ).exists()
+    return {"submitted": submitted, "can_submit": not submitted and authority.state in BASELINE_STATES}
+
+
+def submit_baseline(placement_id: UUID, confidence_score: int, *, actor) -> Assessment:
+    """Starting confidence (0-100), the denominator of the confidence-change indicator."""
+    identity.require_capability(actor, "submit_assessment")
+    with transaction.atomic():
+        authority = placements.verify_assessment_write(placement_id, actor=actor)
+        if authority.state not in BASELINE_STATES:
+            raise errors.AssessmentNotReady()
+        if Assessment.objects.filter(
+            placement_id=authority.placement_id, kind=AssessmentKind.BASELINE_CONFIDENCE
+        ).exists():
+            raise errors.AssessmentAlreadySubmitted("Your starting confidence has already been recorded.")
+        if not 0 <= confidence_score <= 100:
+            raise errors.ScoreOutOfRange()
+        assessment = Assessment.objects.create(
+            placement_id=authority.placement_id, kind=AssessmentKind.BASELINE_CONFIDENCE
+        )
+        Response.objects.create(
+            assessment=assessment, question_code="baseline_confidence",
+            scale=Response.Scale.SCORE_0_100, value_numeric=confidence_score,
+        )
+        audit.record(
+            actor=actor, action="assessment.baseline_submit", entity_table="assessments_assessment",
+            entity_id=assessment.id, changes={"placement_id": str(authority.placement_id)},
+        )
+    return assessment

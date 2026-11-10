@@ -31,6 +31,10 @@ class Command(BaseCommand):
             raise CommandError("The programme does not exist.")
         if not program:
             program, _ = Program.objects.get_or_create(name=options["program_name"])
+        # A new programme must be able to start inductions on day one.
+        from apps.induction.services import ensure_default_template
+
+        ensure_default_template(program)
         email = User.objects.normalize_email(options["email"])
         existing = User.objects.filter(program=program, role=Role.PROGRAM_ADMIN).first()
         if existing:

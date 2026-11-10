@@ -11,6 +11,7 @@ urlpatterns = [
     path("auth/invitations/students/bulk", views.BulkStudentInviteView.as_view(), name="auth-bulk-student-invite"),
     path("auth/invitations/mentors/bulk", views.BulkMentorInviteView.as_view(), name="auth-bulk-mentor-invite"),
     path("auth/invitations/<uuid:user_id>/resend", views.InvitationResendView.as_view(), name="auth-invitation-resend"),
+    path("mentor/profile", views.MentorProfileView.as_view(), name="mentor-profile"),
     path("people", views.PeopleView.as_view(), name="people-list"),
     path("people/<uuid:user_id>/activity", views.PersonActivityView.as_view(), name="person-activity"),
     path("facility/mentors", views.FacilityMentorsView.as_view(), name="facility-mentor-list"),

@@ -41,6 +41,7 @@ export function ApprovedFeedbackPanel({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h3 className="font-body text-sm font-bold text-navy">{item.student_name}</h3><p className="mt-1 font-body text-xs text-navy-muted">{item.cohort_name} · {item.facility_name} · {item.ward_name}</p></div><time className="shrink-0 font-body text-xs text-navy-muted" dateTime={item.submitted_at}>{new Date(item.submitted_at).toLocaleDateString("en-GB")}</time></div>
                   <p className="mt-4 whitespace-pre-wrap font-body text-sm leading-6 text-navy">{item.comments || "The student submitted feedback without written comments."}</p>
+                  {item.improvement_suggestion && <p className="mt-3 font-body text-sm leading-6 text-navy-muted"><strong className="font-semibold text-navy">Suggested improvement: </strong>{item.improvement_suggestion}</p>}
                   {item.unresolved_concern && <p className="mt-4 inline-flex rounded-full bg-warning/10 px-3 py-1 font-body text-xs font-bold text-warning">Student marked this as needing follow-up</p>}
                 </div>
               </div>

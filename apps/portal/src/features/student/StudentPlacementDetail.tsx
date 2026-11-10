@@ -42,6 +42,7 @@ import { PlacementProgressSummary } from "../placements/PlacementProgressSummary
 import { OrientationPanel } from "../induction/OrientationPanel";
 import { InductionSummary } from "../induction/InductionSummary";
 import { FinalAssessmentForm } from "../assessments/FinalAssessmentForm";
+import { BaselineConfidenceCard } from "../assessments/BaselineConfidenceCard";
 import { FeedbackAndSafeguardingPanel } from "../safeguarding/FeedbackAndSafeguardingPanel";
 import { PlacementHistory } from "../placements/PlacementHistory";
 
@@ -616,6 +617,8 @@ export function StudentPlacementDetail({
             )}
           </div>
         </section>
+
+        <BaselineConfidenceCard placementId={current.id} state={current.state} onError={onError} />
 
         {/* -------------------------------------------------------------- */}
         {/* Tabs                                                           */}

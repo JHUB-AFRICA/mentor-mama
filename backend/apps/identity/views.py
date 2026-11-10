@@ -707,3 +707,49 @@ class AccountAccessView(APIView):
         if not changed:
             return Response({"error": {"code": "InvalidAccountAccess", "message": "That role and scope combination is not permitted."}}, status=400)
         return Response({"data": {"id": str(target.id), "role": target.role, "institution_id": target.institution_id, "facility_id": target.facility_id}})
+
+
+def _mentor_profile_payload(profile):
+    return {
+        "cadre": profile.cadre,
+        "department": profile.department,
+        "years_of_practice": profile.years_of_practice,
+        "mentorship_experience_years": profile.mentorship_experience_years,
+        "cpd_identifier": profile.cpd_identifier,
+        "digital_literacy": profile.digital_literacy,
+    }
+
+
+class MentorProfileView(APIView):
+    """A mentor's own professional profile. Optional; never a placement gate."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _profile(self, request):
+        from apps.core.errors import UnauthorizedFacilityAccess
+        from apps.identity.models import MentorProfile
+
+        if request.user.role != Role.MENTOR or request.user.status != Status.ACTIVE:
+            raise UnauthorizedFacilityAccess()
+        profile, _ = MentorProfile.objects.get_or_create(user=request.user)
+        return profile
+
+    def get(self, request):
+        return Response({"data": _mentor_profile_payload(self._profile(request))})
+
+    def patch(self, request):
+        from apps.identity.serializers import MentorProfileSerializer
+
+        profile = self._profile(request)
+        payload = MentorProfileSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        with transaction.atomic():
+            for field, value in payload.validated_data.items():
+                setattr(profile, field, value.strip() if isinstance(value, str) else value)
+            profile.save()
+            audit.record(
+                actor=request.user, action="mentor.profile_updated", entity_table="identity_mentor_profile",
+                entity_id=profile.id, scope={"program_id": str(request.user.program_id)},
+                changes={"fields": sorted(payload.validated_data)},
+            )
+        return Response({"data": _mentor_profile_payload(profile)})

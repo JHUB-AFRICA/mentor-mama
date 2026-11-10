@@ -9,7 +9,21 @@ import {
 } from "../../services/offline";
 import type { SessionInput } from "../../services/api";
 
-const topics = ["communication", "labour_monitoring", "clinical_skills", "documentation", "safeguarding", "feedback", "reflection", "professionalism"];
+// Concept note Appendix A topic areas first, then the broader mentoring topics.
+const topics = [
+  "antenatal_care",
+  "labour_monitoring",
+  "documentation",
+  "newborn_care",
+  "respectful_maternity_care",
+  "emergency_preparedness",
+  "communication",
+  "clinical_skills",
+  "safeguarding",
+  "feedback",
+  "reflection",
+  "professionalism",
+];
 const durations = [5, 10, 15, 30, 45];
 
 function initialInput(): SessionInput {
@@ -233,10 +247,13 @@ export function SessionLogForm({
             onChange={(event) => setInput((current) => ({ ...current, follow_up_action: event.target.value }))}
           >
             <option value="none">None</option>
-            <option value="review_next_shift">Review on next shift</option>
+            <option value="repeat_demonstration">Repeat demonstration</option>
+            <option value="review_reading">Review reading</option>
             <option value="practice_skill">Practise a skill</option>
-            <option value="supervisor_follow_up">Supervisor follow-up</option>
+            <option value="review_next_shift">Review on next shift</option>
+            <option value="supervisor_follow_up">Supervisor review</option>
             <option value="student_referral">Student support referral</option>
+            <option value="other">Other</option>
           </select>
         </label>
         <div className="flex justify-end border-t border-border pt-5 sm:col-span-2 lg:col-span-3">

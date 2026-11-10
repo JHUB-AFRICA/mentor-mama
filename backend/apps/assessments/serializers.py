@@ -25,6 +25,10 @@ class FinalAssessmentSerializer(serializers.Serializer):
     overall_experience = serializers.IntegerField(min_value=1, max_value=5)
 
 
+class BaselineAssessmentSerializer(serializers.Serializer):
+    confidence_score = serializers.IntegerField(min_value=0, max_value=100)
+
+
 class FeedbackSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=("confidential", "anonymous"), default="confidential")
     comments = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
@@ -35,6 +39,38 @@ class FeedbackSerializer(serializers.Serializer):
         if len(codes) != len(set(codes)):
             raise serializers.ValidationError("Each question may be answered once.")
         return value
+
+
+#: Structured student feedback (concept note, Appendix B). question_code -> scale.
+CONFIDENTIAL_QUESTIONS = {
+    "orientation": "likert_1_5",
+    "knows_mentor": "yes_no",
+    "mentor_availability": "likert_1_5",
+    "constructive_feedback": "likert_1_5",
+    "confidence_this_week": "likert_1_5",
+    "respectful_environment": "likert_1_5",
+}
+
+
+class ConfidentialFeedbackSerializer(FeedbackSerializer):
+    unresolved_concern = serializers.BooleanField(required=False, default=False)
+    improvement = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None, max_length=1000)
+
+    def validate(self, attrs):
+        if attrs.get("mode") != "confidential":
+            return attrs  # the view redirects anonymous submissions to the privacy-protected endpoint
+        for item in attrs.get("responses", []):
+            expected = CONFIDENTIAL_QUESTIONS.get(item["question_code"])
+            if expected is None:
+                raise serializers.ValidationError({"responses": f"Unknown feedback question: {item['question_code']}."})
+            if item["scale"] != expected:
+                raise serializers.ValidationError({"responses": f"{item['question_code']} must use the {expected} scale."})
+        comments = (attrs.get("comments") or "").strip()
+        if attrs.get("unresolved_concern") and len(comments) < 5:
+            raise serializers.ValidationError({"comments": "Briefly describe the concern that needs follow-up."})
+        if not (attrs.get("responses") or comments or (attrs.get("improvement") or "").strip()):
+            raise serializers.ValidationError("Add at least one rating or comment before submitting.")
+        return attrs
 
 
 class AnonymousFeedbackSerializer(FeedbackSerializer):

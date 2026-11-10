@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.core import audit, errors, outbox
@@ -223,3 +223,38 @@ def _lock(checklist_id: UUID) -> Checklist:
     if checklist is None:
         raise errors.UnauthorizedFacilityAccess()
     return checklist
+
+
+#: Default labour-ward induction checklist from the MentorMAMA concept note (section 11).
+#: (label, completed_by_role). Roles: mentor, mentor_or_nurse_manager, mentor_and_student.
+DEFAULT_CHECKLIST_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Student welcomed and introduced to the ward/unit team.", "mentor_or_nurse_manager"),
+    ("Student shown ward layout, emergency exits, handwashing points, PPE area and staff room.", "mentor"),
+    ("Student oriented to shift times, reporting lines and who to contact for support.", "mentor"),
+    ("Student briefed on respectful maternity care expectations.", "mentor"),
+    ("Student briefed on documentation expectations and confidentiality.", "mentor"),
+    ("Student briefed on emergency escalation protocols.", "mentor_or_nurse_manager"),
+    ("Student learning objectives discussed and recorded.", "mentor_and_student"),
+    ("First mentorship session scheduled. Add the agreed date and time in the comment.", "mentor_and_student"),
+)
+
+
+def ensure_default_template(program) -> tuple[ChecklistTemplate, bool]:
+    """Publish the concept-note checklist for a programme that has none yet.
+
+    Idempotent: a programme that already has a published template is left alone,
+    so a customised checklist is never overwritten.
+    """
+    existing = ChecklistTemplate.objects.filter(
+        program=program, published_at__isnull=False, retired_at__isnull=True
+    ).order_by("-version").first()
+    if existing is not None:
+        return existing, False
+    with transaction.atomic():
+        version = (
+            ChecklistTemplate.objects.filter(program=program).aggregate(top=models.Max("version"))["top"] or 0
+        ) + 1
+        template = ChecklistTemplate.objects.create(program=program, version=version, published_at=timezone.now())
+        for position, (label, role) in enumerate(DEFAULT_CHECKLIST_ITEMS, start=1):
+            TemplateItem.objects.create(template=template, position=position, label=label, completed_by_role=role)
+    return template, True

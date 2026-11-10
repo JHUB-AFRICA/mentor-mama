@@ -30,11 +30,30 @@ class FinalAssessmentView(APIView):
                          "meta": {"command": command.command_type, "idempotency_replayed": False}}, status=201)
 
 
+class BaselineAssessmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, placement_id):
+        return Response({"data": services.baseline_status(placement_id, actor=request.user)})
+
+    def post(self, request, placement_id):
+        payload = serializers.BaselineAssessmentSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with IdempotentCommand(request, "submit_baseline_assessment") as command:
+            if command.replayed:
+                return Response({"data": {"submitted": True}, "meta": {"command": command.command_type, "idempotency_replayed": True}})
+            assessment = services.submit_baseline(
+                placement_id, payload.validated_data["confidence_score"], actor=request.user
+            )
+            command.record(assessment.id)
+        return Response({"data": {"id": str(assessment.id), "submitted": True}}, status=201)
+
+
 class PlacementFeedbackView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, placement_id):
-        payload = serializers.FeedbackSerializer(data=request.data)
+        payload = serializers.ConfidentialFeedbackSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         if payload.validated_data["mode"] == "anonymous":
             from apps.core.errors import AnonymousFeedbackUnavailable
