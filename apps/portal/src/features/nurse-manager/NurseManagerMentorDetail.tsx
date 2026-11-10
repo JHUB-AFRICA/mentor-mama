@@ -1,3 +1,4 @@
+import { placementStateLabel } from "../placements/placementJourney";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
@@ -262,7 +263,7 @@ export function NurseManagerMentorDetail({
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
                           <span className="rounded-full bg-mist px-2.5 py-1 font-body text-xs font-bold capitalize text-navy-muted">
-                            {placement.state.replaceAll("_", " ")}
+                            {placementStateLabel(placement.state, "staff")}
                           </span>
                           <ArrowRight
                             size={16}

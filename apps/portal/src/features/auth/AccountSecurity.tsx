@@ -1,15 +1,63 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import { Copy, Download, Eye, EyeOff, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
-import { Button, Card } from "@mentormama/ui";
+import type { FormEvent, ReactNode } from "react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Copy,
+  Download,
+  Laptop,
+  Loader2,
+  LockKeyhole,
+  LogOut,
+  MonitorSmartphone,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  Circle,
+} from "lucide-react";
 import { ApiError, beginMfaSetup, changePassword, disableEmailMfa, enableEmailMfa, getMfaDevices, getSessions, logout, resendEmailVerification, revokeOtherSessions, revokeSession, UserSession, verifyEmailCode, verifyMfaSetup } from "../../services/api";
 import type { CurrentUser } from "../../services/api";
 import { QRCodeSVG } from "qrcode.react";
 import brandMark from "../../assets/brand/logo-icon.svg";
 import { useToast } from "../../components/ToastProvider";
 import { InlineFeedback } from "../../components/InlineFeedback";
+import { Field, Modal, PasswordInput, TextInput } from "../../components/kit";
+import { AdminButton, AdminCard, EmptyState, ListRow, StatusPill } from "../programme-admin/ui/AdminKit";
+import "./account-settings.css";
 
-export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentUser; onSignedOut: () => void; onError: (message: string) => void }) {
+const strengthLabels = ["", "Too short", "Acceptable", "Good", "Strong"];
+
+/** The server rule is at least 12 characters; mix and symbols only raise the meter. */
+function passwordStrength(value: string) {
+  const long = value.length >= 12;
+  const mixed = /[a-z]/.test(value) && /[A-Z]/.test(value);
+  const numberOrSymbol = /[0-9]/.test(value) || /[^A-Za-z0-9]/.test(value);
+  const level = value.length === 0 ? 0 : !long ? 1 : 2 + (mixed ? 1 : 0) + (numberOrSymbol ? 1 : 0);
+  return { long, mixed, numberOrSymbol, level };
+}
+
+function relativeTime(iso: string) {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "unknown";
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} d ago`;
+  return new Date(iso).toLocaleDateString("en-GB");
+}
+
+function deviceIcon(device: string) {
+  const value = device.toLowerCase();
+  if (/ipad|tablet/.test(value)) return <Tablet />;
+  if (/iphone|android|mobile|phone/.test(value)) return <Smartphone />;
+  return <Laptop />;
+}
+
+export function AccountSecurity({ user, onSignedOut, onError, view = "all" }: { user: CurrentUser; onSignedOut: () => void; onError: (message: string) => void; view?: "all" | "devices" }) {
   const { pushToast } = useToast();
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,8 +67,7 @@ export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentU
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [sessionToRevoke, setSessionToRevoke] = useState<UserSession | null>(null);
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaStatusLoading, setMfaStatusLoading] = useState(true);
@@ -35,6 +82,7 @@ export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentU
   const [emailVerificationMessage, setEmailVerificationMessage] = useState<string | null>(null);
   const [emailVerificationCode, setEmailVerificationCode] = useState("");
   const [emailVerified, setEmailVerified] = useState(Boolean(user.email_verified));
+  const showSecurity = view === "all";
 
   async function loadSessions() {
     setLoading(true);
@@ -45,6 +93,7 @@ export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentU
   }
   useEffect(() => { void loadSessions(); }, []);
   useEffect(() => {
+    if (!showSecurity) return;
     let active = true;
     setMfaStatusLoading(true);
     setMfaStatusError(false);
@@ -61,7 +110,7 @@ export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentU
       })
       .finally(() => { if (active) setMfaStatusLoading(false); });
     return () => { active = false; };
-  }, [mfaStatusAttempt, onError, user.id]);
+  }, [mfaStatusAttempt, onError, user.id, showSecurity]);
 
   async function startMfaSetup() {
     setMfaBusy(true);
@@ -137,100 +186,258 @@ export function AccountSecurity({ user, onSignedOut, onError }: { user: CurrentU
   async function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPasswordMessage(null);
-    if (newPassword.length < 12) { setPasswordMessage("Use at least 12 characters for your new password."); return; }
-    if (newPassword !== confirmPassword) { setPasswordMessage("The new passwords do not match."); return; }
+    if (newPassword.length < 12) { setPasswordMessage({ text: "Use at least 12 characters for your new password.", ok: false }); return; }
+    if (newPassword !== confirmPassword) { setPasswordMessage({ text: "The new passwords do not match.", ok: false }); return; }
     setChangingPassword(true);
     try {
       await changePassword(currentPassword, newPassword);
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-      setPasswordMessage("Password changed. Other signed-in devices have been signed out."); pushToast({ kind: "success", title: "Password changed", message: "Other signed-in devices have been signed out." });
+      setPasswordMessage({ text: "Password changed. Other signed-in devices have been signed out.", ok: true }); pushToast({ kind: "success", title: "Password changed", message: "Other signed-in devices have been signed out." });
       setSessions(await getSessions());
     } catch (cause) {
-      setPasswordMessage(cause instanceof ApiError ? cause.message : "The password could not be changed.");
+      setPasswordMessage({ text: cause instanceof ApiError ? cause.message : "The password could not be changed.", ok: false });
     } finally { setChangingPassword(false); }
   }
 
-  return <div className="mb-8 grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-    <Card padding="lg">
-      <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal"><LockKeyhole size={18} /></span><div><p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">Password</p><h2 className="mt-1 font-display text-h2 text-navy">Keep your account secure</h2></div></div>
-      <p className="mt-3 font-body text-body-sm leading-6 text-navy-muted">Use a memorable passphrase with at least 12 characters. Changing it signs out other devices.</p>
-      {passwordMessage && <p className="mt-4 rounded-xl bg-teal-light px-4 py-3 font-body text-caption text-navy" role="status">{passwordMessage}</p>}
-      <form className="mt-5 space-y-4" onSubmit={submitPassword}>
-        <label className="block font-body text-caption font-semibold text-navy">Current password<input className="auth-control mt-2" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label>
-        <label className="block font-body text-caption font-semibold text-navy">New password<span className="relative mt-2 block"><input className="auth-control pr-12" type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" required /><button type="button" className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-navy-muted hover:text-teal" onClick={() => setShowNewPassword((value) => !value)} aria-label={showNewPassword ? "Hide new password" : "Show new password"}>{showNewPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
-        <label className="block font-body text-caption font-semibold text-navy">Confirm new password<input className="auth-control mt-2" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required /></label>
-        <Button type="submit" size="sm" disabled={changingPassword}>{changingPassword ? "Changing…" : "Change password"}</Button>
-      </form>
-    </Card>
-    <Card padding="lg"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">Account security</p><h2 className="mt-1 font-display text-h2 text-navy">Where you’re signed in</h2><p className="mt-2 font-body text-body-sm text-navy-muted">Review devices using your account. Sign out any device you no longer recognise.</p></div><div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-mist/60 p-1"><Button variant="tertiary" size="sm" className="no-underline" onClick={() => void loadSessions()} disabled={busy || loading} aria-label="Refresh signed-in devices"><RefreshCw size={15} className="mr-2" />Refresh</Button><span className="hidden h-5 w-px bg-border sm:block" aria-hidden="true" /><Button variant="tertiary" size="sm" className="no-underline text-error hover:text-error" onClick={signOut} disabled={busy}><LogOut size={15} className="mr-2" />Sign out here</Button></div></div>{loading ? <p className="mt-6 font-body text-body-sm text-navy-muted" role="status">Loading signed-in devices…</p> : sessionsError ? <div className="mt-6"><InlineFeedback kind="error" title="Signed-in devices are unavailable"><Button size="sm" variant="tertiary" onClick={() => void loadSessions()}>Try again</Button></InlineFeedback></div> : sessions.length === 0 ? <div className="mt-6 rounded-2xl border border-dashed border-border p-6"><p className="font-body text-sm font-semibold text-navy">No signed-in devices found.</p><p className="mt-1 font-body text-xs text-navy-muted">Sign in again to add this device.</p></div> : <div className="settings-sessions-list mt-6 space-y-3">{sessions.map((session) => <div key={session.id} className="flex flex-col justify-between gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center"><div><p className="font-body text-body-sm font-semibold text-navy">{session.device}{session.current ? " · This device" : ""}</p><p className="mt-1 font-body text-caption text-navy-muted">Last active {new Date(session.last_seen_at).toLocaleString("en-GB")} · Signs out {new Date(session.expires_at).toLocaleDateString("en-GB")}</p><p className="mt-1 font-body text-[0.68rem] text-navy-muted">{session.ip_address ? `IP ${session.ip_address}` : "IP unavailable"}</p></div>{!session.current && <Button variant="tertiary" size="sm" disabled={busy} onClick={() => setSessionToRevoke(session)}>Sign out this device</Button>}</div>)}</div>}{sessions.filter((session) => !session.current).length > 0 && !sessionsError && <Button className="mt-5" variant="secondary" size="sm" onClick={revokeOthers} disabled={busy}>Sign out all other devices</Button>}{sessionToRevoke && <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"><section role="dialog" aria-modal="true" aria-labelledby="revoke-session-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h3 id="revoke-session-title" className="font-display text-xl font-bold text-navy">Sign out this device?</h3><p className="mt-2 font-body text-sm leading-6 text-navy-muted">{sessionToRevoke.device} will be signed out immediately. It can sign in again later.</p><div className="mt-6 flex justify-end gap-3"><Button variant="tertiary" onClick={() => setSessionToRevoke(null)} disabled={busy}>Keep it signed in</Button><Button variant="secondary" onClick={() => void revokeSelected()} disabled={busy}>{busy ? "Signing out…" : "Sign out device"}</Button></div></section></div>}</Card>
-    {mfaStatusLoading ? <Card padding="lg" className="xl:col-span-2"><p className="font-body text-sm text-navy-muted" role="status">Checking authenticator settings…</p></Card> : mfaStatusError ? <Card padding="lg" className="xl:col-span-2"><InlineFeedback kind="error" title="Authenticator settings are unavailable"><Button size="sm" variant="tertiary" onClick={() => setMfaStatusAttempt((attempt) => attempt + 1)}>Try again</Button></InlineFeedback></Card> : <MfaSecurityCard user={user} enabled={mfaEnabled} emailEnabled={emailMfaEnabled} emailVerified={emailVerified} setup={mfaSetup} code={mfaCode} recoveryCodes={recoveryCodes} busy={mfaBusy} emailVerificationBusy={emailVerificationBusy} emailVerificationMessage={emailVerificationMessage} emailVerificationCode={emailVerificationCode} onEmailVerificationCodeChange={setEmailVerificationCode} onVerifyEmail={() => void confirmEmailVerification()} onStart={() => void startMfaSetup()} onCodeChange={setMfaCode} onVerify={() => void confirmMfaSetup()} onDownload={downloadRecoveryCodes} onCodesSaved={() => setRecoveryCodes(null)} onToggleEmail={() => void toggleEmailMfa()} onSendEmailVerification={() => void sendEmailVerification()} />}
-  </div>;
+  const otherSessions = sessions.filter((session) => !session.current);
+  const strength = passwordStrength(newPassword);
+  const passwordDirty = Boolean(currentPassword || newPassword || confirmPassword);
+
+  return (
+    <div className="acct-stack">
+      {showSecurity && (
+        <AdminCard
+          title="Password"
+          description="Use a memorable passphrase with at least 12 characters. Changing it signs out other devices."
+          titleId="password-title"
+          action={<span className="pa-tile pa-tile--sm pa-tile--teal" aria-hidden="true"><LockKeyhole /></span>}
+        >
+          {passwordMessage && (
+            <p className={`acct-message mb-4${passwordMessage.ok ? "" : " acct-message--error"}`} role={passwordMessage.ok ? "status" : "alert"}>
+              {passwordMessage.ok ? <CheckCircle2 aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+              {passwordMessage.text}
+            </p>
+          )}
+          <form className="acct-form" onSubmit={submitPassword}>
+            <Field label="Current password" required>
+              <PasswordInput value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required />
+            </Field>
+            <Field label="New password" required>
+              <PasswordInput value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" required />
+            </Field>
+            <PasswordStrength value={newPassword} confirm={confirmPassword} strength={strength} />
+            <Field label="Confirm new password" required>
+              <PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required />
+            </Field>
+            <div className="acct-form__actions">
+              <AdminButton type="submit" disabled={changingPassword} aria-busy={changingPassword} icon={changingPassword ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>
+                {changingPassword ? "Changing…" : "Change password"}
+              </AdminButton>
+              {passwordDirty && !changingPassword && <StatusPill tone="warning">Unsaved changes</StatusPill>}
+            </div>
+          </form>
+        </AdminCard>
+      )}
+
+      {showSecurity && (mfaStatusLoading ? (
+        <AdminCard title="Authenticator app" titleId="mfa-title"><p className="acct-muted" role="status">Checking authenticator settings…</p></AdminCard>
+      ) : mfaStatusError ? (
+        <AdminCard title="Authenticator app" titleId="mfa-title">
+          <InlineFeedback kind="error" title="Authenticator settings are unavailable">
+            <AdminButton size="sm" variant="secondary" onClick={() => setMfaStatusAttempt((attempt) => attempt + 1)}>Try again</AdminButton>
+          </InlineFeedback>
+        </AdminCard>
+      ) : (
+        <MfaSecurityCard user={user} enabled={mfaEnabled} emailEnabled={emailMfaEnabled} emailVerified={emailVerified} setup={mfaSetup} code={mfaCode} recoveryCodes={recoveryCodes} busy={mfaBusy} emailVerificationBusy={emailVerificationBusy} emailVerificationMessage={emailVerificationMessage} emailVerificationCode={emailVerificationCode} onEmailVerificationCodeChange={setEmailVerificationCode} onVerifyEmail={() => void confirmEmailVerification()} onStart={() => void startMfaSetup()} onCodeChange={setMfaCode} onVerify={() => void confirmMfaSetup()} onDownload={downloadRecoveryCodes} onCodesSaved={() => setRecoveryCodes(null)} onToggleEmail={() => void toggleEmailMfa()} onSendEmailVerification={() => void sendEmailVerification()} />
+      ))}
+
+      <AdminCard
+        title="Active sessions"
+        description="Review devices using your account. Sign out any device you no longer recognise."
+        titleId="sessions-title"
+        flush
+        action={
+          <AdminButton variant="ghost" size="sm" onClick={() => void loadSessions()} disabled={busy || loading} aria-label="Refresh signed-in devices" icon={<RefreshCw className={loading ? "acct-spin" : undefined} aria-hidden="true" />}>
+            Refresh
+          </AdminButton>
+        }
+        footer={
+          otherSessions.length > 0 && !sessionsError ? (
+            <>
+              <span>{otherSessions.length} other {otherSessions.length === 1 ? "device is" : "devices are"} signed in.</span>
+              <AdminButton variant="secondary" size="sm" onClick={() => void revokeOthers()} disabled={busy} aria-busy={busy} icon={busy ? <Loader2 className="acct-spin" aria-hidden="true" /> : <LogOut aria-hidden="true" />}>
+                Sign out all other devices
+              </AdminButton>
+            </>
+          ) : undefined
+        }
+      >
+        {loading ? (
+          <div className="acct-stack p-4" role="status" aria-label="Loading signed-in devices"><div className="acct-skeleton" /><div className="acct-skeleton" /></div>
+        ) : sessionsError ? (
+          <div className="p-4">
+            <InlineFeedback kind="error" title="Signed-in devices are unavailable">
+              <AdminButton size="sm" variant="secondary" onClick={() => void loadSessions()}>Try again</AdminButton>
+            </InlineFeedback>
+          </div>
+        ) : sessions.length === 0 ? (
+          <EmptyState icon={<MonitorSmartphone />} title="No signed-in devices found." text="Sign in again to add this device." />
+        ) : (
+          <div className="settings-sessions-list">
+            {sessions.map((session) => (
+              <ListRow
+                key={session.id}
+                icon={deviceIcon(session.device)}
+                tone={session.current ? "teal" : "slate"}
+                title={<>{session.device}{session.current && <StatusPill tone="teal">This device</StatusPill>}</>}
+                meta={<>{session.ip_address ? `IP ${session.ip_address}` : "IP unavailable"} · Last active <span title={new Date(session.last_seen_at).toLocaleString("en-GB")}>{relativeTime(session.last_seen_at)}</span> · Signs out {new Date(session.expires_at).toLocaleDateString("en-GB")}</>}
+                trailing={
+                  session.current ? (
+                    <AdminButton variant="secondary" size="sm" onClick={() => void signOut()} disabled={busy} icon={<LogOut aria-hidden="true" />}>Sign out here</AdminButton>
+                  ) : (
+                    <AdminButton variant="secondary" size="sm" disabled={busy} onClick={() => setSessionToRevoke(session)} aria-label={`Sign out ${session.device}`}>Sign out</AdminButton>
+                  )
+                }
+              />
+            ))}
+          </div>
+        )}
+      </AdminCard>
+
+      <Modal
+        open={sessionToRevoke !== null}
+        onClose={() => setSessionToRevoke(null)}
+        size="sm"
+        title="Sign out this device?"
+        description={sessionToRevoke ? `${sessionToRevoke.device} will be signed out immediately. It can sign in again later.` : undefined}
+        icon={<LogOut />}
+        dismissible={!busy}
+        footer={
+          <>
+            <AdminButton variant="ghost" onClick={() => setSessionToRevoke(null)} disabled={busy}>Keep it signed in</AdminButton>
+            <AdminButton variant="primary" onClick={() => void revokeSelected()} disabled={busy} aria-busy={busy} icon={busy ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>
+              {busy ? "Signing out…" : "Sign out device"}
+            </AdminButton>
+          </>
+        }
+      >
+        <p className="acct-help">You can sign in again from that device at any time.</p>
+      </Modal>
+    </div>
+  );
+}
+
+function PasswordStrength({ value, confirm, strength }: { value: string; confirm: string; strength: ReturnType<typeof passwordStrength> }) {
+  const matches = confirm.length > 0 && value === confirm;
+  return (
+    <div className="acct-meter" data-level={strength.level} aria-live="polite">
+      <div className="acct-meter__head">
+        <span>Password strength</span>
+        <span>{strengthLabels[strength.level] || "Not entered"}</span>
+      </div>
+      <div className="acct-meter__bar" aria-hidden="true"><span className="acct-meter__seg" /><span className="acct-meter__seg" /><span className="acct-meter__seg" /><span className="acct-meter__seg" /></div>
+      <ul className="acct-checks" aria-label="Password requirements">
+        <Check met={strength.long}>At least 12 characters</Check>
+        <Check met={matches}>New passwords match</Check>
+        <Check met={strength.mixed} optional>Upper and lowercase letters</Check>
+        <Check met={strength.numberOrSymbol} optional>A number or symbol</Check>
+      </ul>
+    </div>
+  );
+}
+
+function Check({ met, optional, children }: { met: boolean; optional?: boolean; children: ReactNode }) {
+  return (
+    <li className={`acct-check${met ? " is-met" : ""}`}>
+      {met ? <CheckCircle2 aria-hidden="true" /> : <Circle aria-hidden="true" />}
+      <span>{children}<span className="sr-only">{met ? " — met" : " — not met"}</span></span>
+      {optional && <span className="acct-check__tag">Recommended</span>}
+    </li>
+  );
 }
 
 function MfaSecurityCard({ user, enabled, emailEnabled, emailVerified, setup, code, recoveryCodes, busy, emailVerificationBusy, emailVerificationMessage, emailVerificationCode, onEmailVerificationCodeChange, onVerifyEmail, onStart, onCodeChange, onVerify, onDownload, onCodesSaved, onToggleEmail, onSendEmailVerification }: { user: CurrentUser; enabled: boolean; emailEnabled: boolean; emailVerified: boolean; setup: { secret: string; otpauth_uri: string } | null; code: string; recoveryCodes: string[] | null; busy: boolean; emailVerificationBusy: boolean; emailVerificationMessage: string | null; emailVerificationCode: string; onEmailVerificationCodeChange: (value: string) => void; onVerifyEmail: () => void; onStart: () => void; onCodeChange: (value: string) => void; onVerify: () => void; onDownload: () => void; onCodesSaved: () => void; onToggleEmail: () => void; onSendEmailVerification: () => void }) {
   const [codesSaved, setCodesSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function copyBackupCodes() {
     try {
       await navigator.clipboard.writeText(recoveryCodes?.join("\n") ?? "");
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // The download action remains available when clipboard access is blocked.
     }
   }
 
   return (
-    <Card padding="lg" className="xl:col-span-2">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal"><ShieldCheck size={18} /></span>
-        <div>
-          <p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">Authenticator app</p>
-          <h2 className="mt-1 font-display text-h2 text-navy">{enabled ? "Authenticator connected" : "Protect sign-in with an authenticator"}</h2>
-          <p className="mt-2 max-w-2xl font-body text-body-sm leading-6 text-navy-muted">{enabled ? "Use a code from your authenticator app when you sign in." : `Add an authenticator app for extra sign-in protection. This is optional for your ${user.role === "student" ? "student" : "programme"} role.`}</p>
-        </div>
+    <AdminCard
+      title={enabled ? "Authenticator connected" : "Protect sign-in with an authenticator"}
+      description={enabled ? "Use a code from your authenticator app when you sign in." : `Add an authenticator app for extra sign-in protection. This is optional for your ${user.role === "student" ? "student" : "programme"} role.`}
+      titleId="mfa-title"
+      action={<StatusPill tone={enabled ? "success" : "neutral"}>{enabled ? "Connected" : "Not set up"}</StatusPill>}
+    >
+      <div className="acct-stack">
+        {recoveryCodes ? (
+          <section className="acct-panel" aria-labelledby="backup-codes-title">
+            <h4 id="backup-codes-title" className="acct-panel__title">Backup codes</h4>
+            <p className="acct-muted mt-1">Each code works once. Save these in a private place; they are shown only here and are never sent by email or shown to support staff.</p>
+            <div className="acct-codes">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <AdminButton size="sm" variant="secondary" onClick={() => void copyBackupCodes()} icon={copied ? <CheckCircle2 aria-hidden="true" /> : <Copy aria-hidden="true" />}>{copied ? "Copied" : "Copy codes"}</AdminButton>
+              <AdminButton size="sm" variant="secondary" onClick={onDownload} icon={<Download aria-hidden="true" />}>Download codes</AdminButton>
+            </div>
+            <label className="acct-checkbox mt-4"><input type="checkbox" checked={codesSaved} onChange={(event) => setCodesSaved(event.target.checked)} />I’ve saved these backup codes somewhere private.</label>
+            <AdminButton className="mt-4" size="sm" onClick={() => { setCodesSaved(false); onCodesSaved(); }} disabled={!codesSaved}>Done</AdminButton>
+          </section>
+        ) : setup ? (
+          <section className="acct-setup" aria-label="Authenticator setup">
+            <div className="acct-qr"><QRCodeSVG value={setup.otpauth_uri} size={168} level="H" includeMargin aria-label="MentorMAMA authenticator setup QR code" imageSettings={{ src: brandMark, width: 32, height: 32, excavate: true }} /></div>
+            <div className="min-w-0">
+              <p className="acct-panel__title">1. Open your authenticator app and scan this MentorMAMA code.</p>
+              <p className="acct-muted mt-1">Keep this page open while you set it up.</p>
+              <details className="acct-panel acct-details mt-3">
+                <summary>Can’t scan? Use a setup key</summary>
+                <p className="mt-3 break-all font-mono text-xs text-navy">{setup.secret}</p>
+                <p className="acct-muted mt-2">Keep this key private. Anyone who has it could create sign-in codes for your account.</p>
+              </details>
+              <p className="acct-panel__title mt-4">2. Enter the six-digit code from your app.</p>
+              <div className="mt-2">
+                <Field label="Authenticator sign-in code">
+                  <TextInput className="acct-code-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => onCodeChange(event.target.value.replace(/\D/g, ""))} placeholder="000000" />
+                </Field>
+              </div>
+              <AdminButton className="mt-3" size="sm" onClick={onVerify} disabled={busy || code.length !== 6} aria-busy={busy} icon={busy ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>{busy ? "Checking…" : "Connect authenticator"}</AdminButton>
+            </div>
+          </section>
+        ) : !enabled ? (
+          <div>
+            <AdminButton onClick={onStart} disabled={busy} aria-busy={busy} icon={busy ? <Loader2 className="acct-spin" aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}>{busy ? "Starting setup…" : "Set up authenticator app"}</AdminButton>
+          </div>
+        ) : null}
+
+        {enabled && (
+          <section className="acct-panel" aria-labelledby="email-backup-title">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h4 id="email-backup-title" className="acct-panel__title">Email backup</h4>
+                <p className="acct-muted mt-1">Use a one-time sign-in code sent to your verified email if your authenticator is unavailable.</p>
+              </div>
+              {emailVerified ? <AdminButton size="sm" variant="secondary" onClick={onToggleEmail} disabled={busy}>{emailEnabled ? "Turn off email backup" : "Turn on email backup"}</AdminButton> : <StatusPill tone="warning">Email not verified</StatusPill>}
+            </div>
+            {!emailVerified && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                <Field label="Email verification code">
+                  <TextInput inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={emailVerificationCode} onChange={(event) => onEmailVerificationCodeChange(event.target.value.replace(/\D/g, ""))} placeholder="Enter six-digit code" />
+                </Field>
+                <AdminButton variant="secondary" onClick={onSendEmailVerification} disabled={emailVerificationBusy}>{emailVerificationBusy ? "Sending…" : "Send again"}</AdminButton>
+                <AdminButton onClick={onVerifyEmail} disabled={emailVerificationBusy || emailVerificationCode.length !== 6}>{emailVerificationBusy ? "Checking…" : "Verify email"}</AdminButton>
+              </div>
+            )}
+            {emailVerificationMessage && <p className="mt-3 text-xs font-semibold text-[var(--pa-teal-ink)]" role="status">{emailVerificationMessage}</p>}
+          </section>
+        )}
       </div>
-
-      {recoveryCodes ? (
-        <section className="mt-5 rounded-xl border border-teal/25 bg-teal-light/40 p-4" aria-labelledby="backup-codes-title">
-          <h3 id="backup-codes-title" className="font-body text-sm font-semibold text-navy">Backup codes</h3>
-          <p className="mt-1 font-body text-xs leading-5 text-navy-muted">Each code works once. Save these in a private place; they are shown only here and are never sent by email or shown to support staff.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs text-navy">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant="tertiary" onClick={() => void copyBackupCodes()}><Copy size={14} />Copy codes</Button>
-            <Button size="sm" variant="tertiary" onClick={onDownload}><Download size={14} />Download codes</Button>
-          </div>
-          <label className="mt-4 flex items-start gap-3 font-body text-sm text-navy"><input type="checkbox" className="mt-1 h-4 w-4 accent-teal" checked={codesSaved} onChange={(event) => setCodesSaved(event.target.checked)} />I’ve saved these backup codes somewhere private.</label>
-          <Button className="mt-4" size="sm" onClick={() => { setCodesSaved(false); onCodesSaved(); }} disabled={!codesSaved}>Done</Button>
-        </section>
-      ) : setup ? (
-        <section className="mt-5 grid gap-5 sm:grid-cols-[auto_1fr]" aria-label="Authenticator setup">
-          <div className="rounded-xl border border-border bg-white p-3"><QRCodeSVG value={setup.otpauth_uri} size={176} level="H" includeMargin aria-label="MentorMAMA authenticator setup QR code" imageSettings={{ src: brandMark, width: 32, height: 32, excavate: true }} /></div>
-          <div className="min-w-0">
-            <p className="font-body text-sm font-semibold text-navy">1. Open your authenticator app and scan this MentorMAMA code.</p>
-            <p className="mt-1 font-body text-sm leading-6 text-navy-muted">Keep this page open while you set it up.</p>
-            <details className="mt-4 rounded-xl border border-border bg-mist/50 p-3">
-              <summary className="cursor-pointer font-body text-sm font-semibold text-teal">Can’t scan? Use a setup key</summary>
-              <p className="mt-3 break-all font-mono text-xs text-navy">{setup.secret}</p>
-              <p className="mt-2 font-body text-xs leading-5 text-navy-muted">Keep this key private. Anyone who has it could create sign-in codes for your account.</p>
-            </details>
-            <p className="mt-4 font-body text-sm font-semibold text-navy">2. Enter the six-digit code from your app.</p>
-            <label className="mt-3 block max-w-xs font-body text-sm font-semibold text-navy">Authenticator sign-in code<input className="auth-control mt-2 text-center font-mono tracking-[0.3em]" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => onCodeChange(event.target.value.replace(/\D/g, ""))} placeholder="000000" /></label>
-            <Button className="mt-3" size="sm" onClick={onVerify} disabled={busy || code.length !== 6}>{busy ? "Checking…" : "Connect authenticator"}</Button>
-          </div>
-        </section>
-      ) : !enabled ? (
-        <Button className="mt-5" size="sm" onClick={onStart} disabled={busy}>{busy ? "Starting setup…" : "Set up authenticator app"}</Button>
-      ) : null}
-
-      {enabled && (
-        <section className="mt-6 rounded-xl border border-border bg-mist/50 p-4" aria-labelledby="email-backup-title">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><h3 id="email-backup-title" className="font-body text-sm font-semibold text-navy">Email backup</h3><p className="mt-1 font-body text-xs leading-5 text-navy-muted">Use a one-time sign-in code sent to your verified email if your authenticator is unavailable.</p></div>
-            {emailVerified ? <Button size="sm" variant="tertiary" onClick={onToggleEmail} disabled={busy}>{emailEnabled ? "Turn off email backup" : "Turn on email backup"}</Button> : <span className="rounded-full bg-amber-50 px-2.5 py-1 font-body text-xs font-semibold text-amber-700">Email not verified</span>}
-          </div>
-          {!emailVerified && <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end"><label className="font-body text-xs font-semibold text-navy">Email verification code<input className="auth-control mt-1" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={emailVerificationCode} onChange={(event) => onEmailVerificationCodeChange(event.target.value.replace(/\D/g, ""))} placeholder="Enter six-digit code" /></label><Button size="sm" variant="tertiary" onClick={onSendEmailVerification} disabled={emailVerificationBusy}>{emailVerificationBusy ? "Sending…" : "Send again"}</Button><Button size="sm" onClick={onVerifyEmail} disabled={emailVerificationBusy || emailVerificationCode.length !== 6}>{emailVerificationBusy ? "Checking…" : "Verify email"}</Button></div>}
-          {emailVerificationMessage && <p className="mt-3 font-body text-xs font-semibold text-teal" role="status">{emailVerificationMessage}</p>}
-        </section>
-      )}
-    </Card>
+    </AdminCard>
   );
 }

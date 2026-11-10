@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -9,22 +9,21 @@ import {
   Filter,
   GraduationCap,
   Link2,
-  MoreHorizontal,
   Plus,
   Search,
-  X,
 } from "lucide-react";
 import { Button, Skeleton } from "@mentormama/ui";
+import { Modal } from "../../components/kit";
+import { AdminButton } from "../programme-admin/ui/AdminKit";
+import "../programme-admin/programme-overlays.css";
 import { PortalErrorState } from "../../components/PortalErrorState";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ApiError,
-  getLibrary,
-  publishContentItem,
-  archiveContentItem,
-  type LibraryEntry,
-  type CurrentUser,
-} from "../../services/api";
+import { useQuery } from "@tanstack/react-query";
+import { Edit3, ExternalLink } from "lucide-react";
+import { getLibrary, type LibraryEntry, type CurrentUser } from "../../services/api";
+import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
+import { actionMeta, actionsFor, useContentActions, type ActionTarget } from "./contentActions";
+import { audienceSummary, categoryLabel } from "./contentMeta";
+import "./content-detail.css";
 
 type Kind = "all" | "guide" | "module" | "document" | "external";
 type AddType = Exclude<Kind, "all">;
@@ -90,7 +89,6 @@ export function ContentLibrary({
         required: requiredOnly ? "true" : "",
       }),
   });
-  const queryClient = useQueryClient();
   const entries = query.data?.data ?? [];
   const counts = query.data?.meta.counts ?? {
     all: 0,
@@ -106,36 +104,34 @@ export function ContentLibrary({
     { value: "document", label: "Documents", icon: FileText },
     { value: "external", label: "External resources", icon: Link2 },
   ];
-  const refresh = () =>
-    void queryClient.invalidateQueries({ queryKey: ["library"] });
-  function changeStatus(entry: LibraryEntry) {
-    if (entry.kind === "module") {
-      onError(
-        "Learning module publishing is managed from the module builder so completion rules remain intact.",
-      );
-      return;
-    }
-    if (
-      entry.status === "published" &&
-      !window.confirm(
-        `Archive “${entry.title}”? Historical references will be retained.`,
-      )
-    )
-      return;
-    const request =
-      entry.status === "draft"
-        ? publishContentItem(entry.source_id)
-        : archiveContentItem(entry.source_id, entry.status === "archived");
-    void request
-      .then(refresh)
-      .catch((cause: unknown) =>
-        onError(
-          cause instanceof ApiError
-            ? cause.message
-            : "We could not update this content item.",
-        ),
-      );
-  }
+  const openEntry = (entry: LibraryEntry) => {
+    navigate(
+      user.role === "student"
+        ? `/student/library/${entry.kind}/${entry.source_id}`
+        : user.role === "mentor"
+          ? `/mentor/library/${entry.kind}/${entry.source_id}`
+          : `/admin/content/item/${entry.kind}/${entry.source_id}`,
+    );
+  };
+  const actions = useContentActions({
+    onError,
+    onDuplicated: (target, copyId) => navigate(`/admin/content/new/${target.kind}?edit=${copyId}`),
+  });
+  const menuFor = (entry: LibraryEntry): ActionMenuItem[] => {
+    const target: ActionTarget = { kind: entry.kind, id: entry.source_id, title: entry.title, status: entry.status };
+    return [
+      { key: "open", label: "Open", icon: <ExternalLink size={15} />, onSelect: () => openEntry(entry) },
+      { key: "edit", label: "Edit", icon: <Edit3 size={15} />, onSelect: () => navigate(`/admin/content/new/${entry.kind}?edit=${entry.source_id}`) },
+      ...actionsFor(entry.status).map((action) => ({
+        key: action,
+        label: actionMeta[action].label,
+        icon: actionMeta[action].icon,
+        danger: actionMeta[action].danger,
+        disabled: action === "publish" && entry.kind === "module" && entry.lessons === 0,
+        onSelect: () => actions.request(action, target),
+      })),
+    ];
+  };
   function clearFilters() {
     setKind("all");
     setSearch("");
@@ -275,20 +271,13 @@ export function ContentLibrary({
             <LibraryTable
               entries={entries}
               canManage={canManage}
-              onAction={changeStatus}
-              onOpen={(entry) => {
-                navigate(
-                  user.role === "student"
-                    ? `/student/library/${entry.kind}/${entry.source_id}`
-                    : user.role === "mentor"
-                      ? `/mentor/library/${entry.kind}/${entry.source_id}`
-                      : `/admin/content/item/${entry.kind}/${entry.source_id}`,
-                );
-              }}
+              menuFor={menuFor}
+              onOpen={openEntry}
             />
           )}
         </>
       )}
+      {actions.dialog}
       {addType && (
         <AddContentModal
           type={addType}
@@ -340,12 +329,12 @@ function StatIcon({ type }: { type: Kind }) {
 function LibraryTable({
   entries,
   canManage,
-  onAction,
+  menuFor,
   onOpen,
 }: {
   entries: LibraryEntry[];
   canManage: boolean;
-  onAction: (entry: LibraryEntry) => void;
+  menuFor: (entry: LibraryEntry) => ActionMenuItem[];
   onOpen: (entry: LibraryEntry) => void;
 }) {
   return (
@@ -369,7 +358,7 @@ function LibraryTable({
                 key={entry.id}
                 entry={entry}
                 canManage={canManage}
-                onAction={onAction}
+                menuFor={menuFor}
                 onOpen={onOpen}
               />
             ))}
@@ -398,12 +387,12 @@ function LibraryTable({
 function LibraryRow({
   entry,
   canManage,
-  onAction,
+  menuFor,
   onOpen,
 }: {
   entry: LibraryEntry;
   canManage: boolean;
-  onAction: (entry: LibraryEntry) => void;
+  menuFor: (entry: LibraryEntry) => ActionMenuItem[];
   onOpen: (entry: LibraryEntry) => void;
 }) {
   const meta = kindMeta[entry.kind];
@@ -440,7 +429,7 @@ function LibraryRow({
           {meta.label}
         </span>
       </td>
-      <td>{audienceLabel(entry.audience)}</td>
+      <td>{audienceSummary(entry.audience)}</td>
       <td>{categoryLabel(entry.category)}</td>
       <td>
         <span
@@ -460,23 +449,13 @@ function LibraryRow({
           <small>{entry.updated_by}</small>
         </span>
       </td>
-      {canManage && <td>
-        <button
-          type="button"
-          aria-label={`Actions for ${entry.title}`}
-          className="content-library-more"
-          title={
-            entry.status === "draft"
-              ? "Publish content"
-              : entry.status === "archived"
-                ? "Restore content"
-                : "Archive content"
-          }
-          onClick={() => onAction(entry)}
-        >
-          <MoreHorizontal size={18} />
-        </button>
-      </td>}
+      {canManage && (
+        <td>
+          <div className="cd-row-actions">
+            <ActionMenu label={`Actions for ${entry.title}`} items={menuFor(entry)} />
+          </div>
+        </td>
+      )}
     </tr>
   );
 }
@@ -529,21 +508,12 @@ function LibraryEmptyState({
     </section>
   );
 }
-function audienceLabel(values: string[]) {
-  if (values.length === 0 || values.length > 2) return "All users";
-  return values
-    .map((value) =>
-      value === "nurse_manager" || value === "coordinator"
-        ? "Programme staff"
-        : value[0].toUpperCase() + value.slice(1),
-    )
-    .join(", ");
-}
-function categoryLabel(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+const addOptions: Array<{ value: AddType; description: string }> = [
+  { value: "guide", description: "Write programme guidance directly in MentorMAMA." },
+  { value: "module", description: "Build structured learning with lessons and completion tracking." },
+  { value: "document", description: "Add a PDF, Word document or presentation resource." },
+  { value: "external", description: "Link to trusted material hosted elsewhere." },
+];
 
 function AddContentModal({
   type,
@@ -555,98 +525,71 @@ function AddContentModal({
   onContinue: (type: AddType) => void;
 }) {
   const [selected, setSelected] = useState<AddType>(type);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [onClose]);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  function moveSelection(from: number, step: number) {
+    const next = (from + step + addOptions.length) % addOptions.length;
+    setSelected(addOptions[next].value);
+    optionRefs.current[next]?.focus();
+  }
   return (
-    <div
-      className="content-library-modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-content-title"
-        className="content-library-modal"
-      >
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      icon={<Plus />}
+      title="What would you like to add?"
+      description="Choose a content type to add to the programme library."
+      footer={
         <>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-                Add to programme library
-              </p>
-              <h3
-                id="add-content-title"
-                className="mt-2 font-display text-2xl font-bold text-navy"
-              >
-                What would you like to add?
-              </h3>
-            </div>
+          <AdminButton type="button" variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </AdminButton>
+          <AdminButton type="button" size="sm" onClick={() => onContinue(selected)}>
+            Continue
+          </AdminButton>
+        </>
+      }
+    >
+      <div className="po-options" role="radiogroup" aria-label="Content type">
+        {addOptions.map((option, index) => {
+          const meta = kindMeta[option.value];
+          const Icon = meta.icon;
+          const checked = selected === option.value;
+          return (
             <button
+              key={option.value}
+              ref={(node) => {
+                optionRefs.current[index] = node;
+              }}
               type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-full p-2 text-navy-muted hover:bg-mist"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="content-library-add-options">
-            {(["guide", "module", "document", "external"] as AddType[]).map(
-              (item) => {
-                const meta = kindMeta[item];
-                const Icon = meta.icon;
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`content-library-add-option ${selected === item ? "selected" : ""}`}
-                    onClick={() => setSelected(item)}
-                  >
-                    <span
-                      className={`content-library-row-icon content-library-row-icon--${meta.color}`}
-                    >
-                      <Icon size={20} />
-                    </span>
-                    <span>
-                      <strong>{meta.label}</strong>
-                      <small>
-                        {item === "guide"
-                          ? "Write programme guidance directly in MentorMAMA."
-                          : item === "module"
-                            ? "Build structured learning with lessons and completion tracking."
-                            : item === "document"
-                              ? "Add a PDF, Word document or presentation resource."
-                              : "Link to trusted material hosted elsewhere."}
-                      </small>
-                    </span>
-                  </button>
-                );
-              },
-            )}
-          </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <Button type="button" variant="tertiary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                onContinue(selected);
+              role="radio"
+              aria-checked={checked}
+              tabIndex={checked ? 0 : -1}
+              className="po-option"
+              onClick={() => setSelected(option.value)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                  event.preventDefault();
+                  moveSelection(index, 1);
+                } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  moveSelection(index, -1);
+                }
               }}
             >
-              Continue
-            </Button>
-          </div>
-        </>
-      </section>
-    </div>
+              <span className="po-option__icon" aria-hidden="true">
+                <Icon />
+              </span>
+              <span className="po-option__text">
+                <span className="po-option__title">{meta.label}</span>
+                <span className="po-option__desc">{option.description}</span>
+              </span>
+              <span className="po-option__radio" aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
   );
 }
 

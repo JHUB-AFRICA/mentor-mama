@@ -1,3 +1,4 @@
+import { isPlacementClosed, placementStateLabel } from "../placements/placementJourney";
 import {
   useEffect,
   useMemo,
@@ -166,7 +167,8 @@ export function MentorStudentDetail({
 
   const initials = getInitials(name);
 
-  const status = label(placement.state);
+  const status = placementStateLabel(placement.state, "staff");
+  const placementClosed = isPlacementClosed(placement.state);
 
   const lastSession =
     progress?.mentorship.last_session_date;
@@ -523,13 +525,17 @@ export function MentorStudentDetail({
                         ? "Check the orientation handoff, then start induction."
                       : placement.state === "induction"
                         ? "Complete the induction handoff"
-                        : "Keep the placement moving"}
+                        : placementClosed
+                          ? "This placement is closed"
+                          : "Keep the placement moving"}
                   </h2>
 
                   <span>
                     {needsSession
                       ? "Regular check-ins help keep placements on track."
-                      : "Use the record below to prepare for the next meaningful conversation."}
+                      : placementClosed
+                        ? "No further sessions can be logged. The record below stays available for reference."
+                        : "Use the record below to prepare for the next meaningful conversation."}
                   </span>
                 </div>
 
@@ -1561,14 +1567,6 @@ function getInitials(name: string) {
       .join("")
       .toUpperCase() || "AS"
   );
-}
-
-function label(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
-    );
 }
 
 function formatDate(value: string) {

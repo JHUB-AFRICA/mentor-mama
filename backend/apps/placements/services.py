@@ -254,7 +254,7 @@ def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor) -> Placement:
     identity.require_capability(actor, "allocate_ward")
     with transaction.atomic():
         placement = _lock(placement_id)
-        _reject_terminal(placement)
+        _reject_closed(placement)
 
         ward = facilities.lock_ward(ward_id)          # INV-16: lock before counting
         if ward is None:
@@ -376,7 +376,7 @@ def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
     with transaction.atomic():
         placement = _lock(placement_id)
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=placement.facility_id)
-        _reject_terminal(placement)
+        _reject_closed(placement)
         policy = identity.mentor_assignment_policy(mentor_id=mentor_id, facility_id=placement.facility_id)
         if not policy["available"]:
             raise errors.InvalidTransition(policy["reason"])
@@ -399,7 +399,7 @@ def reassign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, reason: str =
     with transaction.atomic():
         placement = _lock(placement_id)
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=placement.facility_id)
-        _reject_terminal(placement)
+        _reject_closed(placement)
         current = MentorAssignment.objects.select_for_update().filter(
             placement=placement, ended_at=None
         ).first()
@@ -632,6 +632,13 @@ def verify_assessment_write(placement_id: UUID, *, actor) -> AssessmentWriteAuth
 def _reject_terminal(placement: Placement) -> None:
     if placement.state in TERMINAL_STATES:
         raise errors.PlacementArchived()
+
+
+def _reject_closed(placement: Placement) -> None:
+    """A completed placement is a closed record: ward and mentor can no longer change."""
+    _reject_terminal(placement)
+    if placement.state == State.COMPLETED:
+        raise errors.PlacementClosed("This placement is completed, so its ward and mentor can no longer be changed.")
 
 
 def _require_transition_authority(

@@ -12,6 +12,8 @@ import { Button, Card } from "@mentormama/ui";
 import { getPlacementActivity, type Placement, type PlacementActivityEntry } from "../../services/api";
 import type { WorkspaceProps } from "../workspaces/WorkspaceTypes";
 import "./StudentOverview.css";
+import { greetingFor } from "../../lib/greeting";
+import { placementStateLabel } from "../placements/placementJourney";
 
 function date(value: string) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -22,15 +24,7 @@ function date(value: string) {
 }
 
 function state(value: string) {
-  return (
-    {
-      active: "Active placement",
-      induction: "Induction in progress",
-      orientation: "Orientation next",
-      awaiting_student: "Your confirmation is needed",
-      paused: "Paused",
-    } as Record<string, string>
-  )[value] ?? value.replaceAll("_", " ");
+  return placementStateLabel(value, "learner");
 }
 
 function stateTone(value: string) {
@@ -51,6 +45,7 @@ function stateTone(value: string) {
 }
 
 export function StudentOverview({
+  user,
   placements,
   mode,
   onOpen,
@@ -122,11 +117,12 @@ export function StudentOverview({
             <span>Your learning record</span>
           </div>
 
-          <h1>Stay clear on what comes next.</h1>
+          <h1>{greetingFor(user.name)}.</h1>
 
           <p>
-            Track your placement, complete the steps assigned to you, and
-            keep your conversations with your mentor useful.
+            Stay clear on what comes next: track your placement, complete
+            the steps assigned to you, and keep your conversations with your
+            mentor useful.
           </p>
         </div>
 

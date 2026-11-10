@@ -4,12 +4,14 @@ import {
   ArrowRight,
   BookOpen,
   Building2,
+  CalendarCheck,
   CheckCircle2,
-  ChevronRight,
+  ClipboardList,
   Clock3,
   FileText,
   LockKeyhole,
   Plus,
+  ShieldAlert,
   ShieldCheck,
   Sprout,
   TriangleAlert,
@@ -36,6 +38,18 @@ import {
 import type { AuthoringKind } from "../content/ContentAuthoringWorkspace";
 import { PortalWorkspaceSkeleton } from "../../components/PortalWorkspaceSkeleton";
 import { useToast } from "../../components/ToastProvider";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  EmptyState,
+  ListRow,
+  Notice,
+  StatCard,
+  StatGrid,
+  StatusPill,
+} from "./ui/AdminKit";
 
 const AccountSettings = lazy(() =>
   import("../auth/AccountSettings").then((module) => ({
@@ -253,9 +267,15 @@ export function ProgramAdminDashboard({
       <ContentAuthoringWorkspace
         kind={authoringKindFromPath(location.pathname)}
         editId={new URLSearchParams(location.search).get("edit") ?? undefined}
-        onBack={() => navigate("content")}
+        onBack={() => {
+          const editing = new URLSearchParams(location.search).get("edit");
+          if (editing) navigateRoute(`/admin/content/item/${authoringKindFromPath(location.pathname)}/${editing}`);
+          else navigate("content");
+        }}
         onError={onError}
-        onSaved={() => navigate("content")}
+        onSaved={(saved) =>
+          saved ? navigateRoute(`/admin/content/item/${saved.kind}/${saved.id}`) : navigate("content")
+        }
       />
     ) : view === "people" ? (
       <PeopleTable
@@ -292,7 +312,7 @@ export function ProgramAdminDashboard({
       user={user}
       active={
         view === "account"
-          ? "overview"
+          ? "settings"
           : view === "content-authoring" || view === "content-detail"
             ? "content"
             : view === "recovery"
@@ -439,7 +459,7 @@ function Overview({
     (trainingRequired && trainingModules.isError);
   const overviewLoading = setupLoading || indicators.isPending;
   const overviewError = setupError || indicators.isError;
-  const identityComplete = Boolean(programme.data?.name.trim());
+  const identityComplete = Boolean(programme.data?.name?.trim());
   const directory = readiness;
   const directoryComplete = Boolean(
     directory &&
@@ -664,96 +684,152 @@ function Overview({
   const allSetupStepsComplete =
     setupSteps.length > 0 && completedSetupSteps === setupSteps.length;
 
+  const indicatorValues = indicators.data?.indicators ?? {};
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
+  const statusTone =
+    overviewError || content.isError
+      ? "danger"
+      : overviewLoading || content.isPending
+        ? "neutral"
+        : !coreSetupComplete || attentionCount > 0
+          ? "warning"
+          : "success";
+  const statusText = overviewError
+    ? "Programme readiness unavailable"
+    : overviewLoading
+      ? "Checking programme setup"
+      : content.isError
+        ? "Attention summary unavailable"
+        : !coreSetupComplete
+          ? "Setup in progress"
+          : attentionCount > 0
+            ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention`
+            : "Initial setup recorded";
+  const lastActivity = activity.isPending
+    ? "Checking…"
+    : activity.isError
+      ? "Unavailable"
+      : activity.data?.results[0]
+        ? relativeTime(activity.data.results[0].occurred_at)
+        : "No recent activity recorded";
+  const attentionBadge = attentionUnavailable
+    ? setupError || content.isError
+      ? "Unavailable"
+      : "Checking…"
+    : `${attentionCount} item${attentionCount === 1 ? "" : "s"}`;
+  const attentionTone =
+    overviewError || content.isError || !coreSetupComplete
+      ? "warning"
+      : attentionCount > 0
+        ? "danger"
+        : "success";
+  const readinessBadge = overviewError
+    ? "Unavailable"
+    : overviewLoading
+      ? "Checking…"
+      : coreSetupComplete
+        ? "Core setup recorded"
+        : "Setup in progress";
+  const indicatorsUnavailable = indicators.isPending || indicators.isError;
+  const openConcerns = indicatorValues.open_concerns ?? 0;
+  const highConcerns = indicatorValues.high_concerns ?? 0;
+  const refetchAll = () => {
+    void summary.refetch();
+    void indicators.refetch();
+    void programme.refetch();
+    void content.refetch();
+  };
+
   return (
-    <div className="programme-admin-overview">
-      <section className="programme-admin-overview-hero">
-        <div className="programme-admin-overview-intro">
-          <p className="font-body text-[0.68rem] font-bold uppercase tracking-[0.14em] text-teal">
-            Programme Administrator
-          </p>
-          <p className="font-body text-sm font-semibold text-navy">
-            Welcome, {user.name}
-          </p>
-          <h2 className="mt-2 font-display text-4xl font-bold leading-none tracking-tight text-navy sm:text-5xl">
-            Programme overview
-          </h2>
-          <p className="mt-3 max-w-lg font-body text-base leading-6 text-navy-muted">
-            Review programme readiness, pending actions, and placement handoffs.
-          </p>
-          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 font-body text-xs font-semibold text-navy-muted">
-            <span className="inline-flex items-center gap-2">
-              <span
-                className={`size-2.5 rounded-full ${overviewError || content.isError ? "bg-error" : overviewLoading || content.isPending ? "bg-navy-muted/40" : attentionCount > 0 ? "bg-warning" : "bg-success"}`}
-              />
-              {overviewError
-                ? "Programme readiness unavailable"
-                : overviewLoading
-                  ? "Checking programme setup"
-                  : content.isError
-                    ? "Attention summary unavailable"
-                  : !coreSetupComplete
-                    ? "Setup in progress"
-                    : attentionCount > 0
-                      ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention`
-                      : "Initial setup recorded"}
+    <AdminPage>
+      <AdminPageHeader
+        eyebrow="Programme administration"
+        title="Programme overview"
+        description={`Welcome back, ${firstName}. Review programme readiness, pending actions and placement handoffs.`}
+        meta={
+          <>
+            <StatusPill tone={statusTone}>{statusText}</StatusPill>
+            <span>
+              <Clock3 size={14} className="text-teal" aria-hidden="true" />
+              Last activity {lastActivity}
             </span>
-            <span className="hidden h-4 w-px bg-border sm:block" />
-            <span className="inline-flex items-center gap-2">
-              <Clock3 size={14} className="text-teal" />
-              Last activity{" "}
-              {activity.isPending
-                ? "Checking…"
-                : activity.isError
-                  ? "Unavailable"
-                  : activity.data?.results[0]
-                    ? relativeTime(activity.data.results[0].occurred_at)
-                    : "No recent activity recorded"}
+          </>
+        }
+        actions={
+          <AdminButton
+            onClick={primaryAction.run}
+            disabled={primaryAction.disabled}
+            icon={primaryAction.label === "Invite another person" ? <Plus /> : undefined}
+          >
+            {primaryAction.label}
+          </AdminButton>
+        }
+      />
+
+      {(overviewError || content.isError) && (
+        <Notice icon={<TriangleAlert />}>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <span>
+              <strong>Some overview data could not be loaded.</strong> Check
+              the status below before treating the programme as clear.
             </span>
+            <AdminButton variant="secondary" size="sm" onClick={refetchAll}>
+              Try again
+            </AdminButton>
           </div>
-        </div>
-        <Button
-          size="md"
-          className="programme-admin-hero-invite self-center lg:self-center"
-          onClick={primaryAction.run}
-          disabled={primaryAction.disabled}
-        >
-          {primaryAction.label === "Invite another person" && (
-            <Plus size={17} className="mr-2" />
-          )}
-          {primaryAction.label}
-        </Button>
-      </section>
+        </Notice>
+      )}
+
+      <StatGrid>
+        <StatCard
+          icon={<Users />}
+          tone="teal"
+          value={activePeople}
+          label="Active team accounts"
+          hint={summary.isError ? "Unavailable" : `${pendingInvites} invitation${pendingInvites === 1 ? "" : "s"} pending`}
+          loading={summary.isPending || summary.isError}
+          onClick={onPeople}
+        />
+        <StatCard
+          icon={<ClipboardList />}
+          tone="violet"
+          value={activePlacements}
+          label="Active placements"
+          hint={indicators.isError ? "Unavailable" : `${indicatorValues.placements_total ?? 0} in the placement register`}
+          loading={indicatorsUnavailable}
+          onClick={onPlacements}
+        />
+        <StatCard
+          icon={<CalendarCheck />}
+          tone="blue"
+          value={indicatorValues.sessions_this_week ?? 0}
+          label="Sessions this week"
+          hint={indicators.isError ? "Unavailable" : `${indicatorValues.sessions_total ?? 0} logged in total`}
+          loading={indicatorsUnavailable}
+        />
+        <StatCard
+          icon={<ShieldAlert />}
+          tone={openConcerns > 0 ? "rose" : "green"}
+          value={openConcerns}
+          label="Open safeguarding concerns"
+          hint={indicators.isError ? "Unavailable" : highConcerns > 0 ? `${highConcerns} high severity` : "None at high severity"}
+          loading={indicatorsUnavailable}
+        />
+      </StatGrid>
 
       {!allSetupStepsComplete && (
-        <section
-          className="programme-admin-setup-progress rounded-2xl border border-border bg-white p-5 shadow-[0_4px_24px_rgba(13,27,51,0.035)] sm:p-6"
-          aria-labelledby="getting-started-heading"
+        <AdminCard
+          title="Getting started"
+          titleId="getting-started-heading"
+          description="Complete these steps to prepare your programme for placement handoffs."
+          action={
+            <StatusPill tone="teal" dot={false}>
+              {completedSetupSteps}/{setupSteps.length}{" "}
+              {setupError ? "status unavailable" : "steps complete"}
+            </StatusPill>
+          }
+          className="programme-admin-setup-progress"
         >
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-                Programme setup
-              </p>
-              <h3
-                id="getting-started-heading"
-                className="mt-1 font-display text-xl font-bold text-navy"
-              >
-                Getting started
-              </h3>
-              <p className="mt-1 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-                Complete these steps to prepare your programme for placement
-                handoffs.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 self-start rounded-full bg-mist px-3 py-1.5 font-body text-xs font-semibold text-navy-muted sm:self-center">
-              <span className="programme-admin-setup-progress-count">
-                {completedSetupSteps}/{setupSteps.length}
-              </span>
-              <span>
-                {setupError ? "status unavailable" : "steps complete"}
-              </span>
-            </div>
-          </div>
           <div
             className="programme-admin-setup-stepper"
             style={
@@ -766,14 +842,8 @@ function Overview({
             role="list"
             aria-label={`${completedSetupSteps} of ${setupSteps.length} programme setup steps complete`}
           >
-            <span
-              className="programme-admin-setup-stepper-track"
-              aria-hidden="true"
-            />
-            <span
-              className="programme-admin-setup-stepper-fill"
-              aria-hidden="true"
-            />
+            <span className="programme-admin-setup-stepper-track" aria-hidden="true" />
+            <span className="programme-admin-setup-stepper-fill" aria-hidden="true" />
             {setupSteps.map((step, index) => (
               <div
                 className={`programme-admin-setup-step${step.status === "Complete" ? " is-complete" : ""}${index === activeSetupStepIndex ? " is-current" : ""}${step.status === "Unavailable" ? " is-unavailable" : ""}`}
@@ -784,381 +854,233 @@ function Overview({
                   type="button"
                   onClick={step.onClick}
                   aria-label={`${step.title}. ${step.status}. ${step.detail}`}
-                  aria-current={
-                    index === activeSetupStepIndex ? "step" : undefined
-                  }
+                  aria-current={index === activeSetupStepIndex ? "step" : undefined}
                   className="programme-admin-setup-step-button"
                 >
-                  <span
-                    className="programme-admin-setup-step-marker"
-                    aria-hidden="true"
-                  >
-                    {step.status === "Complete" ? (
-                      <CheckCircle2 size={19} />
-                    ) : (
-                      step.number
-                    )}
+                  <span className="programme-admin-setup-step-marker" aria-hidden="true">
+                    {step.status === "Complete" ? <CheckCircle2 size={19} /> : step.number}
                   </span>
                   <span className="programme-admin-setup-step-copy">
-                    <span className="programme-admin-setup-step-title">
-                      {step.title}
-                    </span>
-                    <span className="programme-admin-setup-step-status">
-                      {step.status}
-                    </span>
-                    <span className="programme-admin-setup-step-detail">
-                      {step.detail}
-                    </span>
+                    <span className="programme-admin-setup-step-title">{step.title}</span>
+                    <span className="programme-admin-setup-step-status">{step.status}</span>
+                    <span className="programme-admin-setup-step-detail">{step.detail}</span>
                   </span>
                 </button>
                 {step.actions?.length ? (
                   <div className="programme-admin-setup-step-actions">
                     {step.actions.map((action) => (
-                      <Button
+                      <AdminButton
                         key={action.label}
-                        type="button"
+                        variant="secondary"
                         size="sm"
-                        variant="tertiary"
                         onClick={(event) => {
                           event.stopPropagation();
                           action.onClick();
                         }}
                       >
                         {action.label}
-                      </Button>
+                      </AdminButton>
                     ))}
                   </div>
                 ) : null}
               </div>
             ))}
           </div>
-        </section>
+        </AdminCard>
       )}
 
-      {(overviewError || content.isError) && (
-        <div className="flex flex-col justify-between gap-3 border-l-2 border-error bg-error/5 px-4 py-3 sm:flex-row sm:items-center">
-          <p className="font-body text-sm text-error">
-            Some programme overview data could not be loaded. Check the status
-            below before treating the programme as clear.
-          </p>
-          <Button
-            variant="tertiary"
-            size="sm"
-            onClick={() => {
-              void summary.refetch();
-              void indicators.refetch();
-              void programme.refetch();
-              void content.refetch();
-            }}
-          >
-            Try again
-          </Button>
-        </div>
-      )}
-
-      <div className="programme-admin-overview-grid">
-        <Panel
-          className="programme-admin-overview-panel--attention"
+      <div className="pa-grid-2">
+        <AdminCard
           title="Needs attention"
-          badge={
-            attentionUnavailable
-              ? setupError || content.isError
-                ? "Unavailable"
-                : "Checking…"
-              : `${attentionCount} item${attentionCount === 1 ? "" : "s"}`
-          }
-          tone={
-            overviewError || content.isError || !coreSetupComplete
-              ? "warning"
-              : attentionCount > 0
-                ? "alert"
-                : "success"
-          }
+          description="Items requiring your decision or follow-up."
+          action={<StatusPill tone={attentionTone}>{attentionBadge}</StatusPill>}
+          flush
         >
-          <p className="programme-admin-panel-intro">
-            Items requiring your decision or follow-up.
-          </p>
-          {!coreSetupComplete && (
-            <AttentionItem
-              icon={<Building2 />}
-              count={setupError ? "—" : outstandingSetupCount}
-              title="Programme setup"
-              detail={
-                setupError
-                  ? "Setup readiness is unavailable. Review the configuration checks."
-                  : "Complete the first-use steps before relying on programme readiness."
-              }
-              onClick={primaryAction.run}
-              tone="warning"
+          <div className="pa-list">
+            {!coreSetupComplete && (
+              <ListRow
+                icon={<Building2 />}
+                tone="amber"
+                title="Programme setup"
+                meta={
+                  setupError
+                    ? "Setup readiness is unavailable. Review the configuration checks."
+                    : "Complete the first-use steps before relying on programme readiness."
+                }
+                value={setupError ? "—" : outstandingSetupCount}
+                onClick={primaryAction.run}
+              />
+            )}
+            <ListRow
+              icon={<Users />}
+              tone="rose"
+              title="Pending invitations"
+              meta="Invitations awaiting acceptance."
+              value={invitationCount}
+              onClick={onPeople}
             />
-          )}
-          <AttentionItem
-            icon={<Users />}
-            count={invitationCount}
-            title="Pending invitations"
-            detail="Invitations awaiting acceptance."
-            onClick={onPeople}
-            tone="error"
-          />
-          <AttentionItem
-            icon={<TriangleAlert />}
-            count={missingSetupCount}
-            title="Placements missing setup"
-            detail="Handoffs cannot proceed until resolved."
-            onClick={onPlacements}
-            tone="warning"
-          />
-          <AttentionItem
-            icon={<FileText />}
-            count={draftCount}
-            title="Draft content to review"
-            detail="Check audience, completeness, and visibility before publishing."
-            onClick={onContent}
-            tone="info"
-          />
-        </Panel>
-        <Panel
-          className="programme-admin-overview-panel--readiness"
+            <ListRow
+              icon={<TriangleAlert />}
+              tone="amber"
+              title="Placements missing setup"
+              meta="Handoffs cannot proceed until resolved."
+              value={missingSetupCount}
+              onClick={onPlacements}
+            />
+            <ListRow
+              icon={<FileText />}
+              tone="blue"
+              title="Draft content to review"
+              meta="Check audience, completeness and visibility before publishing."
+              value={draftCount}
+              onClick={onContent}
+            />
+          </div>
+        </AdminCard>
+
+        <AdminCard
           title="Programme readiness"
-          badge={
-            overviewError
-              ? "Unavailable"
-              : overviewLoading
-                ? "Checking…"
-                : coreSetupComplete
-                  ? "Core setup recorded"
-                  : "Setup in progress"
+          description="The records your operational teams depend on."
+          action={
+            <StatusPill tone={overviewError ? "warning" : overviewLoading ? "neutral" : coreSetupComplete ? "success" : "warning"}>
+              {readinessBadge}
+            </StatusPill>
           }
-          tone={
-            overviewError
-              ? "warning"
-              : overviewLoading
-                ? "default"
-                : coreSetupComplete
-                  ? "success"
-                  : "warning"
-          }
+          flush
         >
-          <ReadinessRow
-            icon={<Building2 />}
-            title="Operating context"
-            detail={
-              summary.isPending
-                ? "Loading programme setup…"
-                : summary.isError
-                  ? "Could not load programme setup"
-                  : `${readiness?.institutions ?? 0} institutions · ${readiness?.facilities ?? 0} facilities · ${readiness?.wards ?? 0} wards`
-            }
-            onClick={() => onSetupSection("directory")}
-          />
-          <ReadinessRow
-            icon={<Users />}
-            title="People & access"
-            detail={
-              summary.isPending
-                ? "Loading account totals…"
-                : summary.isError
-                  ? "Could not load account totals"
-                  : `${activePeople} active · ${pendingInvites} pending · ${data?.suspended_people ?? 0} suspended team accounts; excludes your account`
-            }
-            onClick={onPeople}
-          />
-          <ReadinessRow
-            icon={<FileText />}
-            title="Handoffs & placements"
-            detail={
-              indicators.isPending || summary.isPending
-                ? "Loading placement readiness…"
-                : indicators.isError || summary.isError
-                  ? "Could not load placement readiness"
-                  : `${activePlacements} active · ${readiness?.placements_missing_setup ?? 0} missing setup · ${readiness?.unassigned_placements ?? 0} unassigned`
-            }
-            onClick={onPlacements}
-          />
-        </Panel>
-        <Panel
-          className="programme-admin-overview-panel--activity"
+          <div className="pa-list">
+            <ListRow
+              icon={<Building2 />}
+              title="Operating context"
+              meta={
+                summary.isPending
+                  ? "Loading programme setup…"
+                  : summary.isError
+                    ? "Could not load programme setup"
+                    : `${readiness?.institutions ?? 0} institutions · ${readiness?.facilities ?? 0} facilities · ${readiness?.wards ?? 0} wards`
+              }
+              onClick={() => onSetupSection("directory")}
+            />
+            <ListRow
+              icon={<Users />}
+              title="People & access"
+              meta={
+                summary.isPending
+                  ? "Loading account totals…"
+                  : summary.isError
+                    ? "Could not load account totals"
+                    : `${activePeople} active · ${pendingInvites} pending · ${data?.suspended_people ?? 0} suspended (excludes you)`
+              }
+              onClick={onPeople}
+            />
+            <ListRow
+              icon={<ClipboardList />}
+              title="Handoffs & placements"
+              meta={
+                indicators.isPending || summary.isPending
+                  ? "Loading placement readiness…"
+                  : indicators.isError || summary.isError
+                    ? "Could not load placement readiness"
+                    : `${activePlacements} active · ${readiness?.placements_missing_setup ?? 0} missing setup · ${readiness?.unassigned_placements ?? 0} unassigned`
+              }
+              onClick={onPlacements}
+            />
+          </div>
+        </AdminCard>
+
+        <AdminCard
           title="Recent programme activity"
-          action="View all"
-          onClick={onActivity}
+          description="The latest changes made across your programme."
+          action={
+            <AdminButton variant="ghost" size="sm" onClick={onActivity}>
+              View all <ArrowRight />
+            </AdminButton>
+          }
+          flush
         >
           {activity.isPending ? (
             <ActivitySkeleton />
           ) : activity.isError ? (
-            <div className="flex flex-col items-start gap-3 py-3">
-              <p className="font-body text-sm text-error">
-                Recent activity could not be loaded.
-              </p>
-              <Button
-                variant="tertiary"
-                size="sm"
-                onClick={() => void activity.refetch()}
-              >
-                Try again
-              </Button>
-            </div>
+            <EmptyState
+              icon={<Activity size={22} />}
+              title="Recent activity could not be loaded"
+              action={
+                <AdminButton variant="secondary" size="sm" onClick={() => void activity.refetch()}>
+                  Try again
+                </AdminButton>
+              }
+            />
           ) : activity.data?.results.length ? (
-            <div className="divide-y divide-border">
+            <div className="pa-list">
               {activity.data.results.map((entry) => (
                 <RecentActivity key={entry.id} entry={entry} />
               ))}
             </div>
           ) : (
-            <EmptyPanel text="Activity will appear here as your team works." />
+            <EmptyState
+              icon={<Activity size={22} />}
+              title="No activity yet"
+              text="Activity will appear here as your team works."
+            />
           )}
-        </Panel>
-        <Panel
-          className="programme-admin-overview-panel--governance"
+        </AdminCard>
+
+        <AdminCard
           title="Programme governance"
-          action="View policy"
-          onClick={() => onSetupSection("access")}
+          description="The controls that keep programme data safe."
+          action={
+            <AdminButton variant="ghost" size="sm" onClick={() => onSetupSection("access")}>
+              View policy <ArrowRight />
+            </AdminButton>
+          }
+          flush
         >
-          <GovernanceRow
-            icon={<LockKeyhole />}
-            title="Access policy"
-            detail="Server enforced role capabilities"
-            status="Enforced"
-            onClick={() => onSetupSection("access")}
-          />
-          <GovernanceRow
-            icon={<ShieldCheck />}
-            title="Multi-factor authentication"
-            detail="Required for Programme Admin, Coordinator, and Nurse Manager accounts; optional for Mentors and Students"
-            status="Enforced"
-            onClick={onAccountSecurity}
-          />
-          <GovernanceRow
-            icon={<BookOpen />}
-            title="Content library"
-            detail={
-              content.isPending
-                ? "Loading library status…"
-                : content.isError
-                  ? "Could not load library status"
-                  : `${published} published · ${drafts} drafts · ${archived} archived`
-            }
-            status={
-              content.isError ? "Unavailable" : drafts ? "Review" : "Healthy"
-            }
-            onClick={onContent}
-          />
-          <GovernanceRow
-            icon={<Sprout />}
-            title="Programme configuration"
-            detail="Institutions, facilities, wards and directory"
-            onClick={() => onSetupSection("identity")}
-          />
-        </Panel>
+          <div className="pa-list">
+            <ListRow
+              icon={<LockKeyhole />}
+              tone="slate"
+              title="Access policy"
+              meta="Server-enforced role capabilities"
+              trailing={<StatusPill tone="success">Enforced</StatusPill>}
+              onClick={() => onSetupSection("access")}
+            />
+            <ListRow
+              icon={<ShieldCheck />}
+              tone="slate"
+              title="Multi-factor authentication"
+              meta="Required for Programme Admins, Coordinators and Nurse Managers"
+              trailing={<StatusPill tone="success">Enforced</StatusPill>}
+              onClick={onAccountSecurity}
+            />
+            <ListRow
+              icon={<BookOpen />}
+              tone="slate"
+              title="Content library"
+              meta={
+                content.isPending
+                  ? "Loading library status…"
+                  : content.isError
+                    ? "Could not load library status"
+                    : `${published} published · ${drafts} drafts · ${archived} archived`
+              }
+              trailing={
+                <StatusPill tone={content.isError ? "neutral" : drafts ? "warning" : "success"}>
+                  {content.isError ? "Unavailable" : drafts ? "Review" : "Healthy"}
+                </StatusPill>
+              }
+              onClick={onContent}
+            />
+            <ListRow
+              icon={<Sprout />}
+              tone="slate"
+              title="Programme configuration"
+              meta="Institutions, facilities, wards and directory"
+              onClick={() => onSetupSection("identity")}
+            />
+          </div>
+        </AdminCard>
       </div>
-    </div>
-  );
-}
-
-function Panel({
-  className = "",
-  title,
-  badge,
-  action,
-  onClick,
-  tone = "default",
-  children,
-}: {
-  className?: string;
-  title: string;
-  badge?: string;
-  action?: string;
-  onClick?: () => void;
-  tone?: "default" | "alert" | "success" | "warning";
-  children: React.ReactNode;
-}) {
-  const badgeClass =
-    tone === "alert"
-      ? "bg-error/10 text-error"
-      : tone === "warning"
-        ? "bg-warning/15 text-warning"
-        : tone === "success"
-          ? "bg-teal-light text-teal"
-          : "bg-mist text-navy-muted";
-  return (
-    <section
-      className={`programme-admin-panel rounded-2xl border border-border bg-white shadow-[0_4px_24px_rgba(13,27,51,0.035)] ${className}`}
-    >
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h3 className="font-display text-2xl font-bold tracking-tight text-navy">
-          {title}
-        </h3>
-        <div className="flex items-center gap-3">
-          {badge && (
-            <span
-              className={`rounded-full px-3 py-1.5 font-body text-xs font-bold ${badgeClass}`}
-            >
-              {badge}
-            </span>
-          )}
-          {action && onClick && (
-            <button
-              type="button"
-              onClick={onClick}
-              className="hidden min-h-10 items-center gap-1 font-body text-xs font-semibold text-teal hover:text-navy sm:inline-flex"
-            >
-              {action}
-              <ArrowRight size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function AttentionItem({
-  icon,
-  count,
-  title,
-  detail,
-  onClick,
-  tone,
-}: {
-  icon: React.ReactNode;
-  count: number | string;
-  title: string;
-  detail: string;
-  onClick: () => void;
-  tone: "error" | "warning" | "info";
-}) {
-  const styles = {
-    error: "bg-error/10 text-error",
-    warning: "bg-warning/15 text-warning",
-    info: "bg-sky-100 text-sky-700",
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex w-full items-center gap-3 border-b border-border py-4 text-left last:border-b-0"
-    >
-      <span
-        className={`flex size-10 shrink-0 items-center justify-center rounded-full ${styles[tone]}`}
-      >
-        {icon}
-      </span>
-      <span className="w-8 shrink-0 font-display text-2xl font-bold text-navy">
-        {count}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-body text-sm font-bold text-navy">
-          {title}
-        </span>
-        <span className="mt-1 block font-body text-xs leading-5 text-navy-muted">
-          {detail}
-        </span>
-      </span>
-      <ChevronRight
-        size={18}
-        className="shrink-0 text-navy-muted transition group-hover:translate-x-0.5 group-hover:text-teal"
-      />
-    </button>
+    </AdminPage>
   );
 }
 
@@ -1168,41 +1090,6 @@ function displayCount(isPending: boolean, isError: boolean, count: number) {
   return count;
 }
 
-function ReadinessRow({
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex w-full items-center gap-3 border-b border-border py-4 text-left last:border-b-0"
-    >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-body text-sm font-bold text-navy">
-          {title}
-        </span>
-        <span className="mt-1 block truncate font-body text-xs text-navy-muted">
-          {detail}
-        </span>
-      </span>
-      <ChevronRight
-        size={17}
-        className="shrink-0 text-navy-muted group-hover:text-teal"
-      />
-    </button>
-  );
-}
 function RecentActivity({ entry }: { entry: ActivityEntry }) {
   const labels: Record<string, string> = {
     "account.invited": "invited a team member",
@@ -1215,73 +1102,26 @@ function RecentActivity({ entry }: { entry: ActivityEntry }) {
     "content.published": "published programme content",
   };
   return (
-    <div className="flex gap-3 py-3.5">
-      <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal">
-        <Activity size={16} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-body text-sm text-navy">
-          <strong>{entry.actor}</strong>{" "}
-          {labels[entry.action] ?? formatActivityLabel(entry.action)}
-        </p>
-        <p className="mt-1 font-body text-xs text-navy-muted">
-          {entry.actor_role.replaceAll("_", " ")} ·{" "}
-          {relativeTime(entry.occurred_at)}
-        </p>
-      </div>
-    </div>
+    <ListRow
+      icon={<Activity />}
+      title={
+        <>
+          {entry.actor}{" "}
+          <span className="font-normal text-navy-muted">
+            {labels[entry.action] ?? formatActivityLabel(entry.action)}
+          </span>
+        </>
+      }
+      meta={`${entry.actor_role.replaceAll("_", " ")} · ${relativeTime(entry.occurred_at)}`}
+    />
   );
 }
-function GovernanceRow({
-  icon,
-  title,
-  detail,
-  status,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  status?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex w-full items-center gap-3 border-b border-border py-3 text-left"
-    >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-mist text-navy-muted">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-body text-sm font-bold text-navy">
-          {title}
-        </span>
-        <span className="mt-1 block font-body text-xs text-navy-muted">
-          {detail}
-        </span>
-      </span>
-      {status && (
-        <span className="hidden rounded-full bg-teal-light px-3 py-1.5 font-body text-xs font-bold text-teal sm:block">
-          {status}
-        </span>
-      )}
-      <ChevronRight
-        size={16}
-        className="text-navy-muted group-hover:text-teal"
-      />
-    </button>
-  );
-}
-function EmptyPanel({ text }: { text: string }) {
-  return <p className="py-8 font-body text-sm text-navy-muted">{text}</p>;
-}
+
 function ActivitySkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="pa-list" aria-label="Loading recent activity">
       {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="flex gap-3">
+        <div key={index} className="pa-row">
           <Skeleton className="size-9 rounded-full" />
           <div className="flex-1">
             <Skeleton className="h-4 w-3/4" />
@@ -1292,6 +1132,7 @@ function ActivitySkeleton() {
     </div>
   );
 }
+
 function formatActivityLabel(action: string) {
   return action.replaceAll(".", " · ").replaceAll("_", " ");
 }

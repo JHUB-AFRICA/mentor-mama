@@ -855,3 +855,23 @@
     transition: none;
   }
 }
+
+
+/* ================================================================
+   SHARED PORTAL SIDEBAR ALIGNMENT
+   The sidebar is now PortalSidebar (17rem, drawer below 1024px), the
+   same as every other role. Align this shell's offsets with it.
+================================================================ */
+:root {
+  --workspace-sidebar-width: 17rem;
+}
+
+@media (max-width: 1023px) {
+  .workspace-main {
+    margin-left: 0;
+  }
+
+  .workspace-menu-button {
+    display: flex;
+  }
+}

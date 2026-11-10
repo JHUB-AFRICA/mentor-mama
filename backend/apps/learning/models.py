@@ -18,6 +18,7 @@ class TrainingModule(BaseModel):
     pass_mark = models.PositiveSmallIntegerField(default=70)
     is_required = models.BooleanField(default=False)
     is_published = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
     visible_roles = models.JSONField(default=default_visible_roles)
     category = models.CharField(max_length=32, default="general")
     cover_image = models.FileField(upload_to="learning/covers/", blank=True, null=True)

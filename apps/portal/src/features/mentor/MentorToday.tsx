@@ -30,6 +30,7 @@ import { MentorWorkspaceFrame } from "./MentorWorkspaceFrame";
 import { MentorFeedbackSummary } from "../assessments/MentorFeedbackSummary";
 
 import "./MentorToday.css";
+import { greetingFor } from "../../lib/greeting";
 
 interface MentorTodayProps {
   user: CurrentUser;
@@ -316,13 +317,14 @@ export function MentorToday({
               <div className="mentor-page-header__main">
                 <div>
                   <h1 className="mentor-page-title">
-                    Start with what needs you.
+                    {greetingFor(user.name)}.
                   </h1>
 
                   <p className="mentor-page-description">
-                    Your assigned students, induction work,
-                    and follow-ups are organized here so you
-                    can focus on the next useful action.
+                    Start with what needs you. Your assigned
+                    students, induction work and follow-ups are
+                    organized here so you can focus on the next
+                    useful action.
                   </p>
                 </div>
 

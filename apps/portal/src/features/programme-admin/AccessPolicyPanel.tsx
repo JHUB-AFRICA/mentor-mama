@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   Check,
-  CircleHelp,
   LockKeyhole,
   Mail,
   MessageSquare,
@@ -11,7 +10,17 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { Button, Card, Skeleton } from "@mentormama/ui";
+import { Skeleton } from "@mentormama/ui";
+import {
+  AdminButton,
+  AdminCard,
+  IconTile,
+  ListRow,
+  Notice,
+  StatusPill,
+  type Tone,
+} from "./ui/AdminKit";
+import "./programme-setup-kit.css";
 import { useQuery } from "@tanstack/react-query";
 import { getAccessPolicies, type AccessPolicy } from "../../services/api";
 
@@ -43,7 +52,7 @@ type PolicyGroup = {
   description: string;
   capabilities: string[];
   icon: typeof UserRound;
-  tone: string;
+  tone: Tone;
   mfaRequired: boolean;
 };
 
@@ -52,7 +61,7 @@ function groupPolicies(policies: AccessPolicy[]): PolicyGroup[] {
     policies.filter((policy) => roles.includes(policy.role));
   const merge = (items: AccessPolicy[]) =>
     [...new Set(items.flatMap((item) => item.capabilities))].sort();
-  const groups = [
+  const groups: Array<Omit<PolicyGroup, "capabilities" | "mfaRequired"> & { policies: AccessPolicy[] }> = [
     {
       key: "student",
       label: "Student",
@@ -83,7 +92,7 @@ function groupPolicies(policies: AccessPolicy[]): PolicyGroup[] {
       label: "Programme Admin",
       description: "Full programme management access.",
       icon: ShieldCheck,
-      tone: "orange",
+      tone: "amber",
       policies: find("program_admin"),
     },
   ];
@@ -103,7 +112,7 @@ function ReadOnlyToggle({
 }) {
   return (
     <span
-      className="access-policy-toggle"
+      className="ap-switch"
       role="switch"
       aria-checked={checked}
       aria-label={label}
@@ -126,7 +135,7 @@ export function AccessPolicyPanel({
 
   if (policies.isPending) {
     return (
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.8fr)]">
+      <div className="pd-layout">
         <Skeleton className="h-[38rem]" />
         <Skeleton className="h-[28rem]" />
       </div>
@@ -134,18 +143,18 @@ export function AccessPolicyPanel({
   }
   if (policies.isError) {
     return (
-      <Card padding="sm">
+      <AdminCard title="Access policy">
         <p className="font-body text-sm text-error">
           We could not load the access policy.
         </p>
-        <Button
+        <AdminButton
           className="mt-4"
           size="sm"
           onClick={() => void policies.refetch()}
         >
           Try again
-        </Button>
-      </Card>
+        </AdminButton>
+      </AdminCard>
     );
   }
 
@@ -157,67 +166,73 @@ export function AccessPolicyPanel({
     (policy) => policy.role === "program_admin",
   );
   const mfaEnabled = policies.data.some((policy) => policy.mfa_required);
+  const rules: Array<{ icon: React.ReactNode; title: string; text: string; checked: boolean }> = [
+    {
+      icon: <UserCheck />,
+      title: "Require account approval",
+      text: "New users must be approved by a programme admin before access.",
+      checked: true,
+    },
+    {
+      icon: <Mail />,
+      title: "Enforce institutional email",
+      text: "Institutional-domain restriction is not exposed by the current policy contract.",
+      checked: false,
+    },
+    {
+      icon: <LockKeyhole />,
+      title: "Require MFA for administrators",
+      text: "Programme administrators and elevated staff roles require MFA.",
+      checked: mfaEnabled,
+    },
+  ];
 
   return (
-    <div className="access-policy-layout">
-      <Card padding="sm" className="access-policy-card">
-        <div className="access-policy-title">
-          <span className="access-policy-title-icon">
-            <ShieldCheck size={24} />
-          </span>
-          <div>
-            <h3 className="font-display text-xl font-bold text-navy">
-              Access policy
-            </h3>
-            <p className="mt-1 font-body text-sm text-navy-muted">
-              Define who can access the programme, what they can do, and any
-              additional security rules.
-            </p>
-          </div>
-        </div>
-        <div className="access-policy-section">
-          <div className="access-policy-section-heading">
-            <div>
-              <h4 className="font-display text-lg font-bold text-navy">
-                Role permissions
-              </h4>
-              <p className="mt-1 font-body text-sm text-navy-muted">
-                Review the default permissions for each role in this programme.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="tertiary"
+    <div className="pd-layout">
+      <div className="ps-stack">
+        <AdminCard
+          title="Access policy"
+          description="Define who can access the programme, what they can do, and any additional security rules."
+        >
+          <Notice icon={<ShieldCheck />}>
+            Policy changes are server-enforced. This screen is a live
+            read-only summary.
+          </Notice>
+        </AdminCard>
+        <AdminCard
+          title="Role permissions"
+          description="Review the default permissions for each role in this programme."
+          flush
+          action={
+            <AdminButton
+              variant="secondary"
               size="sm"
+              icon={<SlidersHorizontal />}
               onClick={() =>
                 onError(
                   "Role permissions are managed by the server policy and cannot be edited from this view.",
                 )
               }
             >
-              <SlidersHorizontal size={15} className="mr-2" />
               Edit roles
-            </Button>
-          </div>
-          <div className="access-policy-role-list">
+            </AdminButton>
+          }
+        >
+          <div className="ap-roles">
             {groups.map((group) => {
               const Icon = group.icon;
               return (
-                <details key={group.key} className="access-policy-role">
+                <details key={group.key} className="ap-role">
                   <summary>
-                    <span
-                      className={`access-policy-role-icon access-policy-role-icon--${group.tone}`}
-                    >
-                      <Icon size={19} />
-                    </span>
+                    <IconTile tone={group.tone} size="sm" icon={<Icon />} />
                     <span className="min-w-0 flex-1">
                       <strong>{group.label}</strong>
                       <small>{group.description}</small>
                     </span>
-                    <span className="access-policy-role-count">
+                    <StatusPill tone="neutral" dot={false}>
                       {`${group.capabilities.length} capabilities`}
-                    </span>
-                    <ArrowRight size={17} className="access-policy-chevron" />
+                    </StatusPill>
+                    <ArrowRight size={16} className="ap-chevron" />
                   </summary>
                   <ul>
                     {group.capabilities.map((capability) => (
@@ -231,171 +246,108 @@ export function AccessPolicyPanel({
               );
             })}
           </div>
-        </div>
-        <div className="access-policy-section">
-          <div>
-            <h4 className="font-display text-lg font-bold text-navy">
-              Additional access rules
-            </h4>
-            <p className="mt-1 font-body text-sm text-navy-muted">
-              Security rules enforced across the programme.
-            </p>
-          </div>
-          <div className="access-policy-rules">
-            <div>
-              <span className="access-policy-rule-icon">
-                <UserCheck size={18} />
-              </span>
-              <span>
-                <strong>Require account approval</strong>
-                <small>
-                  New users must be approved by a programme admin before access.
-                </small>
-              </span>
-              <ReadOnlyToggle checked label="Require account approval" />
-            </div>
-            <div>
-              <span className="access-policy-rule-icon">
-                <Mail size={18} />
-              </span>
-              <span>
-                <strong>Enforce institutional email</strong>
-                <small>
-                  Institutional-domain restriction is not exposed by the current
-                  policy contract.
-                </small>
-              </span>
-              <ReadOnlyToggle
-                checked={false}
-                label="Enforce institutional email"
+        </AdminCard>
+        <AdminCard
+          title="Additional access rules"
+          description="Security rules enforced across the programme."
+          flush
+        >
+          <div className="pa-list">
+            {rules.map((rule) => (
+              <ListRow
+                key={rule.title}
+                icon={rule.icon}
+                tone="teal"
+                title={<span className="ap-wrap">{rule.title}</span>}
+                meta={<span className="ap-wrap">{rule.text}</span>}
+                trailing={<ReadOnlyToggle checked={rule.checked} label={rule.title} />}
               />
-            </div>
-            <div>
-              <span className="access-policy-rule-icon">
-                <LockKeyhole size={18} />
-              </span>
-              <span>
-                <strong>Require MFA for administrators</strong>
-                <small>
-                  Programme administrators and elevated staff roles require MFA.
-                </small>
-              </span>
-              <ReadOnlyToggle
-                checked={mfaEnabled}
-                label="Require MFA for administrators"
-              />
-            </div>
+            ))}
           </div>
-        </div>
-        <div className="access-policy-readonly">
-          <ShieldCheck size={16} />
-          Policy changes are server-enforced. This screen is a live read-only
-          summary.
-        </div>
-      </Card>
+        </AdminCard>
+      </div>
 
-      <aside className="access-policy-sidebar">
-        <Card padding="sm" id="access-policy-summary">
-          <h3 className="font-display text-lg font-bold text-navy">
-            Policy summary
-          </h3>
-          <div className="access-policy-summary-stats">
-            <div>
-              <UsersRound size={19} />
-              <strong>{groups.length}</strong>
-              <span>Roles configured</span>
+      <aside className="ps-stack">
+        <div id="access-policy-summary" className="ps-stack">
+          <AdminCard title="Policy summary" flush>
+            <div className="pa-list">
+              <ListRow
+                icon={<UsersRound />}
+                tone="blue"
+                title="Roles configured"
+                value={groups.length}
+              />
+              <ListRow
+                icon={<SlidersHorizontal />}
+                tone="violet"
+                title="Total capabilities"
+                value={capabilities.length}
+              />
+              <ListRow
+                icon={<UserCheck />}
+                tone="teal"
+                title="Account approval"
+                trailing={<StatusPill tone="success">Required</StatusPill>}
+              />
+              <ListRow
+                icon={<Mail />}
+                tone="slate"
+                title={<span className="ap-wrap">Institutional email</span>}
+                trailing={<StatusPill tone="neutral">Not configured</StatusPill>}
+              />
+              <ListRow
+                icon={<LockKeyhole />}
+                tone="amber"
+                title={<span className="ap-wrap">MFA for administrators</span>}
+                trailing={
+                  adminPolicy?.mfa_required || mfaEnabled ? (
+                    <StatusPill tone="success">Enabled</StatusPill>
+                  ) : (
+                    <StatusPill tone="warning">Not required</StatusPill>
+                  )
+                }
+              />
             </div>
-            <div>
-              <SlidersHorizontal size={19} />
-              <strong>{capabilities.length}</strong>
-              <span>Total capabilities</span>
-            </div>
+          </AdminCard>
+        </div>
+        <AdminCard title="Access request workflow" flush>
+          <div className="pa-list">
+            <ListRow
+              icon={<UsersRound />}
+              tone="green"
+              title="Request method"
+              meta="Admin invitation only"
+            />
+            <ListRow
+              icon={<UserCheck />}
+              tone="teal"
+              title="Approver"
+              meta="Any programme admin"
+            />
           </div>
-          <div className="access-policy-summary-list">
-            <div>
-              <UserCheck size={17} />
-              <span>Account approval</span>
-              <strong>Required</strong>
-            </div>
-            <div>
-              <Mail size={17} />
-              <span>Institutional email</span>
-              <strong>Not configured</strong>
-            </div>
-            <div>
-              <LockKeyhole size={17} />
-              <span>MFA for administrators</span>
-              <strong>
-                {adminPolicy?.mfa_required || mfaEnabled
-                  ? "Enabled"
-                  : "Not required"}
-              </strong>
-            </div>
-          </div>
-        </Card>
-        <Card padding="sm">
-          <div className="flex items-start gap-3">
-            <span className="access-policy-title-icon access-policy-title-icon--small">
-              <UsersRound size={20} />
-            </span>
-            <div>
-              <h3 className="font-display text-lg font-bold text-navy">
-                Access request workflow
-              </h3>
-              <p className="mt-2 font-body text-sm leading-6 text-navy-muted">
-                Manage how new users request access to this programme.
-              </p>
-            </div>
-          </div>
-          <div className="access-policy-workflow">
-            <div>
-              <span>Request method</span>
-              <strong>Admin invitation only</strong>
-              <ArrowRight size={15} />
-            </div>
-            <div>
-              <span>Approver</span>
-              <strong>Any programme admin</strong>
-              <ArrowRight size={15} />
-            </div>
-          </div>
-        </Card>
-        <Card padding="sm" className="access-policy-help">
-          <div className="flex items-start gap-3">
-            <span className="access-policy-help-icon">
-              <CircleHelp size={20} />
-            </span>
-            <div>
-              <h3 className="font-display text-lg font-bold text-navy">
-                Need help?
-              </h3>
-              <p className="mt-2 font-body text-sm leading-6 text-navy-muted">
-                Learn more about roles, permissions and access control for your
-                programme.
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="tertiary"
-              to="mailto:support@mentormama.org?subject=Access policy documentation"
+        </AdminCard>
+        <AdminCard title="Need help?">
+          <p className="ps-copy">
+            Learn more about roles, permissions and access control for your
+            programme.
+          </p>
+          <div className="ps-actions-col">
+            <a
+              className="pa-btn pa-btn--secondary pa-btn--sm"
+              href="mailto:support@mentormama.org?subject=Access policy documentation"
             >
-              <MessageSquare size={15} className="mr-2" />
+              <MessageSquare />
               View documentation
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="tertiary"
-              to="mailto:support@mentormama.org?subject=Access policy support"
+            </a>
+            <a
+              className="pa-btn pa-btn--secondary pa-btn--sm"
+              href="mailto:support@mentormama.org?subject=Access policy support"
             >
-              <MessageSquare size={15} className="mr-2" />
+              <MessageSquare />
               Contact support
-            </Button>
+            </a>
           </div>
-        </Card>
+        </AdminCard>
       </aside>
     </div>
   );

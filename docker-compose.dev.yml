@@ -58,6 +58,11 @@ services:
       MAILTRAP_SANDBOX_ID: ${MAILTRAP_SANDBOX_ID:-}
       MAILTRAP_WEBHOOK_SECRET: ${MAILTRAP_WEBHOOK_SECRET:-}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-accounts@localhost}
+      AI_ENABLED: "${AI_ENABLED:-false}"
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_TEMPERATURE: "${AI_TEMPERATURE:-0.2}"
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       EXPORT_ROOT: /tmp/mentormama-exports
       PRIVATE_CONTENT_ROOT: /var/lib/mentormama/content-documents
@@ -160,7 +165,13 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12

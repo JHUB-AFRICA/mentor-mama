@@ -1,59 +1,117 @@
-import { useState, type ReactNode } from "react";
-import { Clock3, RefreshCw, ShieldCheck, Users } from "lucide-react";
-import { Button } from "@mentormama/ui";
+import { useState } from "react";
+import { CalendarClock, Clock3, Info, KeyRound, RefreshCw, ShieldCheck, UserCheck } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMFARecoveryRequests, resolveMFARecoveryRequest } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  EmptyState,
+  Notice,
+  StatCard,
+  StatGrid,
+  StatusPill,
+} from "./ui/AdminKit";
+import "./people-pages.css";
+import "./programme-overlays.css";
+import { Field, Modal, TextArea } from "../../components/kit";
 
 export function MFARecoveryInbox() {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const requests = useQuery({ queryKey: ["mfa-recovery-requests"], queryFn: getMFARecoveryRequests });
   const count = requests.data?.length ?? 0;
+  const oldestDays = requests.data?.length
+    ? Math.max(0, Math.floor((Date.now() - Math.min(...requests.data.map((item) => new Date(item.created_at).getTime()))) / 86_400_000))
+    : 0;
   return (
-    <div className="content-library-page">
-      <header className="content-library-heading">
-        <div>
-          <p className="content-library-eyebrow">People &amp; access</p>
-          <h1>Authenticator recovery</h1>
-          <p>Review requests from people in your programme who can’t use their sign-in code.</p>
-        </div>
-        <Button variant="tertiary" onClick={() => void requests.refetch()} disabled={requests.isFetching}>
-          <RefreshCw size={16} className="mr-2" /> Refresh
-        </Button>
-      </header>
+    <AdminPage>
+      <AdminPageHeader
+        eyebrow="People & access"
+        title="Authenticator recovery"
+        description="Review requests from people in your programme who can’t use their sign-in code."
+        actions={
+          <AdminButton
+            variant="secondary"
+            icon={<RefreshCw />}
+            onClick={() => void requests.refetch()}
+            disabled={requests.isFetching}
+          >
+            Refresh
+          </AdminButton>
+        }
+      />
 
-      <section className="content-library-stats mfa-recovery-summary" aria-label="Recovery request summary">
-        <Summary icon={<Clock3 size={21} />} value={requests.isPending ? "—" : count} label="Waiting for review" />
-        <Summary icon={<Users size={21} />} value="Current" label="Programme scope" />
-        <Summary icon={<ShieldCheck size={21} />} value="Required" label="A reason is recorded for each decision" />
-      </section>
+      <StatGrid columns={2}>
+        <StatCard
+          icon={<Clock3 />}
+          tone="amber"
+          value={count}
+          label="Waiting for review"
+          hint="Requests from your programme"
+          loading={requests.isPending || requests.isError}
+        />
+        <StatCard
+          icon={<CalendarClock />}
+          tone="blue"
+          value={oldestDays}
+          label={oldestDays === 1 ? "Day since oldest request" : "Days since oldest request"}
+          hint={count === 0 ? "Nothing waiting" : "Oldest unresolved request"}
+          loading={requests.isPending || requests.isError}
+        />
+      </StatGrid>
 
-      <aside className="mfa-recovery-admin-note">
-        <ShieldCheck size={18} />
-        <p><strong>Review requests for your programme.</strong> Programme Administrators can’t approve their own recovery requests. For your own account, <a href="mailto:support@mentormama.org">contact MentorMAMA support</a>; platform administrators handle those requests.</p>
-      </aside>
+      <Notice icon={<ShieldCheck />}>
+        <strong>Review requests for your programme.</strong> A reason is recorded for each decision. Programme Administrators can’t approve their own recovery requests. For your own account, <a href="mailto:support@mentormama.org" className="font-bold text-[var(--pa-teal-ink)] underline underline-offset-2">contact MentorMAMA support</a>; platform administrators handle those requests.
+      </Notice>
 
-      <section className="content-library-table-wrap" aria-label="Requests awaiting review">
-        {requests.isPending ? <p className="content-library-empty">Loading recovery requests…</p> : requests.isError ? (
-          <div className="content-library-empty"><p>Recovery requests could not be loaded.</p><Button variant="tertiary" onClick={() => void requests.refetch()}>Try again</Button></div>
+      <section className="pa-table-wrap" aria-label="Requests awaiting review">
+        {requests.isPending ? (
+          <EmptyState icon={<Clock3 size={24} />} title="Loading recovery requests…" />
+        ) : requests.isError ? (
+          <EmptyState
+            icon={<Info size={24} />}
+            title="Recovery requests could not be loaded."
+            action={<AdminButton variant="secondary" onClick={() => void requests.refetch()}>Try again</AdminButton>}
+          />
         ) : count === 0 ? (
-          <div className="content-library-empty"><p>No requests are waiting for review.</p></div>
+          <AdminCard flush>
+            <EmptyState
+              icon={<UserCheck size={24} />}
+              title="No requests are waiting for review."
+              text="When someone can’t use their sign-in code, their request will appear here."
+            />
+          </AdminCard>
         ) : (
-          <div className="content-library-table-scroll">
-            <table className="content-library-table mfa-recovery-table">
-              <thead><tr><th>PERSON</th><th>ROLE</th><th>REQUEST</th><th>RECEIVED</th><th>ACTIONS</th></tr></thead>
-          <tbody>{requests.data!.map((item) => <RecoveryRow key={item.id} item={item} onDone={(decision) => { void queryClient.invalidateQueries({ queryKey: ["mfa-recovery-requests"] }); pushToast({ kind: "success", title: decision === "recover" ? "Authenticator reset" : "Request closed", message: decision === "recover" ? "The person can set up a new authenticator after signing in." : "The recovery request was closed without changing access." }); }} />)}</tbody>
+          <div className="pa-table-scroll">
+            <table className="pa-table min-w-[60rem]">
+              <thead><tr><th>Person</th><th>Role</th><th>Request</th><th>Received</th><th>Actions</th></tr></thead>
+              <tbody>
+                {requests.data!.map((item) => (
+                  <RecoveryRow
+                    key={item.id}
+                    item={item}
+                    onDone={(decision) => {
+                      void queryClient.invalidateQueries({ queryKey: ["mfa-recovery-requests"] });
+                      pushToast({
+                        kind: "success",
+                        title: decision === "recover" ? "Authenticator reset" : "Request closed",
+                        message: decision === "recover"
+                          ? "The person can set up a new authenticator after signing in."
+                          : "The recovery request was closed without changing access.",
+                      });
+                    }}
+                  />
+                ))}
+              </tbody>
             </table>
           </div>
         )}
       </section>
-    </div>
+    </AdminPage>
   );
-}
-
-function Summary({ icon, value, label }: { icon: ReactNode; value: string | number; label: string }) {
-  return <article className="content-library-stat"><span className="content-library-stat-icon content-library-stat-icon--teal">{icon}</span><div><strong>{value}</strong><small>{label}</small></div></article>;
 }
 
 function RecoveryRow({ item, onDone }: { item: { id: string; name: string; email: string; role: string; reason: string; created_at: string }; onDone: (decision: "recover" | "close") => void }) {
@@ -71,17 +129,50 @@ function RecoveryRow({ item, onDone }: { item: { id: string; name: string; email
   }
   return <>
     <tr>
-      <td><strong>{item.name}</strong><small className="mfa-recovery-email">{item.email}</small></td>
-      <td>{item.role.replaceAll("_", " ")}</td>
-      <td className="mfa-recovery-reason">{item.reason}</td>
+      <td><div className="pa-cell-title"><div><strong>{item.name}</strong><small>{item.email}</small></div></div></td>
+      <td><StatusPill tone="neutral" dot={false}>{item.role.replaceAll("_", " ")}</StatusPill></td>
+      <td className="pa-wrap-cell">{item.reason}</td>
       <td>{new Date(item.created_at).toLocaleString()}</td>
-      <td><div className="mfa-recovery-actions"><Button size="sm" onClick={() => setDecision("recover")}>Reset authenticator</Button><Button size="sm" variant="tertiary" onClick={() => setDecision("close")}>Close</Button></div></td>
+      <td><div className="pa-row-actions"><AdminButton size="sm" onClick={() => setDecision("recover")}>Reset authenticator</AdminButton><AdminButton size="sm" variant="secondary" onClick={() => setDecision("close")}>Close</AdminButton></div></td>
     </tr>
-    {decision && <tr><td colSpan={5}><div className="mfa-recovery-review">
-      <p>{decision === "recover" ? "This removes their current authenticator and signs out their devices. They’ll set up a new authenticator after signing in." : "This closes the request without changing their sign-in access."}</p>
-      <label>Reason for this decision<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} minLength={5} /></label>
-      {error && <p role="alert" className="mfa-recovery-error">{error}</p>}
-      <div><Button size="sm" variant="tertiary" onClick={() => setDecision(null)} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void submit()} disabled={busy || reason.trim().length < 5}>{busy ? "Saving…" : "Confirm"}</Button></div>
-    </div></td></tr>}
+    {decision && (
+      <Modal
+        open
+        onClose={() => setDecision(null)}
+        dismissible={!busy}
+        size="sm"
+        closeLabel="Close dialog"
+        icon={decision === "recover" ? <KeyRound /> : <UserCheck />}
+        title={decision === "recover" ? `Reset authenticator for ${item.name}?` : `Close request from ${item.name}?`}
+        description={
+          decision === "recover"
+            ? "This removes their current authenticator and signs out their devices. They’ll set up a new authenticator after signing in."
+            : "This closes the request without changing their sign-in access."
+        }
+        footer={
+          <>
+            <AdminButton size="sm" variant="secondary" onClick={() => setDecision(null)} disabled={busy}>Cancel</AdminButton>
+            <AdminButton
+              size="sm"
+              variant={decision === "recover" ? "secondary" : "primary"}
+              className={decision === "recover" ? "po-danger" : undefined}
+              onClick={() => void submit()}
+              disabled={busy || reason.trim().length < 5}
+            >
+              {busy ? "Saving…" : decision === "recover" ? "Reset authenticator" : "Close request"}
+            </AdminButton>
+          </>
+        }
+      >
+        <Field
+          label="Reason for this decision"
+          required
+          hint="Saved to the audit record. At least 5 characters."
+          error={error || undefined}
+        >
+          <TextArea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} minLength={5} />
+        </Field>
+      </Modal>
+    )}
   </>;
 }

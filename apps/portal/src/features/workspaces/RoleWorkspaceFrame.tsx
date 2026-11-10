@@ -2,20 +2,18 @@ import { useState, type ReactNode } from "react";
 import {
   ClipboardList,
   BookOpen,
+  CalendarDays,
   GraduationCap,
   LayoutDashboard,
-  LogOut,
-  Menu,
   Settings2,
   Users,
-  X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { logout, type CurrentUser } from "../../services/api";
-import logoIcon from "../../assets/brand/logo-icon-dark.svg";
-import { NotificationPopover } from "../notifications/NotificationPopover";
 import "./RoleWorkspace.css";
+import { PortalSidebar, type SidebarItem } from "./PortalSidebar";
+import { PortalHeader } from "./PortalHeader";
 
 interface RoleWorkspaceFrameProps {
   user: CurrentUser;
@@ -60,6 +58,7 @@ export function RoleWorkspaceFrame({
   placementsHref = "/placements",
 }: RoleWorkspaceFrameProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
 
   const roleLabel =
     roleLabels[user.role] ??
@@ -75,227 +74,49 @@ export function RoleWorkspaceFrame({
 
   const isMentor = user.role === "mentor";
 
+  const navItems: SidebarItem[] = isMentor
+    ? [
+        { id: "today", label: "Overview", icon: <LayoutDashboard size={18} />, href: "/mentor" },
+        { id: "students", label: "Students", icon: <Users size={18} />, href: "/mentor?view=students" },
+        { id: "log", label: "Log session", icon: <ClipboardList size={18} />, href: "/mentor?view=log" },
+        { id: "training", label: "Training", icon: <GraduationCap size={18} />, href: "/mentor?view=training" },
+        { id: "library", label: "Library", icon: <BookOpen size={18} />, href: "/mentor?view=library" },
+        { id: "more", label: "More", icon: <Settings2 size={18} />, href: "/mentor?view=more" },
+      ]
+    : [
+        { id: "overview", label: "Overview", icon: <LayoutDashboard size={18} />, href: homeHref },
+        {
+          id: "placements",
+          label: user.role === "student" ? "My placements" : "Placements",
+          icon: <ClipboardList size={18} />,
+          href: placementsHref,
+        },
+        ...(user.role === "student"
+          ? [
+              { id: "library", label: "Library", icon: <BookOpen size={18} />, href: "/student?view=library" },
+              { id: "log", label: "Sessions", icon: <CalendarDays size={18} />, href: "/student?view=sessions" },
+              { id: "more", label: "More", icon: <Settings2 size={18} />, href: "/student?view=more" },
+            ]
+          : []),
+        ...(secondaryLabel && secondaryHref
+          ? [{ id: "people", label: secondaryLabel, icon: <Users size={18} />, href: secondaryHref }]
+          : []),
+      ];
+
   return (
     <div className="workspace-shell">
-      {/* ============================================================
-          DESKTOP SIDEBAR
-      ============================================================ */}
-
-      <aside
-        className={`workspace-sidebar ${
-          mobileOpen ? "workspace-sidebar--open" : ""
-        }`}
-        aria-label="Main navigation"
-      >
-        {/* Brand */}
-        <div className="workspace-brand">
-          <Link
-            to="/"
-            className="workspace-brand__link"
-            onClick={() => setMobileOpen(false)}
-          >
-            <span className="workspace-brand__mark">
-              <img
-                src={logoIcon}
-                alt=""
-                aria-hidden="true"
-              />
-            </span>
-
-            <span className="workspace-brand__copy">
-              <span className="workspace-brand__name">
-                Mentor<span>MAMA</span>
-              </span>
-
-              <span className="workspace-brand__sub">
-                Clinical programme
-              </span>
-            </span>
-          </Link>
-
-          <button
-            type="button"
-            className="workspace-mobile-close"
-            onClick={() => setMobileOpen(false)}
-            aria-label="Close navigation"
-          >
-            <X size={19} />
-          </button>
-        </div>
-
-        {/* Workspace navigation */}
-        <div className="workspace-navigation">
-          <div className="workspace-navigation__label">
-            {isMentor ? "Clinical practice" : "Workspace"}
-          </div>
-
-          <nav aria-label="Workspace navigation">
-            {isMentor ? (
-              <>
-                <WorkspaceLink
-                  href="/mentor"
-                  label="Overview"
-                  icon={<LayoutDashboard size={18} />}
-                  active={active === "today"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href="/mentor?view=students"
-                  label="Students"
-                  icon={<Users size={18} />}
-                  active={active === "students"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href="/mentor?view=log"
-                  label="Log session"
-                  icon={<ClipboardList size={18} />}
-                  active={active === "log"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href="/mentor?view=training"
-                  label="Training"
-                  icon={<GraduationCap size={18} />}
-                  active={active === "training"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href="/mentor?view=library"
-                  label="Library"
-                  icon={<BookOpen size={18} />}
-                  active={active === "library"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href="/mentor?view=more"
-                  label="More"
-                  icon={<Settings2 size={18} />}
-                  active={active === "more"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-              </>
-            ) : (
-              <>
-                <WorkspaceLink
-                  href={homeHref}
-                  label="Overview"
-                  icon={<LayoutDashboard size={18} />}
-                  active={active === "overview"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                <WorkspaceLink
-                  href={placementsHref}
-                  label={
-                    user.role === "student"
-                      ? "My placements"
-                      : "Placements"
-                  }
-                  icon={<ClipboardList size={18} />}
-                  active={active === "placements"}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-
-                {user.role === "student" && (
-                  <>
-                    <WorkspaceLink
-                      href="/student?view=library"
-                      label="Library"
-                      icon={<BookOpen size={18} />}
-                      active={active === "library"}
-                      onNavigate={() => setMobileOpen(false)}
-                    />
-                    <WorkspaceLink
-                      href="/student?view=sessions"
-                      label="Sessions"
-                      icon={<ClipboardList size={18} />}
-                      active={active === "log"}
-                      onNavigate={() => setMobileOpen(false)}
-                    />
-                    <WorkspaceLink
-                      href="/student?view=more"
-                      label="More"
-                      icon={<Settings2 size={18} />}
-                      active={active === "more"}
-                      onNavigate={() => setMobileOpen(false)}
-                    />
-                  </>
-                )}
-
-                {secondaryLabel && secondaryHref && (
-                  <WorkspaceLink
-                    href={secondaryHref}
-                    label={secondaryLabel}
-                    icon={<Users size={18} />}
-                    active={active === "people"}
-                    onNavigate={() => setMobileOpen(false)}
-                  />
-                )}
-              </>
-            )}
-          </nav>
-        </div>
-
-        {/* Sidebar bottom */}
-        <div className="workspace-sidebar__bottom">
-          <Link
-            to="/account"
-            className="workspace-account-link"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Settings2 size={17} />
-            <span>Settings</span>
-          </Link>
-
-          <div className="workspace-user">
-            <Avatar name={user.name} />
-
-            <div className="workspace-user__details">
-              <div className="workspace-user__name">
-                {user.name}
-              </div>
-
-              <div className="workspace-user__role">
-                {roleLabel}
-              </div>
-            </div>
-
-            <span
-              className="workspace-user__status"
-              title="Active"
-              aria-label="Active"
-            />
-          </div>
-
-          <button
-            type="button"
-            className="workspace-signout"
-            onClick={() => void signOut()}
-          >
-            <LogOut size={17} />
-            <span>Sign out</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* ============================================================
-          MOBILE OVERLAY
-      ============================================================ */}
-
-      {mobileOpen && (
-        <button
-          type="button"
-          className="workspace-overlay"
-          aria-label="Close navigation"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      <PortalSidebar
+        brandHref={isMentor ? "/mentor" : homeHref}
+        workspaceLabel={isMentor ? "Clinical practice" : user.role === "student" ? "Student workspace" : "Workspace"}
+        navLabel="Workspace navigation"
+        activeId={active}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+        user={{ name: user.name, roleLabel }}
+        onSignOut={() => void signOut()}
+        groups={[{ label: isMentor ? "Clinical practice" : "Workspace", items: navItems }]}
+        footerItems={[{ id: "settings", label: "Settings", icon: <Settings2 size={18} />, href: "/account" }]}
+      />
 
       {/* ============================================================
           MAIN AREA
@@ -303,50 +124,14 @@ export function RoleWorkspaceFrame({
 
       <div className="workspace-main">
         {/* Top header */}
-        <header className="workspace-header">
-          <div className="workspace-header__inner">
-            <div className="workspace-header__left">
-              <button
-                type="button"
-                className="workspace-menu-button"
-                onClick={() => setMobileOpen(true)}
-                aria-label="Open navigation"
-              >
-                <Menu size={20} />
-              </button>
-
-              <div className="workspace-page-heading">
-                <div className="workspace-page-heading__eyebrow">
-                  {eyebrow}
-                </div>
-
-                <h1 className="workspace-page-heading__title">
-                  {title}
-                </h1>
-              </div>
-            </div>
-
-            <div className="workspace-header__right">
-              <NotificationPopover />
-
-              <div className="workspace-header__divider" />
-
-              <div className="workspace-header-user">
-                <Avatar name={user.name} size="small" />
-
-                <div className="workspace-header-user__details">
-                  <div className="workspace-header-user__name">
-                    {user.name}
-                  </div>
-
-                  <div className="workspace-header-user__role">
-                    {roleLabel}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+        <PortalHeader
+          onOpenNav={() => setMobileOpen(true)}
+          eyebrow={eyebrow}
+          title={title}
+          user={{ name: user.name, email: user.email, roleLabel }}
+          accountItems={[{ label: "Settings", icon: <Settings2 aria-hidden="true" />, onSelect: () => navigate("/account") }]}
+          onSignOut={() => void signOut()}
+        />
 
         {/* Page content */}
         <main
@@ -419,45 +204,6 @@ export function RoleWorkspaceFrame({
    COMPONENTS
 ================================================================ */
 
-function WorkspaceLink({
-  href,
-  label,
-  icon,
-  active = false,
-  onNavigate,
-}: {
-  href: string;
-  label: string;
-  icon: ReactNode;
-  active?: boolean;
-  onNavigate?: () => void;
-}) {
-  return (
-    <Link
-      to={href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      className={`workspace-nav-link ${
-        active ? "workspace-nav-link--active" : ""
-      }`}
-    >
-      <span className="workspace-nav-link__icon">
-        {icon}
-      </span>
-
-      <span className="workspace-nav-link__label">
-        {label}
-      </span>
-
-      {active && (
-        <span
-          className="workspace-nav-link__indicator"
-          aria-hidden="true"
-        />
-      )}
-    </Link>
-  );
-}
 
 function MobileLink({
   href,
@@ -484,34 +230,5 @@ function MobileLink({
 
       <span>{label}</span>
     </Link>
-  );
-}
-
-function Avatar({
-  name,
-  size = "normal",
-}: {
-  name: string;
-  size?: "normal" | "small";
-}) {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-
-  return (
-    <span
-      className={`workspace-avatar ${
-        size === "small"
-          ? "workspace-avatar--small"
-          : ""
-      }`}
-      aria-hidden="true"
-    >
-      {initials || "U"}
-    </span>
   );
 }

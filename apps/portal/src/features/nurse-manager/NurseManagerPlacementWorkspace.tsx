@@ -1,3 +1,4 @@
+import { isPlacementClosed } from "../placements/placementJourney";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -94,7 +95,9 @@ export function NurseManagerPlacementWorkspace({
   const selectedPlacements = rows.filter((item) =>
     selectedIds.includes(item.id),
   );
-  const selectableRows = rows.filter((item) => item.mentor);
+  const selectableRows = rows.filter(
+    (item) => item.mentor && !isPlacementClosed(item.state),
+  );
   const toggleSelection = (id: string) =>
     setSelectedIds((current) =>
       current.includes(id)
@@ -515,7 +518,7 @@ function PlacementTable({
               >
                 {selectable && (
                   <td className="px-3 py-4 align-top">
-                    {placement.mentor && (
+                    {placement.mentor && !isPlacementClosed(placement.state) && (
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(placement.id)}
@@ -594,7 +597,7 @@ function PlacementTable({
       <div className="space-y-3 p-3 md:hidden">
         {placements.map((placement) => (
           <div key={placement.id} className="flex items-start gap-2">
-            {selectable && placement.mentor && (
+            {selectable && placement.mentor && !isPlacementClosed(placement.state) && (
               <input
                 type="checkbox"
                 checked={selectedIds.includes(placement.id)}

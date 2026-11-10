@@ -36,7 +36,8 @@ x-backend-environment: &backend-environment
 services:
   postgres:
     image: postgres:16-alpine
-    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"]
+    command:
+      ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mentormama}
       POSTGRES_USER: ${POSTGRES_USER:-mentormama}
@@ -45,7 +46,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test:
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
       timeout: 5s
       retries: 6
@@ -62,10 +64,19 @@ services:
     environment:
       REDIS_CACHE_PASSWORD: ${REDIS_CACHE_PASSWORD:?Set REDIS_CACHE_PASSWORD in .env.production}
       REDIS_CACHE_MAXMEMORY: ${REDIS_CACHE_MAXMEMORY:-256mb}
-    command: ["sh", "-c", "exec redis-server --save '' --appendonly no --requirepass \"$$REDIS_CACHE_PASSWORD\" --maxmemory \"$$REDIS_CACHE_MAXMEMORY\" --maxmemory-policy allkeys-lru"]
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --save '''' --appendonly no --requirepass "$$REDIS_CACHE_PASSWORD" --maxmemory "$$REDIS_CACHE_MAXMEMORY" --maxmemory-policy allkeys-lru',
+      ]
     networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_CACHE_PASSWORD\" redis-cli ping | grep -q PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          'REDISCLI_AUTH="$$REDIS_CACHE_PASSWORD" redis-cli ping | grep -q PONG',
+        ]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -77,12 +88,21 @@ services:
     environment:
       REDIS_BROKER_PASSWORD: ${REDIS_BROKER_PASSWORD:?Set REDIS_BROKER_PASSWORD in .env.production}
       REDIS_BROKER_MAXMEMORY: ${REDIS_BROKER_MAXMEMORY:-256mb}
-    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_BROKER_PASSWORD\" --maxmemory \"$$REDIS_BROKER_MAXMEMORY\" --maxmemory-policy noeviction"]
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_BROKER_PASSWORD" --maxmemory "$$REDIS_BROKER_MAXMEMORY" --maxmemory-policy noeviction',
+      ]
     volumes:
       - redis-broker-data:/data
     networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_BROKER_PASSWORD\" redis-cli ping | grep -q PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          'REDISCLI_AUTH="$$REDIS_BROKER_PASSWORD" redis-cli ping | grep -q PONG',
+        ]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -93,7 +113,15 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.2}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-20}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-500}
     volumes:
       - private-content:/var/lib/mentormama/content-documents
       - export-files:/var/lib/mentormama/exports
@@ -109,7 +137,13 @@ services:
       redis-broker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 4
@@ -122,7 +156,15 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    command: ["celery", "-A", "config.celery", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    command:
+      [
+        "celery",
+        "-A",
+        "config.celery",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=${CELERY_CONCURRENCY:-2}",
+      ]
     environment: *backend-environment
     volumes:
       - private-content:/var/lib/mentormama/content-documents
@@ -146,7 +188,15 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    command: ["celery", "-A", "config.celery", "beat", "--loglevel=INFO", "--schedule=/var/lib/mentormama/beat/celerybeat-schedule"]
+    command:
+      [
+        "celery",
+        "-A",
+        "config.celery",
+        "beat",
+        "--loglevel=INFO",
+        "--schedule=/var/lib/mentormama/beat/celerybeat-schedule",
+      ]
     environment: *backend-environment
     volumes:
       - beat-data:/var/lib/mentormama/beat

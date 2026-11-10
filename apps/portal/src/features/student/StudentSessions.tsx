@@ -2,20 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
-  CheckCircle2,
+  ChevronRight,
   Clock3,
+  MapPin,
   MessageCircle,
-  Search,
-  X,
+  ShieldCheck,
 } from "lucide-react";
-import { Button, Card } from "@mentormama/ui";
+import { Skeleton } from "@mentormama/ui";
 import { InlineFeedback } from "../../components/InlineFeedback";
+import { DetailList, Modal } from "../../components/kit";
+import {
+  AdminButton,
+  AdminPage,
+  AdminPageHeader,
+  EmptyState,
+  SearchField,
+  SelectField,
+  StatCard,
+  StatGrid,
+  Toolbar,
+} from "../programme-admin/ui/AdminKit";
 import {
   getMentorshipSessions,
   type MentorshipSession,
   type Placement,
 } from "../../services/api";
-import "./StudentPlacementDetail.css";
+import "./student-sessions.css";
 
 type StudentSession = MentorshipSession & {
   placement: Placement;
@@ -108,335 +120,276 @@ export function StudentSessions({
     };
   }, [placements, reloadToken]);
 
-  useEffect(() => {
-    if (!selectedSession) return;
+  const [typeFilter, setTypeFilter] = useState("");
+  const [placementFilter, setPlacementFilter] = useState("");
 
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setSelectedSession(null);
+  const placementOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const session of sessions) {
+      seen.set(session.placement.id, session.placement.facility_name ?? "Placement");
     }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [selectedSession]);
+    return [...seen.entries()].map(([value, label]) => ({ value, label }));
+  }, [sessions]);
+  const typeOptions = useMemo(
+    () => [...new Set(sessions.map((session) => session.session_type))].map((value) => ({ value, label: formatSessionType(value) })),
+    [sessions],
+  );
 
   const filteredSessions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return sessions;
-    }
-
     return sessions.filter((session) => {
+      if (typeFilter && session.session_type !== typeFilter) return false;
+      if (placementFilter && session.placement.id !== placementFilter) return false;
+      if (!normalizedQuery) return true;
       const searchable = [
-        session.session_type,
+        formatSessionType(session.session_type),
         session.placement.facility_name,
         session.placement.cohort_name,
         session.placement.ward?.name,
         session.session_date,
+        ...session.topics.map(formatSessionType),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-
       return searchable.includes(normalizedQuery);
     });
-  }, [query, sessions]);
+  }, [query, sessions, typeFilter, placementFilter]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, StudentSession[]>();
+    for (const session of filteredSessions) {
+      const key = session.session_date.slice(0, 7);
+      map.set(key, [...(map.get(key) ?? []), session]);
+    }
+    return [...map.entries()];
+  }, [filteredSessions]);
 
   const latestSession = sessions[0];
-
-  const totalMinutes = sessions.reduce(
-    (total, session) => total + (session.duration_minutes ?? 0),
-    0,
-  );
-
-  const uniquePlacements = new Set(
-    sessions.map((session) => session.placement.id),
-  ).size;
+  const totalMinutes = sessions.reduce((total, session) => total + (session.duration_minutes ?? 0), 0);
+  const uniquePlacements = new Set(sessions.map((session) => session.placement.id)).size;
+  const hasFilters = Boolean(query || typeFilter || placementFilter);
+  const clearFilters = () => {
+    setQuery("");
+    setTypeFilter("");
+    setPlacementFilter("");
+  };
+  const nextPlacement =
+    placements.find((item) => item.state === "active") ?? placements[0];
 
   return (
-    <div className="student-page-container student-sessions-page">
-      {/* Header */}
-      <section className="student-sessions-header">
-        <div>
-          <p className="student-kicker">Learning record</p>
-
-          <h1>Mentorship sessions</h1>
-
-          <p>
-            Keep track of the conversations, guidance, and learning
-            support recorded during your placements.
-          </p>
-        </div>
-
-        <div className="student-sessions-header__record">
-          <MessageCircle size={17} />
-          <span>Private learning record</span>
-        </div>
-      </section>
-
-      {/* Summary */}
-      <section className="student-session-summary">
-        <SummaryItem
-          icon={<MessageCircle size={18} />}
-          value={sessions.length}
-          label="Sessions recorded"
-          detail={
-            sessions.length === 0
-              ? "No sessions yet"
-              : "Across your placements"
+    <div className="student-page-container">
+      <AdminPage className="ss">
+        <AdminPageHeader
+          eyebrow="Learning record"
+          title="Mentorship sessions"
+          description="The conversations, guidance and learning support your mentor has recorded during your placements."
+          actions={
+            <span className="ss-private">
+              <ShieldCheck aria-hidden="true" /> Private learning record
+            </span>
           }
         />
 
-        <SummaryItem
-          icon={<Clock3 size={18} />}
-          value={totalMinutes > 0 ? `${totalMinutes}m` : "—"}
-          label="Mentorship time"
-          detail="Recorded session time"
-        />
+        <StatGrid>
+          <StatCard
+            icon={<MessageCircle />}
+            tone="teal"
+            value={sessions.length}
+            label="Sessions recorded"
+            hint={sessions.length === 0 ? "None yet" : "Across your placements"}
+            loading={loading}
+          />
+          <StatCard
+            icon={<Clock3 />}
+            tone="violet"
+            value={totalMinutes > 0 ? formatDuration(totalMinutes) : "—"}
+            label="Mentorship time"
+            hint="Recorded session time"
+            loading={loading}
+          />
+          <StatCard
+            icon={<CalendarDays />}
+            tone="blue"
+            value={latestSession ? formatShortDate(latestSession.session_date) : "—"}
+            label="Latest session"
+            hint={latestSession ? formatMonth(latestSession.session_date) : "No sessions yet"}
+            loading={loading}
+          />
+          <StatCard
+            icon={<MapPin />}
+            tone="amber"
+            value={uniquePlacements}
+            label="Placements"
+            hint="With recorded sessions"
+            loading={loading}
+          />
+        </StatGrid>
 
-        <SummaryItem
-          icon={<CalendarDays size={18} />}
-          value={latestSession ? formatMonth(latestSession.session_date) : "—"}
-          label="Latest activity"
-          detail={
-            latestSession
-              ? formatDate(latestSession.session_date)
-              : "No activity yet"
-          }
-        />
-
-        <SummaryItem
-          icon={<CheckCircle2 size={18} />}
-          value={uniquePlacements}
-          label="Placements"
-          detail="With recorded sessions"
-        />
-      </section>
-
-      {/* Activity heading */}
-      <section className="student-sessions-toolbar">
-        <div>
-          <p className="student-kicker">Activity</p>
-
-          <h2>Session history</h2>
-
-          <p>
-            Your mentor&apos;s submitted session records appear here.
-          </p>
-        </div>
-
-        {!loading && sessions.length > 0 && (
-          <div className="student-session-search">
-            <Search size={16} />
-
-            <input
-              type="search"
+        {!loading && !error && sessions.length > 0 && (
+          <Toolbar filters={placementOptions.length > 1 ? 2 : 1}>
+            <SearchField
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search sessions"
-              aria-label="Search sessions"
+              onChange={setQuery}
+              placeholder="Search by topic, type or ward"
+              label="Search sessions"
             />
+            <SelectField
+              value={typeFilter}
+              onChange={setTypeFilter}
+              label="Filter by session type"
+              options={[{ value: "", label: "All session types" }, ...typeOptions]}
+            />
+            {placementOptions.length > 1 && (
+              <SelectField
+                value={placementFilter}
+                onChange={setPlacementFilter}
+                label="Filter by placement"
+                options={[{ value: "", label: "All placements" }, ...placementOptions]}
+              />
+            )}
+          </Toolbar>
+        )}
+
+        {loading ? (
+          <div className="ss-loading" aria-busy="true" aria-label="Loading sessions">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+          </div>
+        ) : error ? (
+          <EmptyState
+            icon={<MessageCircle />}
+            title="Your session records are unavailable"
+            text="Check your connection and try loading your private record again."
+            action={
+              <AdminButton variant="secondary" size="sm" onClick={() => setReloadToken((value) => value + 1)}>
+                Try again
+              </AdminButton>
+            }
+          />
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon={<MessageCircle />}
+            title="No mentorship sessions recorded yet"
+            text="When your mentor records a session, it appears here with the topics covered, the feedback you were given and any follow-up."
+            action={
+              nextPlacement ? (
+                <AdminButton variant="secondary" size="sm" onClick={() => onOpen(nextPlacement.id)}>
+                  View my placement <ArrowRight />
+                </AdminButton>
+              ) : undefined
+            }
+          />
+        ) : filteredSessions.length === 0 ? (
+          <EmptyState
+            icon={<MessageCircle />}
+            title="No sessions match these filters"
+            text="Try another search term or clear the filters."
+            action={
+              hasFilters ? (
+                <AdminButton variant="secondary" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </AdminButton>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="ss-timeline">
+            {groups.map(([month, items]) => (
+              <section key={month} className="ss-month" aria-label={formatMonth(`${month}-01`)}>
+                <h2 className="ss-month__title">
+                  {formatMonth(`${month}-01`)}
+                  <span>
+                    {items.length} {items.length === 1 ? "session" : "sessions"}
+                  </span>
+                </h2>
+                <ul className="ss-list">
+                  {items.map((session) => (
+                    <li key={session.id}>
+                      <SessionRow session={session} onOpen={setSelectedSession} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
           </div>
         )}
-      </section>
 
-      {/* Sessions */}
-      <Card className="student-sessions-record">
-        {loading ? (
-          <SessionLoadingState />
-        ) : error ? (
-          <SessionErrorState onRetry={() => setReloadToken((value) => value + 1)} />
-        ) : filteredSessions.length === 0 ? (
-          query ? (
-            <SessionSearchEmpty query={query} onClear={() => setQuery("")} />
-          ) : (
-            <SessionEmptyState />
-          )
-        ) : (
-          <>
-            <div className="student-sessions-record__header">
-              <span>
-                {filteredSessions.length}{" "}
-                {filteredSessions.length === 1 ? "session" : "sessions"}
-              </span>
-
-              <span>Most recent first</span>
-            </div>
-
-            <div className="student-session-list">
-              {filteredSessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  onOpen={setSelectedSession}
-                />
-              ))}
-            </div>
-          </>
+        {!loading && !error && unavailablePlacementCount > 0 && (
+          <InlineFeedback kind="info" title="Some session records are still loading">
+            We could not reach {unavailablePlacementCount} {unavailablePlacementCount === 1 ? "placement" : "placements"}. The records shown may be incomplete.
+            <button
+              type="button"
+              className="ml-1 font-semibold text-teal underline underline-offset-2"
+              onClick={() => setReloadToken((value) => value + 1)}
+            >
+              Try again
+            </button>
+          </InlineFeedback>
         )}
-      </Card>
 
-      {!loading && !error && unavailablePlacementCount > 0 && (
-        <InlineFeedback kind="info" title="Some session records are still loading">
-          We could not reach {unavailablePlacementCount} {unavailablePlacementCount === 1 ? "placement" : "placements"}. The records shown may be incomplete. Try again to check all of your placements.
-          <button
-            type="button"
-            className="ml-1 font-semibold text-teal underline underline-offset-2"
-            onClick={() => setReloadToken((value) => value + 1)}
-          >
-            Try again
-          </button>
-        </InlineFeedback>
-      )}
-
-      {/* Privacy */}
-      <div className="student-sessions-footer">
-        <MessageCircle size={15} />
-
-        <p>
-          Session records are part of your private learning record and
-          are shared only with authorised programme staff.
+        <p className="ss-footnote">
+          <ShieldCheck aria-hidden="true" /> Session records are part of your private learning record and are shared only with authorised programme staff.
         </p>
-      </div>
+      </AdminPage>
 
-      {selectedSession && (
-        <SessionDetailModal
-          session={selectedSession}
-          onClose={() => setSelectedSession(null)}
-          onOpenPlacement={() => {
-            setSelectedSession(null);
-            onOpen(selectedSession.placement.id);
-          }}
-        />
-      )}
+      <SessionDetailModal
+        session={selectedSession}
+        onClose={() => setSelectedSession(null)}
+        onOpenPlacement={() => {
+          if (!selectedSession) return;
+          const id = selectedSession.placement.id;
+          setSelectedSession(null);
+          onOpen(id);
+        }}
+      />
     </div>
   );
 }
 
-function SummaryItem({
-  icon,
-  value,
-  label,
-  detail,
-}: {
-  icon: React.ReactNode;
-  value: string | number;
-  label: string;
-  detail: string;
-}) {
-  return (
-    <Card className="student-session-summary__item">
-      <span className="student-session-summary__icon">{icon}</span>
-
-      <div className="student-session-summary__value">
-        {value}
-      </div>
-
-      <div className="student-session-summary__label">{label}</div>
-
-      <div className="student-session-summary__detail">{detail}</div>
-    </Card>
-  );
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
-function SessionRow({
-  session,
-  onOpen,
-}: {
-  session: StudentSession;
-  onOpen: (session: StudentSession) => void;
-}) {
+function formatDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+function SessionRow({ session, onOpen }: { session: StudentSession; onOpen: (session: StudentSession) => void }) {
+  const date = new Date(`${session.session_date}T00:00:00`);
+  const topics = session.topics.map(formatSessionType);
   return (
-    <button
-      type="button"
-      className="student-session-record"
-      onClick={() => onOpen(session)}
-    >
-      <span className="student-session-record__date">
-        <strong>
-          {new Date(
-            `${session.session_date}T00:00:00`,
-          ).getDate()}
-        </strong>
-
-        <small>
-          {new Intl.DateTimeFormat("en-GB", {
-            month: "short",
-          }).format(
-            new Date(`${session.session_date}T00:00:00`),
-          )}
-        </small>
+    <button type="button" className="ss-row" onClick={() => onOpen(session)}>
+      <span className="ss-row__date" aria-hidden="true">
+        <strong>{date.getDate()}</strong>
+        <small>{new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date)}</small>
       </span>
-
-      <span className="student-session-record__main">
-        <span className="student-session-record__title">
-          {formatSessionType(session.session_type)}
+      <span className="ss-row__main">
+        <span className="ss-row__title">{formatSessionType(session.session_type)}</span>
+        <span className="ss-row__meta">
+          {session.placement.facility_name ?? "Placement"}
+          {session.placement.ward?.name ? ` · ${session.placement.ward.name}` : ""}
+          {" · "}
+          {session.duration_minutes ? `${session.duration_minutes} min` : "Duration not recorded"}
+          <span className="sr-only">, {formatDate(session.session_date)}</span>
         </span>
-
-        <span className="student-session-record__placement">
-          {session.placement.facility_name ?? "Placement record"}
-        </span>
-
-        <span className="student-session-record__meta">
-          <span>{formatDate(session.session_date)}</span>
-
-          <span className="student-session-record__separator" />
-
-          <span>
-            {session.duration_minutes
-              ? `${session.duration_minutes} minutes`
-              : "Duration not recorded"}
+        {topics.length > 0 && (
+          <span className="ss-row__chips">
+            {topics.slice(0, 3).map((topic) => (
+              <span key={topic} className="ss-chip">
+                {topic}
+              </span>
+            ))}
+            {topics.length > 3 && <span className="ss-chip ss-chip--more">+{topics.length - 3}</span>}
           </span>
-
-          {session.placement.ward?.name && (
-            <>
-              <span className="student-session-record__separator" />
-
-              <span>{session.placement.ward.name}</span>
-            </>
-          )}
-        </span>
+        )}
       </span>
-
-      <span className="student-session-record__status">
-        <CheckCircle2 size={15} />
-        Recorded
-      </span>
-
-      <span className="student-session-record__arrow">
-        <ArrowRight size={17} />
-      </span>
+      <ChevronRight className="ss-row__arrow" aria-hidden="true" />
     </button>
-  );
-}
-
-function SessionLoadingState() {
-  return (
-    <div className="student-session-loading">
-      <div className="student-session-skeleton student-session-skeleton--short" />
-      <div className="student-session-skeleton" />
-      <div className="student-session-skeleton" />
-      <div className="student-session-skeleton" />
-    </div>
-  );
-}
-
-function SessionErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="student-session-empty student-session-empty--error">
-      <span className="student-session-empty__icon"><MessageCircle size={22} /></span>
-      <div>
-        <p className="student-kicker">Something went wrong</p>
-        <h3>Your session records are unavailable</h3>
-        <p>Check your connection and try loading the private record again.</p>
-        <Button size="sm" variant="secondary" onClick={onRetry}>Try again</Button>
-      </div>
-    </div>
   );
 }
 
@@ -445,112 +398,60 @@ function SessionDetailModal({
   onClose,
   onOpenPlacement,
 }: {
-  session: StudentSession;
+  session: StudentSession | null;
   onClose: () => void;
   onOpenPlacement: () => void;
 }) {
-  const followUp = session.follow_up_action && session.follow_up_action !== "none"
-    ? formatSessionType(session.follow_up_action)
-    : "No follow-up recorded";
-
+  const followUp =
+    session?.follow_up_action && session.follow_up_action !== "none"
+      ? formatSessionType(session.follow_up_action)
+      : "No follow-up recorded";
   return (
-    <div
-      className="student-session-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      open={Boolean(session)}
+      onClose={onClose}
+      size="md"
+      icon={<MessageCircle />}
+      title={session ? formatSessionType(session.session_type) : ""}
+      description={
+        session
+          ? `${formatDate(session.session_date)}${session.duration_minutes ? ` · ${session.duration_minutes} minutes` : ""}`
+          : undefined
+      }
+      footer={
+        <>
+          <AdminButton variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </AdminButton>
+          <AdminButton size="sm" onClick={onOpenPlacement}>
+            View placement <ArrowRight />
+          </AdminButton>
+        </>
+      }
     >
-      <section className="student-session-modal" role="dialog" aria-modal="true" aria-labelledby="student-session-modal-title">
-        <header className="student-session-modal__header">
-          <div>
-            <p className="student-kicker">Mentorship session</p>
-            <h2 id="student-session-modal-title">{formatSessionType(session.session_type)}</h2>
-            <p>{formatDate(session.session_date)}{session.duration_minutes ? ` · ${session.duration_minutes} minutes` : ""}</p>
+      {session && (
+        <>
+          <DetailList
+            items={[
+              { label: "Placement", value: session.placement.facility_name ?? "Placement record", icon: <MapPin /> },
+              ...(session.placement.ward?.name ? [{ label: "Ward", value: session.placement.ward.name, icon: <MapPin /> }] : []),
+              { label: "Topics", value: session.topics.length ? session.topics.map(formatSessionType).join(", ") : "Not recorded", icon: <MessageCircle /> },
+              { label: "Follow-up", value: followUp, icon: <ArrowRight /> },
+            ]}
+          />
+          <div className="ss-notes">
+            <section>
+              <h3>What was covered</h3>
+              <p>{session.what_was_covered || "Not recorded"}</p>
+            </section>
+            <section>
+              <h3>Feedback you were given</h3>
+              <p>{session.feedback_given || "Not recorded"}</p>
+            </section>
           </div>
-          <button type="button" className="student-session-modal__close" onClick={onClose} aria-label="Close session details">
-            <X size={19} />
-          </button>
-        </header>
-
-        <div className="student-session-modal__body">
-          <div className="student-session-modal__context">
-            <span>Placement</span>
-            <strong>{session.placement.facility_name ?? "Placement record"}</strong>
-            {session.placement.ward?.name && <small>{session.placement.ward.name}</small>}
-          </div>
-          <DetailNote title="Topics covered" value={session.topics.length ? session.topics.map(formatSessionType).join(", ") : "Not recorded"} />
-          <DetailNote title="What was covered" value={session.what_was_covered ?? "Not recorded"} />
-          <DetailNote title="Feedback given" value={session.feedback_given ?? "Not recorded"} />
-          <DetailNote title="Follow-up" value={followUp} />
-          <p className="student-session-modal__submitted">Submitted {new Date(session.submitted_at).toLocaleString("en-GB")}</p>
-        </div>
-
-        <footer className="student-session-modal__footer">
-          <p><MessageCircle size={14} /> Private learning record. Do not add patient-identifiable information.</p>
-          <div>
-            <Button variant="tertiary" onClick={onClose}>Close</Button>
-            <Button size="sm" onClick={onOpenPlacement}>View placement <ArrowRight size={15} /></Button>
-          </div>
-        </footer>
-      </section>
-    </div>
-  );
-}
-
-function DetailNote({ title, value }: { title: string; value: string }) {
-  return <div className="student-session-modal__note"><h3>{title}</h3><p>{value}</p></div>;
-}
-
-function SessionEmptyState() {
-  return (
-    <div className="student-session-empty">
-      <span className="student-session-empty__icon">
-        <MessageCircle size={22} />
-      </span>
-
-      <div>
-        <p className="student-kicker">No activity yet</p>
-
-        <h3>No mentorship sessions recorded</h3>
-
-        <p>
-          Your mentor&apos;s session records will appear here once
-          they are submitted.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SessionSearchEmpty({
-  query,
-  onClear,
-}: {
-  query: string;
-  onClear: () => void;
-}) {
-  return (
-    <div className="student-session-empty">
-      <span className="student-session-empty__icon">
-        <Search size={21} />
-      </span>
-
-      <div>
-        <p className="student-kicker">No matches</p>
-
-        <h3>No sessions match &quot;{query}&quot;</h3>
-
-        <p>Try another search term or clear the current search.</p>
-
-        <button
-          type="button"
-          className="student-session-clear"
-          onClick={onClear}
-        >
-          Clear search
-        </button>
-      </div>
-    </div>
+          <p className="ss-submitted">Submitted {new Date(session.submitted_at).toLocaleString("en-GB")}</p>
+        </>
+      )}
+    </Modal>
   );
 }

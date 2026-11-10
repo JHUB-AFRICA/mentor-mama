@@ -1,20 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import {
+  Archive,
   ArrowLeft,
+  BedDouble,
   Building2,
   CalendarDays,
   Check,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
+  ClipboardList,
+  Clock,
   FileText,
+  GraduationCap,
+  Hash,
+  Hospital,
+  Mail,
+  MessageSquarePlus,
   MoreHorizontal,
+  Pause,
+  Play,
   Plus,
   Search,
+  Send,
   ShieldCheck,
   SlidersHorizontal,
   Upload,
+  UserRound,
   Users,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@mentormama/ui";
 import { useToast } from "../../components/ToastProvider";
@@ -59,7 +73,32 @@ import {
 } from "../programme-admin/ProgrammeAdminFrame";
 import { FacilityWorkspaceFrame } from "../nurse-manager/FacilityWorkspaceFrame";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  DetailList,
+  Field as KitField,
+  FieldRow,
+  Modal,
+  SelectInput,
+  TextArea,
+  TextInput,
+} from "../../components/kit";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  AdminTabs,
+  EmptyState,
+  SearchField,
+  SelectField,
+  StatusPill,
+  Toolbar,
+  type PillTone,
+} from "../programme-admin/ui/AdminKit";
+import { isPlacementClosed, placementJourney } from "./placementJourney";
 import "./placement-management.css";
+import "./placement-admin.css";
+import "./placement-admin-detail.css";
 
 type LifecycleAction = "pause" | "resume" | "complete" | "withdraw" | "archive";
 
@@ -278,16 +317,19 @@ export function ProgrammeAdminPlacementManagement({
       setBusy(false);
     }
   }
-  if (selected)
+  const adminView = user.role === "program_admin" && !managerMode;
+  const adminCreating = adminView && selected?.id === "new";
+  if (selected && !adminCreating) {
+    const Detail = adminView ? ProgrammeAdminPlacementDetail : PlacementDetail;
     return (
-      <PlacementDetail
+      <Detail
         user={user}
         managerMode={managerMode}
         placement={selected}
         options={options}
         canCreate={canCreate}
-        canWard={Boolean(user.capabilities.allocate_ward)}
-        canMentor={Boolean(user.capabilities.assign_mentor)}
+        canWard={Boolean(user.capabilities.allocate_ward) && !isPlacementClosed(selected.state)}
+        canMentor={Boolean(user.capabilities.assign_mentor) && !isPlacementClosed(selected.state)}
         canRelease={Boolean(user.capabilities.release_placement)}
         canPause={Boolean(user.capabilities.pause_placement)}
         canResume={Boolean(user.capabilities.resume_placement)}
@@ -331,6 +373,291 @@ export function ProgrammeAdminPlacementManagement({
         }
       />
     );
+  }
+  if (user.role === "program_admin") {
+    const newPlacement = () =>
+      setSelected({
+        id: "new",
+        state: "draft",
+        planned_start: "",
+        planned_end: "",
+        actual_end: null,
+        active_mentor_id: null,
+      });
+    const toOptions = (items: Array<[string, string]>) =>
+      items.map(([value, label]) => ({ value, label }));
+    const facilityOptions: Array<[string, string]> = [
+      ["", "All facilities"],
+      ...Array.from(
+        new Map(
+          (options?.wards ?? []).map((item) => [
+            item.facility_id,
+            item.facility_name,
+          ]),
+        ).entries(),
+      ),
+    ];
+    return (
+      <PlacementWorkspaceFrame user={user} title="Placements" onError={onError}>
+        <AdminPage className="placement-management-page">
+          {notice && (
+            <Notice message={notice} onDismiss={() => setNotice("")} />
+          )}
+          <AdminPageHeader
+            eyebrow="Placements"
+            title="Placements"
+            description="See where each student is in the placement lifecycle and resolve the next operational handoff."
+            actions={
+              canCreate && (
+                <AdminButton icon={<Plus />} onClick={newPlacement}>
+                  New placement
+                </AdminButton>
+              )
+            }
+          />
+          {!adminCreating && (
+          <>
+          <AdminTabs
+            label="Placement lifecycle"
+            value={stateFilter}
+            onChange={(value) => {
+              setStateFilter(value);
+              setPage(1);
+            }}
+            tabs={placementLifecycleTabs.map((tab) => ({
+              value: tab.value,
+              label: tab.label,
+              count: placementTabCount(tab.value, dashboardCounts, pagination),
+            }))}
+          />
+          <Toolbar filters={3}>
+            <SearchField
+              label="Search placements"
+              placeholder="Search student, mentor, cohort, facility or ward"
+              value={searchInput}
+              onChange={setSearchInput}
+            />
+            <SelectField
+              label="Filter by status"
+              value={stateFilter}
+              onChange={(value) => {
+                setStateFilter(value);
+                setPage(1);
+              }}
+              options={toOptions(placementStateOptions)}
+            />
+            <SelectField
+              label="Filter by cohort"
+              value={cohortFilter}
+              onChange={(value) => {
+                setCohortFilter(value);
+                setPage(1);
+              }}
+              options={toOptions([
+                ["", "All cohorts"],
+                ...(options?.cohorts.map(
+                  (item) => [item.id, item.name] as [string, string],
+                ) ?? []),
+              ])}
+            />
+            <SelectField
+              label="Filter by facility"
+              value={facilityFilter}
+              onChange={(value) => {
+                setFacilityFilter(value);
+                setPage(1);
+              }}
+              options={toOptions(facilityOptions)}
+            />
+            <span className="pm-toolbar-actions">
+              <button
+                type="button"
+                className="pa-filter-btn"
+                aria-expanded={filtersOpen}
+                aria-pressed={filtersOpen}
+                onClick={() => setFiltersOpen((value) => !value)}
+              >
+                <SlidersHorizontal size={16} />
+                More filters
+                {activeFilterCount > 0 && (
+                  <span className="pa-tab__count">{activeFilterCount}</span>
+                )}
+              </button>
+              {hasFilters && (
+                <AdminButton variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear
+                </AdminButton>
+              )}
+            </span>
+          </Toolbar>
+          {filtersOpen && (
+            <div className="pm-filters-extra">
+              <SelectField
+                label="Filter by institution"
+                value={institutionFilter}
+                onChange={(value) => {
+                  setInstitutionFilter(value);
+                  setPage(1);
+                }}
+                options={toOptions([
+                  ["", "All institutions"],
+                  ...Array.from(
+                    new Map(
+                      (options?.cohorts ?? []).map((item) => [
+                        item.institution_id,
+                        item.institution_name,
+                      ]),
+                    ).entries(),
+                  ),
+                ])}
+              />
+              <SelectField
+                label="Filter by ward"
+                value={wardFilter}
+                onChange={(value) => {
+                  setWardFilter(value);
+                  setPage(1);
+                }}
+                options={toOptions([
+                  ["", "All wards"],
+                  ...(options?.wards.map(
+                    (item) => [item.id, item.name] as [string, string],
+                  ) ?? []),
+                ])}
+              />
+              <SelectField
+                label="Filter by mentor"
+                value={mentorFilter}
+                onChange={(value) => {
+                  setMentorFilter(value);
+                  setPage(1);
+                }}
+                options={toOptions([
+                  ["", "All mentors"],
+                  ...(options?.mentors.map(
+                    (item) => [item.id, item.name] as [string, string],
+                  ) ?? []),
+                ])}
+              />
+            </div>
+          )}
+          <section className="pa-table-wrap" aria-label="Placements register">
+            {loading ? (
+              <div className="pm-skeleton">
+                {Array.from({ length: 5 }, (_, index) => (
+                  <div key={index} className="animate-pulse" />
+                ))}
+              </div>
+            ) : rows.length === 0 ? (
+              <EmptyState
+                icon={<FileText size={22} />}
+                title={hasFilters ? "No placements match" : "No placements yet"}
+                text={
+                  hasFilters
+                    ? "Try a different search or filter, or clear the current filters."
+                    : "Create the first placement from an enrolled student and cohort."
+                }
+                action={
+                  !hasFilters && canCreate ? (
+                    <AdminButton size="sm" onClick={newPlacement}>
+                      Create placement
+                    </AdminButton>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <>
+              <ul className="pm-cards" aria-label="Placements">
+                {rows.map((placement) => (
+                  <AdminPlacementCard
+                    key={placement.id}
+                    placement={placement}
+                    onOpen={() => void open(placement.id)}
+                  />
+                ))}
+              </ul>
+              <div className="pa-table-scroll pm-table-scroll">
+                <table className="pa-table pm-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Student / cohort</th>
+                      <th scope="col">Facility</th>
+                      <th scope="col">Ward</th>
+                      <th scope="col">Mentor</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Next step</th>
+                      <th scope="col">Updated</th>
+                      <th scope="col">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((placement) => (
+                      <AdminPlacementRow
+                        key={placement.id}
+                        placement={placement}
+                        onOpen={() => void open(placement.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
+            {pagination && rows.length > 0 && (
+              <div className="pa-table-footer">
+                <span>
+                  Showing {(pagination.page - 1) * pagination.page_size + 1}–
+                  {Math.min(
+                    pagination.page * pagination.page_size,
+                    pagination.total_count,
+                  )}{" "}
+                  of {pagination.total_count} placements
+                </span>
+                <span className="pm-pager">
+                  <AdminButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={!pagination.has_previous}
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  >
+                    Previous
+                  </AdminButton>
+                  <span>
+                    Page {pagination.page} of {pagination.total_pages}
+                  </span>
+                  <AdminButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={!pagination.has_next}
+                    onClick={() => setPage((value) => value + 1)}
+                  >
+                    Next
+                  </AdminButton>
+                </span>
+              </div>
+            )}
+          </section>
+          </>
+          )}
+          {adminCreating && (
+            <NewPlacementModal
+              options={options}
+              canCreate={canCreate}
+              busy={busy}
+              onError={onError}
+              onClose={() => {
+                setSelected(null);
+                routerNavigate(placementBasePath);
+              }}
+              onCreate={(input) => run(() => createPlacement(input))}
+            />
+          )}
+        </AdminPage>
+      </PlacementWorkspaceFrame>
+    );
+  }
   return (
     <PlacementWorkspaceFrame user={user} title="Placements" onError={onError}>
       <div className="placement-management-page text-navy">
@@ -629,6 +956,118 @@ export function ProgrammeAdminPlacementManagement({
   );
 }
 
+function adminStatusTone(state: PlacementState): PillTone {
+  if (state === "active") return "success";
+  if (state === "awaiting_student" || state === "paused") return "warning";
+  if (state === "withdrawn") return "danger";
+  if (state === "draft" || state === "scheduled") return "info";
+  if (state === "orientation" || state === "induction") return "teal";
+  return "neutral";
+}
+
+function AdminPlacementRow({
+  placement,
+  onOpen,
+}: {
+  placement: Placement;
+  onOpen: () => void;
+}) {
+  const studentName = placement.student?.name ?? "Student pending";
+  return (
+    <tr className="pm-row" onClick={onOpen}>
+      <td>
+        <div className="pa-cell-title">
+          <div className="min-w-0">
+            <button
+              type="button"
+              className="pm-name"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen();
+              }}
+            >
+              {studentName}
+            </button>
+            <small>{placement.cohort_name ?? "Cohort pending"}</small>
+          </div>
+        </div>
+      </td>
+      <td>{placement.facility_name ?? "Not allocated"}</td>
+      <td>{placement.ward?.name ?? "Pending"}</td>
+      <td>{placement.mentor?.name ?? "Pending"}</td>
+      <td>
+        <StatusPill tone={adminStatusTone(placement.state)}>
+          {placementStateLabel(placement.state)}
+        </StatusPill>
+      </td>
+      <td>
+        <span className="pm-next">{placementNextStep(placement.state)}</span>
+      </td>
+      <td className="whitespace-nowrap">
+        {formatShortDate(placement.planned_start)}
+      </td>
+      <td className="text-right">
+        <button
+          type="button"
+          className="pm-icon-btn"
+          aria-label={`Open placement for ${studentName}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        >
+          <MoreHorizontal size={16} aria-hidden="true" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function AdminPlacementCard({
+  placement,
+  onOpen,
+}: {
+  placement: Placement;
+  onOpen: () => void;
+}) {
+  const studentName = placement.student?.name ?? "Student pending";
+  return (
+    <li>
+      <button
+        type="button"
+        className="pm-card"
+        onClick={onOpen}
+        aria-label={`Open placement for ${studentName}`}
+      >
+        <span className="pm-card__top">
+          <span className="pm-card__who">
+            <strong>{studentName}</strong>
+            <small>{placement.cohort_name ?? "Cohort pending"}</small>
+          </span>
+          <StatusPill tone={adminStatusTone(placement.state)}>
+            {placementStateLabel(placement.state)}
+          </StatusPill>
+        </span>
+        <span className="pm-card__next">
+          <ChevronRight size={14} aria-hidden="true" />
+          Next: {placementNextStep(placement.state)}
+        </span>
+        <span className="pm-card__meta">
+          <span>
+            <Hospital size={13} aria-hidden="true" />
+            {placement.facility_name ?? "Not allocated"}
+            {placement.ward?.name ? ` · ${placement.ward.name}` : ""}
+          </span>
+          <span>
+            <UserRound size={13} aria-hidden="true" />
+            {placement.mentor?.name ?? "Mentor pending"}
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
 function PlacementHeader({ children }: { children: React.ReactNode }) {
   return (
     <span className="font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
@@ -636,17 +1075,6 @@ function PlacementHeader({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
-const lifecycleStates = [
-  "draft",
-  "scheduled",
-  "awaiting_student",
-  "orientation",
-  "induction",
-  "active",
-  "completed",
-  "archived",
-];
-
 const placementLifecycleTabs = [
   { value: "", label: "All" },
   { value: "active", label: "Active" },
@@ -709,50 +1137,44 @@ function placementStatusTone(state: PlacementState) {
   return "placement-status-pill--neutral";
 }
 function LifecycleStepper({ state }: { state: string }) {
-  const states =
-    state === "paused"
-      ? [...lifecycleStates.slice(0, 6), "paused", ...lifecycleStates.slice(6)]
-      : state === "withdrawn"
-        ? [...lifecycleStates, "withdrawn"]
-        : lifecycleStates;
-  const current = states.indexOf(state);
-  const completed = (index: number) =>
-    index < current ||
-    state === "archived" ||
-    (state === "completed" && states[index] === "completed");
+  const journey = placementJourney(state, "staff");
   return (
     <section
       aria-label="Placement lifecycle"
       className="mt-7 overflow-x-auto border-y border-border py-6"
     >
-      <div className="flex min-w-[46rem] items-start">
-        {states.map((item, index) => {
-          const done = completed(index);
-          const active = done || index === current;
-          const terminal = item === "withdrawn";
+      <ol className="flex min-w-[46rem] items-start">
+        {journey.stages.map((stage, index) => {
+          const done = stage.status === "done";
+          const active = done || stage.status !== "upcoming";
+          const stopped = stage.status === "stopped";
+          const attention = stage.status === "attention";
+          const isCurrent = stage.status === "current" || attention || stopped;
           return (
-            <div
-              key={item}
+            <li
+              key={stage.key}
+              aria-current={isCurrent ? "step" : undefined}
               className="relative flex min-w-20 flex-1 flex-col items-center text-center"
             >
               <span
                 aria-hidden="true"
-                className={`absolute left-1/2 top-3 h-px w-full ${index < states.length - 1 && done ? (terminal ? "bg-error" : "bg-teal") : index < states.length - 1 ? "bg-border" : "bg-transparent"}`}
+                className={`absolute left-1/2 top-3 h-px w-full ${index < journey.stages.length - 1 && done ? "bg-teal" : index < journey.stages.length - 1 ? "bg-border" : "bg-transparent"}`}
               />
               <span
-                className={`relative z-10 flex size-6 items-center justify-center rounded-full border font-body text-xs font-bold ${active ? (terminal ? "border-error bg-error text-white" : "border-teal bg-teal text-white") : "border-border bg-white text-navy-muted"}`}
+                className={`relative z-10 flex size-6 items-center justify-center rounded-full border font-body text-xs font-bold ${active ? (stopped ? "border-error bg-error text-white" : attention ? "border-warning bg-warning text-white" : "border-teal bg-teal text-white") : "border-border bg-white text-navy-muted"}`}
               >
                 {done ? <Check size={14} strokeWidth={3} /> : index + 1}
               </span>
               <p
-                className={`relative z-10 mt-3 max-w-20 font-body text-[0.68rem] font-bold capitalize leading-4 ${index === current ? (terminal ? "text-error" : "text-navy") : "text-navy-muted"}`}
+                className={`relative z-10 mt-3 max-w-20 font-body text-[0.68rem] font-bold leading-4 ${isCurrent ? (stopped ? "text-error" : "text-navy") : "text-navy-muted"}`}
               >
-                {item.replaceAll("_", " ")}
+                {stage.label}
+                <span className="sr-only">{done ? " (complete)" : isCurrent ? " (current)" : " (upcoming)"}</span>
               </p>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </section>
   );
 }
@@ -2734,6 +3156,727 @@ function PlacementDetail({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Programme Admin: new placement modal, lifecycle stepper and detail  */
+/* ------------------------------------------------------------------ */
+
+function NewPlacementModal({
+  options,
+  canCreate,
+  busy,
+  onClose,
+  onCreate,
+  onError,
+}: {
+  options: PlacementOptions | null;
+  canCreate: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (input: {
+    cohort_id: string;
+    student_id: string;
+    planned_start: string;
+    planned_end: string;
+  }) => Promise<boolean>;
+  onError: (message: string) => void;
+}) {
+  const [cohort, setCohort] = useState("");
+  const [student, setStudent] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [students, setStudents] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const dateError = start && end && end < start ? "The planned end date must be on or after the start date." : "";
+  const missing = !cohort || !student || !start || !end;
+  async function loadStudents(id: string) {
+    setCohort(id);
+    setStudent("");
+    setStudents([]);
+    if (!id) return;
+    setLoadingStudents(true);
+    try {
+      setStudents(await getCohortStudents(id));
+    } catch {
+      setStudents([]);
+      onError("We could not load the enrolled students for that cohort.");
+    } finally {
+      setLoadingStudents(false);
+    }
+  }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSubmitted(true);
+    if (!canCreate || missing || dateError) return;
+    await onCreate({ cohort_id: cohort, student_id: student, planned_start: start, planned_end: end });
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!busy}
+      size="md"
+      icon={<CalendarDays />}
+      title="New placement"
+      description="Choose the enrolled student and the dates that define this placement. Ward and mentor can be added after creation."
+      footer={
+        <>
+          <AdminButton variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </AdminButton>
+          <AdminButton type="submit" form="new-placement-form" disabled={busy || !canCreate} aria-busy={busy}>
+            {busy ? "Creating…" : "Create placement"}
+          </AdminButton>
+        </>
+      }
+    >
+      <form id="new-placement-form" className="pmd-form" onSubmit={(event) => void submit(event)} noValidate>
+        <KitField label="Cohort" required error={submitted && !cohort ? "Choose a cohort." : undefined}>
+          <SelectInput value={cohort} onChange={(event) => void loadStudents(event.target.value)}>
+            <option value="">Choose cohort</option>
+            {options?.cohorts.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </SelectInput>
+        </KitField>
+        <KitField
+          label="Student"
+          required
+          hint={cohort && !loadingStudents && !students.length ? "No enrolled students were found in this cohort." : undefined}
+          error={submitted && cohort && !student ? "Choose an enrolled student." : undefined}
+        >
+          <SelectInput value={student} disabled={!cohort || loadingStudents} onChange={(event) => setStudent(event.target.value)}>
+            <option value="">{loadingStudents ? "Loading students…" : "Choose enrolled student"}</option>
+            {students.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </SelectInput>
+        </KitField>
+        <FieldRow>
+          <KitField label="Planned start" required error={submitted && !start ? "Choose a start date." : undefined}>
+            <TextInput type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+          </KitField>
+          <KitField label="Planned end" required error={dateError || (submitted && !end ? "Choose an end date." : undefined)}>
+            <TextInput type="date" value={end} min={start || undefined} onChange={(event) => setEnd(event.target.value)} />
+          </KitField>
+        </FieldRow>
+        {!canCreate && <p className="pmd-callout pmd-callout--warn">Your role cannot create placements.</p>}
+      </form>
+    </Modal>
+  );
+}
+
+function PlacementStepper({ state }: { state: PlacementState }) {
+  const journey = placementJourney(state, "staff");
+  const steps = journey.stages;
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const node = listRef.current?.querySelector<HTMLElement>('[aria-current="step"]');
+    // Bring the current step into view on narrow screens without scrolling the page.
+    const list = listRef.current;
+    if (node && list && list.scrollWidth > list.clientWidth) {
+      list.scrollLeft = Math.max(0, node.offsetLeft - list.clientWidth / 2 + node.clientWidth / 2);
+    }
+  }, [state]);
+  return (
+    <nav aria-label="Placement lifecycle" className="pmd-stepper-wrap">
+      <ol className="pmd-stepper" ref={listRef}>
+        {steps.map((step, index) => {
+          const done = step.status === "done";
+          const isCurrent = step.status === "current" || step.status === "attention" || step.status === "stopped";
+          const tone = step.status === "stopped" ? "danger" : step.status === "attention" ? "warn" : "ok";
+          return (
+            <li
+              key={step.key}
+              className={`pmd-step is-${done ? "done" : isCurrent ? "current" : "todo"} is-${tone}`}
+              aria-current={isCurrent ? "step" : undefined}
+            >
+              <span className="pmd-step__dot" aria-hidden="true">
+                {done ? <Check /> : step.status === "attention" ? <Pause /> : step.status === "stopped" ? <XCircle /> : index + 1}
+              </span>
+              <span className="pmd-step__label">
+                {step.label}
+                <span className="sr-only">{done ? " (complete)" : isCurrent ? " (current)" : " (upcoming)"}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+type DialogKind = "pause" | "withdraw" | "reassign" | "complete" | "archive" | "note" | null;
+
+function ProgrammeAdminPlacementDetail({
+  user,
+  placement,
+  options,
+  canWard,
+  canMentor,
+  canRelease,
+  canPause,
+  canResume,
+  canComplete,
+  canArchive,
+  canWithdraw,
+  busy,
+  onBack,
+  onError,
+  notice,
+  onDismissNotice,
+  onWard,
+  onMentor,
+  onRelease,
+  onReminder,
+  onNote,
+  onLifecycle,
+}: ComponentProps<typeof PlacementDetail>) {
+  const [ward, setWard] = useState(placement.ward?.id ?? "");
+  const [mentor, setMentor] = useState(placement.mentor?.id ?? "");
+  const [transitions, setTransitions] = useState<TransitionResponse | null>(null);
+  const [activity, setActivity] = useState<PlacementActivityEntry[]>([]);
+  const [progress, setProgress] = useState<PlacementProgress | null>(null);
+  const [notes, setNotes] = useState<PlacementNote[]>([]);
+  const [dialog, setDialog] = useState<DialogKind>(null);
+  const [reason, setReason] = useState("");
+  const [reasonNote, setReasonNote] = useState("");
+  const [noteBody, setNoteBody] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [reminderSent, setReminderSent] = useState(false);
+
+  useEffect(() => {
+    void getTransitions(placement.id)
+      .then(setTransitions)
+      .catch((cause) => {
+        setTransitions(null);
+        onError(cause instanceof ApiError ? cause.message : "We could not load the available placement actions.");
+      });
+    void getPlacementActivity(placement.id)
+      .then(setActivity)
+      .catch((cause) => {
+        setActivity([]);
+        onError(cause instanceof ApiError ? cause.message : "We could not load placement activity.");
+      });
+  }, [placement.id, placement.state, onError]);
+  useEffect(() => {
+    void getPlacementProgress(placement.id)
+      .then(setProgress)
+      .catch(() => setProgress(null));
+    void getPlacementNotes(placement.id)
+      .then(setNotes)
+      .catch(() => setNotes([]));
+  }, [placement.id]);
+
+  const available = transitions?.available ?? [];
+  const blocked = transitions?.blocked ?? [];
+  const blockers = blocked.flatMap((item) => item.reasons).slice(0, 4);
+  const show = (target: PlacementState, allowed: boolean) => allowed && available.includes(target);
+  const studentName = placement.student?.name ?? "Placement";
+
+  function closeDialog() {
+    setDialog(null);
+    setReason("");
+    setReasonNote("");
+    setNoteBody("");
+  }
+
+  type Act = { key: string; label: string; icon: React.ReactNode; danger?: boolean; disabled?: boolean; run: () => void };
+  const primaryCandidates: Act[] = [];
+  if (show("awaiting_student", canRelease))
+    primaryCandidates.push({ key: "invite", label: "Send placement invitation", icon: <Send />, run: onRelease });
+  if (placement.state === "orientation" && canRelease)
+    primaryCandidates.push({
+      key: "reminder",
+      label: reminderSent ? "Reminder sent" : "Send reminder",
+      icon: <Mail />,
+      disabled: reminderSent,
+      run: () => {
+        void onReminder().then((sent) => {
+          if (sent) setReminderSent(true);
+        });
+      },
+    });
+  if (show("active", canResume))
+    primaryCandidates.push({ key: "resume", label: "Resume placement", icon: <Play />, run: () => onLifecycle("resume") });
+  if (show("completed", canComplete))
+    primaryCandidates.push({ key: "complete", label: "Complete placement", icon: <CheckCircle2 />, run: () => setDialog("complete") });
+  if (show("archived", canArchive))
+    primaryCandidates.push({ key: "archive", label: "Archive placement", icon: <Archive />, run: () => setDialog("archive") });
+  const primary = primaryCandidates[0];
+  const secondary: Act[] = primaryCandidates.slice(1);
+  if (show("paused", canPause))
+    secondary.push({ key: "pause", label: "Pause placement", icon: <Pause />, run: () => setDialog("pause") });
+  if (show("withdrawn", canWithdraw))
+    secondary.push({ key: "withdraw", label: "Withdraw placement", icon: <XCircle />, danger: true, run: () => setDialog("withdraw") });
+
+  const nextStep =
+    primary?.label ??
+    (placement.state === "orientation"
+      ? "Await induction completion"
+      : blocked.length
+        ? "Resolve remaining requirements"
+        : "No action available right now");
+
+  async function saveNote() {
+    if (!noteBody.trim()) return;
+    setNoteBusy(true);
+    try {
+      await onNote(noteBody.trim());
+      setNotes((current) => [
+        { id: `local-${Date.now()}`, body: noteBody.trim(), author: "You", created_at: new Date().toISOString() },
+        ...current,
+      ]);
+      closeDialog();
+    } catch {
+      onError("We could not save that note. Please try again.");
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  const reassigning = Boolean(placement.mentor?.id && mentor && placement.mentor.id !== mentor);
+  const eventLabel = `${activity.length} event${activity.length === 1 ? "" : "s"}`;
+  const reasonRequired = dialog === "pause" || dialog === "withdraw" || dialog === "reassign";
+  const reasonInvalid =
+    !reason.trim() || (dialog === "pause" && reason === "other" && !reasonNote.trim());
+
+  function submitReason() {
+    if (dialog === "reassign") {
+      if (mentor) onMentor(mentor, reason.trim());
+    } else if (dialog === "pause" || dialog === "withdraw") {
+      onLifecycle(dialog, reason.trim(), dialog === "pause" ? reasonNote.trim() : undefined);
+    }
+    closeDialog();
+  }
+
+  return (
+    <PlacementWorkspaceFrame user={user} title="Placement detail" onError={onError}>
+      <AdminPage className="pmd">
+        {notice && <Notice message={notice} onDismiss={onDismissNotice} />}
+        <div className="pmd-sticky">
+          <button type="button" onClick={onBack} className="pmd-back">
+            <ArrowLeft size={16} aria-hidden="true" /> All placements
+          </button>
+          <AdminPageHeader
+            eyebrow={`Placement · ${placement.cohort_name ?? "Cohort pending"}`}
+            title={studentName}
+            meta={
+              <>
+                <StatusPill tone={adminStatusTone(placement.state)}>
+                  <span className="pmd-cap">{placement.state.replaceAll("_", " ")}</span>
+                </StatusPill>
+                <span>
+                  <CalendarDays aria-hidden="true" size={14} /> {formatShortDate(placement.planned_start)} – {formatShortDate(placement.planned_end)}
+                </span>
+                {placement.facility_name && (
+                  <span>
+                    <Hospital aria-hidden="true" size={14} /> {placement.facility_name}
+                  </span>
+                )}
+                {placement.completed_at && <span>Completed {formatLifecycleDate(placement.completed_at)}</span>}
+                {placement.archived_at && <span>Archived {formatLifecycleDate(placement.archived_at)}</span>}
+                {placement.withdrawal_reason && <span>Withdrawal reason: {formatLifecycleReason(placement.withdrawal_reason)}</span>}
+              </>
+            }
+            actions={
+              <>
+                <AdminButton variant="secondary" icon={<MessageSquarePlus />} disabled={busy} onClick={() => setDialog("note")}>
+                  Add note
+                </AdminButton>
+                {primary && (
+                  <AdminButton icon={primary.icon} disabled={busy || primary.disabled} onClick={primary.run}>
+                    {primary.label}
+                  </AdminButton>
+                )}
+              </>
+            }
+          />
+        </div>
+
+        <PlacementStepper state={placement.state} />
+
+        <div className="pmd-grid">
+          <div className="pmd-col">
+            <AdminCard title="Placement details" description="Who, where and when for this placement.">
+              <DetailList
+                items={[
+                  { label: "Student", value: placement.student?.name ?? "Pending", icon: <GraduationCap /> },
+                  { label: "Email", value: placement.student?.email ?? "Pending", icon: <Mail /> },
+                  { label: "Registration number", value: placement.student?.registration_number ?? "Pending", icon: <Hash /> },
+                  { label: "Cohort", value: placement.cohort_name ?? "Pending", icon: <Users /> },
+                  { label: "Institution", value: placement.institution_name ?? "Pending", icon: <Building2 /> },
+                  { label: "Facility", value: placement.facility_name ?? "Pending", icon: <Hospital /> },
+                  {
+                    label: "Ward",
+                    value: placement.ward ? `${placement.ward.name} · ${placement.ward.occupied}/${placement.ward.capacity}` : "Pending",
+                    icon: <BedDouble />,
+                  },
+                  { label: "Mentor", value: placement.mentor?.name ?? "Pending", icon: <UserRound /> },
+                  {
+                    label: "Planned window",
+                    value: `${formatShortDate(placement.planned_start)} → ${formatShortDate(placement.planned_end)}`,
+                    icon: <CalendarDays />,
+                  },
+                  {
+                    label: placement.actual_end ? "Effective end (extended)" : "Effective end",
+                    value: formatShortDate(placement.actual_end ?? placement.planned_end),
+                    icon: <Clock />,
+                  },
+                ]}
+              />
+            </AdminCard>
+
+            <AdminCard title="Setup and ownership" description="Allocate the operational context before the placement moves forward.">
+              <div className="pmd-form">
+                <FieldRow>
+                  <label className="ui-field">
+                    <span className="ui-label">Ward</span>
+                    <SelectInput disabled={!canWard || busy} value={ward} onChange={(event) => setWard(event.target.value)}>
+                      <option value="">Choose ward</option>
+                      {options?.wards.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.facility_name} · {item.name} ({item.capacity})
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </label>
+                  <label className="ui-field">
+                    <span className="ui-label">Mentor</span>
+                    <SelectInput disabled={!canMentor || busy} value={mentor} onChange={(event) => setMentor(event.target.value)}>
+                      <option value="">Choose mentor</option>
+                      {options?.mentors.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} · {item.email}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </label>
+                </FieldRow>
+                {((canWard && ward) || (canMentor && mentor)) && (
+                  <div className="pmd-actions-row">
+                    {canWard && ward && (
+                      <AdminButton size="sm" variant="secondary" disabled={busy || ward === placement.ward?.id} onClick={() => onWard(ward)}>
+                        Save ward
+                      </AdminButton>
+                    )}
+                    {canMentor && mentor && (
+                      <AdminButton
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy || mentor === placement.mentor?.id}
+                        onClick={() => (reassigning ? setDialog("reassign") : onMentor(mentor))}
+                      >
+                        {reassigning ? "Request reassignment" : "Save mentor"}
+                      </AdminButton>
+                    )}
+                  </div>
+                )}
+              </div>
+            </AdminCard>
+
+            <AdminCard
+              title="History"
+              description="A clear record of who changed the placement and when."
+              action={<StatusPill tone="neutral" dot={false}>{eventLabel}</StatusPill>}
+            >
+              {activity.length ? (
+                <ol className="pmd-timeline">
+                  {activity.map((entry) => (
+                    <li key={entry.id}>
+                      <span className="pmd-timeline__dot" aria-hidden="true" />
+                      <div className="pmd-timeline__head">
+                        <strong>{formatActivityAction(entry.action)}</strong>
+                        <time dateTime={entry.occurred_at}>{formatActivityDate(entry.occurred_at)}</time>
+                      </div>
+                      <p>
+                        {entry.actor} · {entry.actor_role.replaceAll("_", " ")}
+                      </p>
+                      {entry.override_reason && <p className="pmd-timeline__reason">Reason: {entry.override_reason}</p>}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <EmptyState icon={<FileText size={22} />} title="No placement activity has been recorded yet." />
+              )}
+            </AdminCard>
+          </div>
+
+          <div className="pmd-col">
+            <AdminCard title="Next step" description="Actions depend on the placement state and your role.">
+              <div className="pmd-next">
+                <div className="pmd-next__row">
+                  <StatusPill tone={adminStatusTone(placement.state)}>{placementStateLabel(placement.state)}</StatusPill>
+                  <strong>{nextStep}</strong>
+                </div>
+                <div className="pmd-progress">
+                  <div className="pmd-progress__head">
+                    <span>Overall placement progress</span>
+                    <strong>{progress ? `${progress.overall_percentage ?? 0}%` : "—"}</strong>
+                  </div>
+                  <div
+                    className="pmd-progress__track"
+                    role="progressbar"
+                    aria-label="Overall placement progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progress?.overall_percentage ?? 0}
+                  >
+                    <span style={{ width: `${progress?.overall_percentage ?? 0}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <p className="pmd-eyebrow">What is still needed</p>
+                  {blockers.length ? (
+                    <ul className="pmd-blockers">
+                      {blockers.map((item, index) => (
+                        <li key={`${item.code}-${index}`}>
+                          <CircleAlert aria-hidden="true" />
+                          <span>
+                            {item.message ?? item.code}
+                            <small>{blockerOwner(item.code)}</small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="pmd-muted">No blockers are currently recorded.</p>
+                  )}
+                </div>
+              </div>
+            </AdminCard>
+
+            <AdminCard title="More actions">
+              {secondary.length ? (
+                <div className="pmd-action-list">
+                  {secondary.map((item) => (
+                    <AdminButton
+                      key={item.key}
+                      variant="secondary"
+                      className={item.danger ? "pmd-btn-danger" : undefined}
+                      icon={item.icon}
+                      disabled={busy || item.disabled}
+                      onClick={item.run}
+                    >
+                      {item.label}
+                    </AdminButton>
+                  ))}
+                </div>
+              ) : (
+                <p className="pmd-muted">
+                  <CircleAlert aria-hidden="true" /> No other manual action is available at this stage.
+                </p>
+              )}
+            </AdminCard>
+
+            <AdminCard title="Progress evidence" description="Safe operational milestones from the placement record.">
+              <DetailList
+                items={[
+                  {
+                    label: "Orientation",
+                    value: progress?.orientation?.acknowledged ? "Acknowledged" : progress ? "Awaiting acknowledgement" : "Not available",
+                    icon: <ClipboardList />,
+                  },
+                  {
+                    label: "Induction",
+                    value: progress ? `${progress.induction.completed}/${progress.induction.total} completed` : "Not available",
+                    icon: <CheckCircle2 />,
+                  },
+                  {
+                    label: "Mentorship",
+                    value: progress ? `${progress.mentorship.sessions_logged} sessions logged` : "Not available",
+                    icon: <Users />,
+                  },
+                  {
+                    label: "Assessment",
+                    value: progress?.assessment.final_submitted ? "Final assessment submitted" : progress ? "Final assessment pending" : "Not available",
+                    icon: <FileText />,
+                  },
+                  {
+                    label: "Safeguarding",
+                    value: progress ? `${progress.safeguarding.open_concerns} open concerns` : "Not available",
+                    icon: <ShieldCheck />,
+                  },
+                ]}
+              />
+            </AdminCard>
+
+            {notes.length > 0 && (
+              <AdminCard title="Notes">
+                <ul className="pmd-notes">
+                  {notes.slice(0, 5).map((note) => (
+                    <li key={note.id}>
+                      <p>{note.body}</p>
+                      <small>
+                        {note.author} · {formatActivityDate(note.created_at)}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              </AdminCard>
+            )}
+          </div>
+        </div>
+
+        {(dialog === "complete" || dialog === "archive") && (
+          <Modal
+            open
+            onClose={closeDialog}
+            size="sm"
+            icon={dialog === "complete" ? <CheckCircle2 /> : <Archive />}
+            title={dialog === "complete" ? "Complete this placement?" : "Archive this placement?"}
+            description={
+              dialog === "complete"
+                ? "This records the placement as complete once the required milestones are satisfied."
+                : "This moves the completed placement into the archive. Archived records are retained for governance and cannot be edited."
+            }
+            footer={
+              <>
+                <AdminButton variant="secondary" onClick={closeDialog}>
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  disabled={busy}
+                  onClick={() => {
+                    onLifecycle(dialog);
+                    closeDialog();
+                  }}
+                >
+                  {dialog === "complete" ? "Complete placement" : "Archive placement"}
+                </AdminButton>
+              </>
+            }
+          >
+            <p className="pmd-muted">You can review the history afterwards from this page.</p>
+          </Modal>
+        )}
+
+        {reasonRequired && (
+          <Modal
+            open
+            onClose={closeDialog}
+            size="md"
+            icon={dialog === "withdraw" ? <XCircle className="pmd-icon-danger" /> : dialog === "pause" ? <Pause /> : <UserRound />}
+            title={
+              dialog === "pause"
+                ? "Pause this placement?"
+                : dialog === "withdraw"
+                  ? "Withdraw this placement?"
+                  : "Reassign this mentor?"
+            }
+            description={
+              dialog === "withdraw"
+                ? "Confirm the action and record why the placement is being withdrawn."
+                : dialog === "reassign"
+                  ? "Record why the mentor assignment needs to change."
+                  : "Record why the placement is being paused."
+            }
+            footer={
+              <>
+                <AdminButton variant="secondary" onClick={closeDialog}>
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  className={dialog === "withdraw" ? "pmd-btn-solid-danger" : undefined}
+                  disabled={reasonInvalid || busy}
+                  onClick={submitReason}
+                >
+                  {dialog === "pause" ? "Pause placement" : dialog === "withdraw" ? "Withdraw placement" : "Confirm reassignment"}
+                </AdminButton>
+              </>
+            }
+          >
+            <div className="pmd-form">
+              {dialog === "withdraw" && (
+                <p className="pmd-callout pmd-callout--danger" role="note">
+                  <CircleAlert aria-hidden="true" />
+                  This removes the placement from the active workflow and cannot be undone from this screen.
+                </p>
+              )}
+              {dialog === "reassign" && (
+                <p className="pmd-callout" role="note">
+                  <CircleAlert aria-hidden="true" />
+                  The current mentor will be closed out in the assignment history and the new mentor will become responsible for future activity.
+                </p>
+              )}
+              {dialog === "reassign" ? (
+                <KitField label="Reassignment reason" required>
+                  <TextArea
+                    autoFocus
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="Why does this mentor assignment need to change?"
+                    required
+                  />
+                </KitField>
+              ) : (
+                <KitField label={dialog === "pause" ? "Pause reason" : "Withdrawal reason"} required>
+                  <SelectInput autoFocus value={reason} onChange={(event) => setReason(event.target.value)} required>
+                    <option value="">Choose a reason</option>
+                    {(dialog === "pause" ? pauseReasons : withdrawalReasons).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </KitField>
+              )}
+              {dialog === "pause" && reason === "other" && (
+                <KitField label="Explain the reason" required>
+                  <TextArea
+                    autoFocus
+                    value={reasonNote}
+                    onChange={(event) => setReasonNote(event.target.value)}
+                    placeholder="Add a short explanation for this interruption"
+                    required
+                  />
+                </KitField>
+              )}
+            </div>
+          </Modal>
+        )}
+
+        {dialog === "note" && (
+          <Modal
+            open
+            onClose={closeDialog}
+            dismissible={!noteBusy}
+            size="md"
+            icon={<MessageSquarePlus />}
+            title="Add placement note"
+            description="Add an operational note for the programme team. Avoid sensitive clinical or safeguarding details."
+            footer={
+              <>
+                <AdminButton variant="secondary" onClick={closeDialog} disabled={noteBusy}>
+                  Cancel
+                </AdminButton>
+                <AdminButton disabled={!noteBody.trim() || noteBusy} aria-busy={noteBusy} onClick={() => void saveNote()}>
+                  {noteBusy ? "Saving…" : "Save note"}
+                </AdminButton>
+              </>
+            }
+          >
+            <KitField label="Note" hint={`${noteBody.length}/2000`}>
+              <TextArea
+                autoFocus
+                value={noteBody}
+                onChange={(event) => setNoteBody(event.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="Write a short operational note"
+              />
+            </KitField>
+          </Modal>
+        )}
+      </AdminPage>
+    </PlacementWorkspaceFrame>
+  );
+}
+
 function PlacementWorkspaceFrame({
   user,
   title,
@@ -2886,4 +4029,9 @@ function formatLifecycleDate(value: string) {
 
 function formatLifecycleReason(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function placementStateLabel(state: string) {
+  const label = state.replaceAll("_", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }

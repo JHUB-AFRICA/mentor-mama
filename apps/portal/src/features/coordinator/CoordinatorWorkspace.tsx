@@ -261,7 +261,7 @@ export function CoordinatorWorkspace({
   return (
     <CoordinatorFrame
       user={user}
-      active={view === "account" ? "overview" : view}
+      active={view}
       title={title}
       onNavigate={navigateTo}
       onAccount={openAccount}

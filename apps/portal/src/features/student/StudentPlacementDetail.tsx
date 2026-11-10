@@ -1,3 +1,4 @@
+import { placementJourney, placementStateLabel } from "../placements/placementJourney";
 import {
   useEffect,
   useMemo,
@@ -64,15 +65,7 @@ function formatDate(value: string) {
 }
 
 function formatState(value: string) {
-  return (
-    {
-      active: "Active placement",
-      induction: "Induction in progress",
-      orientation: "Orientation",
-      awaiting_student: "Confirmation required",
-      paused: "Paused",
-    } as Record<string, string>
-  )[value] ?? value.replaceAll("_", " ");
+  return placementStateLabel(value, "learner");
 }
 
 function stateTone(value: string) {
@@ -93,25 +86,7 @@ function stateTone(value: string) {
 }
 
 function stageDescription(state: string) {
-  switch (state) {
-    case "awaiting_student":
-      return "Your placement has been assigned and is waiting for your acknowledgement.";
-
-    case "orientation":
-      return "Your placement has been acknowledged. Complete the required orientation before you begin.";
-
-    case "induction":
-      return "Your mentor is completing the required induction steps.";
-
-    case "active":
-      return "Your placement is active. Continue your learning, attendance and mentor sessions.";
-
-    case "paused":
-      return "This placement is currently paused. Your programme team will provide updates.";
-
-    default:
-      return "Your placement record is being prepared.";
-  }
+  return placementJourney(state, "learner").summary;
 }
 
 function getCurrentStep(state: string) {
@@ -166,12 +141,30 @@ function getCurrentStep(state: string) {
         tone: "attention" as const,
       };
 
+    case "completed":
+    case "archived":
+      return {
+        eyebrow: "Placement status",
+        title: state === "archived" ? "Placement archived" : "Placement completed",
+        description: placementJourney(state, "learner").summary,
+        label: null,
+        tone: "neutral" as const,
+      };
+
+    case "withdrawn":
+      return {
+        eyebrow: "Placement status",
+        title: "Placement withdrawn",
+        description: placementJourney(state, "learner").summary,
+        label: null,
+        tone: "attention" as const,
+      };
+
     default:
       return {
         eyebrow: "Placement status",
-        title: "Placement record",
-        description:
-          "Your placement record is currently being prepared.",
+        title: "Placement being prepared",
+        description: placementJourney(state, "learner").summary,
         label: null,
         tone: "neutral" as const,
       };
@@ -461,6 +454,10 @@ export function StudentPlacementDetail({
       return "Placement active";
     }
 
+    if (current.state === "completed") {
+      return "Placement completed";
+    }
+
     if (current.state === "induction") {
       return "Induction";
     }
@@ -544,13 +541,7 @@ export function StudentPlacementDetail({
         {/* Journey                                                        */}
         {/* -------------------------------------------------------------- */}
 
-        <PlacementJourney
-          state={current.state}
-          acknowledgementComplete={
-            acknowledgementComplete ||
-            current.state !== "awaiting_student"
-          }
-        />
+        <PlacementJourney state={current.state} />
 
         {/* -------------------------------------------------------------- */}
         {/* Current step                                                   */}
@@ -750,7 +741,7 @@ export function StudentPlacementDetail({
                     <h3>{stageLabel}</h3>
                   </div>
 
-                  {current.state === "active" ? (
+                  {current.state === "active" || current.state === "completed" ? (
                     <CheckCircle2 size={19} />
                   ) : (
                     <Clock3 size={19} />
@@ -1127,50 +1118,8 @@ export function StudentPlacementDetail({
 /* Placement Journey                                                     */
 /* ====================================================================== */
 
-function PlacementJourney({
-  state,
-  acknowledgementComplete,
-}: {
-  state: string;
-  acknowledgementComplete: boolean;
-}) {
-  const stages = [
-    {
-      key: "assigned",
-      label: "Assigned",
-    },
-    {
-      key: "confirmed",
-      label: "Acknowledged",
-    },
-    {
-      key: "orientation",
-      label: "Orientation",
-    },
-    {
-      key: "induction",
-      label: "Induction",
-    },
-    {
-      key: "active",
-      label: "Active",
-    },
-    {
-      key: "closeout",
-      label: "Close-out",
-    },
-  ];
-
-  const activeIndex =
-    state === "awaiting_student"
-      ? 1
-      : state === "orientation"
-        ? 2
-        : state === "induction"
-          ? 3
-          : state === "active"
-            ? 4
-            : 1;
+function PlacementJourney({ state }: { state: string }) {
+  const journey = placementJourney(state, "learner");
 
   return (
     <section className="placement-journey">
@@ -1184,22 +1133,21 @@ function PlacementJourney({
         </div>
 
         <span className="placement-journey__stage">
-          Step {Math.min(activeIndex + 1, stages.length)}{" "}
-          of {stages.length}
+          {journey.progressLabel}
         </span>
       </div>
 
-      <div className="placement-timeline">
-        {stages.map((stage, index) => {
-          const completed =
-            index < activeIndex ||
-            (index === 1 && acknowledgementComplete);
-
-          const current = index === activeIndex;
+      <ol className="placement-timeline" aria-label="Placement progress">
+        {journey.stages.map((stage, index) => {
+          const completed = stage.status === "done";
+          const current =
+            stage.status === "current" ||
+            stage.status === "attention";
 
           return (
-            <div
+            <li
               key={stage.key}
+              aria-current={current ? "step" : undefined}
               className={`placement-timeline__item ${
                 completed
                   ? "placement-timeline__item--complete"
@@ -1220,15 +1168,23 @@ function PlacementJourney({
 
               <div className="placement-timeline__label">
                 {stage.label}
+                <span className="sr-only">
+                  {completed
+                    ? " (complete)"
+                    : current
+                      ? " (current)"
+                      : " (upcoming)"}
+                </span>
               </div>
 
-              {index < stages.length - 1 && (
+              {index < journey.stages.length - 1 && (
                 <div className="placement-timeline__connector" />
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
+
     </section>
   );
 }

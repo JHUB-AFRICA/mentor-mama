@@ -579,7 +579,7 @@
 }
 .content-library-table {
   width: 100%;
-  min-width: 68rem;
+  min-width: 56rem;
   border-collapse: collapse;
   font:
     0.76rem/1.35 "Inter",
@@ -597,7 +597,7 @@
 .content-library-table th,
 .content-library-table td {
   border-bottom: 1px solid #e6edf2;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.85rem;
   vertical-align: middle;
 }
 .content-library-table tbody tr:hover {
@@ -634,11 +634,6 @@
 .mfa-recovery-review > div { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
 .mfa-recovery-error { color: #b42318 !important; }
 @media (max-width: 40rem) { .mfa-recovery-summary { grid-template-columns: 1fr; } }
-.content-library-table th:first-child,
-.content-library-table td:first-child {
-  width: 2.5rem;
-  padding-right: 0.2rem;
-}
 .content-library-table input[type="checkbox"] {
   width: 1rem;
   height: 1rem;

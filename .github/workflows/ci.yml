@@ -178,6 +178,7 @@ jobs:
           pnpm --filter @mentormama/portal exec playwright test
           e2e/auth-portal.spec.ts
           e2e/content-module-authoring.spec.ts
+          e2e/menta-buddy.spec.ts
           --grep-invert "programme admin can sign in"
 
       - name: Upload browser report, traces, screenshots, and video

@@ -24,7 +24,7 @@ __all__ = [
     "date_within_pause", "request_transition", "register_completion_blocker", "verify_session_write",
     "verify_assessment_write",
     "available_transitions", "blocked_transitions",
-    "assert_access", "dashboard_counts", "interruption_report", "export_rows",
+    "assert_access", "dashboard_counts", "interruption_report", "export_rows", "student_placement_summaries",
 ]
 
 
@@ -86,6 +86,37 @@ def dashboard_counts(scope) -> dict[str, int]:
         withdrawn=Count("id", filter=Q(state=State.WITHDRAWN)),
     )
     return {f"placements_{key}": value for key, value in counts.items()}
+
+
+def student_placement_summaries(student_id: UUID, *, limit: int = 5) -> list[dict]:
+    """A student's current placements as safe summary fields.
+
+    Deliberately excludes notes, withdrawal narratives, and every person's name
+    or contact detail; callers (for example the in-app assistant) may forward
+    these values to a third-party model.
+    """
+    rows = (
+        Placement.objects.filter(student_assignments__student_id=student_id, student_assignments__ended_at=None)
+        .select_related("facility", "cohort")
+        .prefetch_related("ward_assignments__ward", "mentor_assignments")
+        .distinct()
+        .order_by("-planned_start")[:limit]
+    )
+    summaries = []
+    for placement in rows:
+        ward = next((row.ward for row in placement.ward_assignments.all() if row.ended_at is None), None)
+        summaries.append({
+            "id": placement.id,
+            "state": placement.state,
+            "state_label": placement.get_state_display(),
+            "facility": placement.facility.name if placement.facility else None,
+            "ward": ward.name if ward else None,
+            "cohort": placement.cohort.name,
+            "start": placement.actual_start or placement.planned_start,
+            "end": placement.effective_end,
+            "has_mentor": any(row.ended_at is None for row in placement.mentor_assignments.all()),
+        })
+    return summaries
 
 
 def export_rows(scope):

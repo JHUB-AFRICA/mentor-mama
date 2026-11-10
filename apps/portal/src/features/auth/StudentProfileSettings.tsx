@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { CheckCircle2 } from "lucide-react";
-import { Button, Card } from "@mentormama/ui";
+import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
 import { ApiError, getStudentProfile, updateStudentProfile, type StudentProfile } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
+import { Field, FieldRow, TextInput } from "../../components/kit";
+import { AdminButton, AdminCard, StatusPill } from "../programme-admin/ui/AdminKit";
+import "./account-settings.css";
 
 const emptyProfile: StudentProfile = {
   course_name: "",
@@ -16,19 +18,25 @@ const emptyProfile: StudentProfile = {
 export function StudentProfileSettings({ onError, onComplete }: { onError: (message: string) => void; onComplete?: (profile: StudentProfile) => void }) {
   const { pushToast } = useToast();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
+  const [baseline, setBaseline] = useState<string>(JSON.stringify(emptyProfile));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const dirty = JSON.stringify(profile) !== baseline;
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadError(false);
     void getStudentProfile()
-      .then((result) => { if (active) setProfile(result); })
+      .then((result) => {
+        if (!active) return;
+        setProfile(result);
+        setBaseline(JSON.stringify(result));
+      })
       .catch(() => {
         if (!active) return;
         setLoadError(true);
@@ -60,6 +68,7 @@ export function StudentProfileSettings({ onError, onComplete }: { onError: (mess
     try {
       const updatedProfile = await updateStudentProfile(profile);
       setProfile(updatedProfile);
+      setBaseline(JSON.stringify(updatedProfile));
       setSaved(true);
       onComplete?.(updatedProfile);
       pushToast({ kind: "success", title: "Student profile saved", message: "Your profile details have been updated." });
@@ -70,5 +79,68 @@ export function StudentProfileSettings({ onError, onComplete }: { onError: (mess
     }
   }
 
-  return <Card padding="lg"><div className="max-w-2xl"><p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-teal">Student details</p><h2 className="mt-1 font-display text-h2 text-navy">Complete your programme profile</h2><p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">These details help your institution support you. They are separate from your placement record and are not shown to mentors.</p><p className="mt-3 font-body text-xs text-navy-muted">Fields marked <span className="font-semibold text-error">*</span> are needed before you can open your placement workspace.</p>{formError && <p className="mt-4 rounded-xl border border-error/20 bg-error/5 px-4 py-3 font-body text-sm text-error" role="alert">{formError}</p>}{saved && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl bg-teal-light px-4 py-3 font-body text-caption text-navy"><CheckCircle2 size={16} className="text-teal" />Student details saved.</p>}{loading ? <p className="mt-6 font-body text-sm text-navy-muted" role="status">Loading your student details…</p> : loadError ? <div className="mt-6 rounded-xl border border-error/20 bg-error/5 p-4" role="alert"><p className="font-body text-sm text-error">We couldn’t load your saved details. Your profile has not been changed.</p><Button className="mt-3" size="sm" variant="tertiary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Try again</Button></div> : <form className="mt-6 grid gap-5 sm:grid-cols-2" onSubmit={submit}><label className="block font-body text-caption font-semibold text-navy sm:col-span-2">Course or programme <span className="text-error" aria-hidden="true">*</span><input required className="auth-control mt-2" value={profile.course_name} onChange={(event) => update("course_name", event.target.value)} placeholder="e.g. Bachelor of Science in Nursing" /></label><label className="block font-body text-caption font-semibold text-navy">Year of study <span className="text-error" aria-hidden="true">*</span><input required className="auth-control mt-2" type="number" min="1" max="20" value={profile.year_of_study ?? ""} onChange={(event) => update("year_of_study", event.target.value ? Number(event.target.value) : null)} placeholder="e.g. 4" /></label><label className="block font-body text-caption font-semibold text-navy">Date of birth<input className="auth-control mt-2" type="date" value={profile.date_of_birth ?? ""} onChange={(event) => update("date_of_birth", event.target.value || null)} /></label><div className="sm:col-span-2"><p className="font-body text-caption font-semibold text-navy">Emergency contact</p><p className="mt-1 font-body text-xs text-navy-muted">Keep this information current for programme support.</p></div><label className="block font-body text-caption font-semibold text-navy">Contact name <span className="text-error" aria-hidden="true">*</span><input required className="auth-control mt-2" value={profile.emergency_contact_name} onChange={(event) => update("emergency_contact_name", event.target.value)} /></label><label className="block font-body text-caption font-semibold text-navy">Relationship <span className="text-error" aria-hidden="true">*</span><input required className="auth-control mt-2" value={profile.emergency_contact_relationship} onChange={(event) => update("emergency_contact_relationship", event.target.value)} placeholder="e.g. Parent" /></label><label className="block font-body text-caption font-semibold text-navy sm:col-span-2">Contact phone <span className="text-error" aria-hidden="true">*</span><input required className="auth-control mt-2" type="tel" value={profile.emergency_contact_phone} onChange={(event) => update("emergency_contact_phone", event.target.value)} /></label><div className="sm:col-span-2"><Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save student details"}</Button></div></form>}</div></Card>;
+  return (
+    <AdminCard
+      title="Complete your programme profile"
+      description="These details help your institution support you. They are separate from your placement record and are not shown to mentors."
+      titleId="student-details-title"
+      action={dirty && !loading && !loadError ? <StatusPill tone="warning">Unsaved changes</StatusPill> : undefined}
+    >
+      <p className="acct-muted">
+        Fields marked <span className="font-semibold text-error">*</span> are needed before you can open your placement workspace.
+      </p>
+      {formError && (
+        <p className="acct-message acct-message--error mt-3" role="alert"><CircleAlert aria-hidden="true" />{formError}</p>
+      )}
+      {saved && (
+        <p role="status" className="acct-message mt-3"><CheckCircle2 aria-hidden="true" />Student details saved.</p>
+      )}
+      {loading ? (
+        <p className="acct-muted mt-4" role="status">Loading your student details…</p>
+      ) : loadError ? (
+        <div className="acct-message acct-message--error mt-4" role="alert">
+          <CircleAlert aria-hidden="true" />
+          <div>
+            <p>We couldn’t load your saved details. Your profile has not been changed.</p>
+            <AdminButton className="mt-2" size="sm" variant="secondary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Try again</AdminButton>
+          </div>
+        </div>
+      ) : (
+        <form className="acct-form mt-4" onSubmit={submit}>
+          <Field label="Course or programme" required>
+            <TextInput required value={profile.course_name} onChange={(event) => update("course_name", event.target.value)} placeholder="e.g. Bachelor of Science in Nursing" />
+          </Field>
+          <FieldRow>
+            <Field label="Year of study" required>
+              <TextInput required type="number" min="1" max="20" value={profile.year_of_study ?? ""} onChange={(event) => update("year_of_study", event.target.value ? Number(event.target.value) : null)} placeholder="e.g. 4" />
+            </Field>
+            <Field label="Date of birth">
+              <TextInput type="date" value={profile.date_of_birth ?? ""} onChange={(event) => update("date_of_birth", event.target.value || null)} />
+            </Field>
+          </FieldRow>
+          <div>
+            <p className="acct-label">Emergency contact</p>
+            <p className="acct-muted">Keep this information current for programme support.</p>
+          </div>
+          <FieldRow>
+            <Field label="Contact name" required>
+              <TextInput required value={profile.emergency_contact_name} onChange={(event) => update("emergency_contact_name", event.target.value)} />
+            </Field>
+            <Field label="Relationship" required>
+              <TextInput required value={profile.emergency_contact_relationship} onChange={(event) => update("emergency_contact_relationship", event.target.value)} placeholder="e.g. Parent" />
+            </Field>
+          </FieldRow>
+          <Field label="Contact phone" required>
+            <TextInput required type="tel" value={profile.emergency_contact_phone} onChange={(event) => update("emergency_contact_phone", event.target.value)} />
+          </Field>
+          <div className="acct-form__actions">
+            <AdminButton type="submit" disabled={saving} aria-busy={saving} icon={saving ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>
+              {saving ? "Saving…" : "Save student details"}
+            </AdminButton>
+            {dirty && <span className="acct-muted">You have unsaved changes.</span>}
+          </div>
+        </form>
+      )}
+    </AdminCard>
+  );
 }

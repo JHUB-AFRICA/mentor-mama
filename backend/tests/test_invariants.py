@@ -426,3 +426,18 @@ def test_pause_extends_actual_end_and_records_a_countable_reason(
 def test_invalid_transition_is_refused(scheduled_placement, nurse_manager):
     with pytest.raises(errors.InvalidTransition):
         placement_services.transition(scheduled_placement.id, State.COMPLETED, actor=nurse_manager)
+
+
+def test_completed_placement_is_closed_to_mentor_and_ward_changes(active_placement, exit_survey, other_mentor, nurse_manager, ward):
+    import pytest
+    from apps.core import errors
+    from apps.placements import services as placement_services
+    from apps.placements.models import State
+
+    placement_services.transition(active_placement.id, State.COMPLETED, actor=nurse_manager)
+    with pytest.raises(errors.PlacementClosed):
+        placement_services.reassign_mentor(active_placement.id, other_mentor.id, actor=nurse_manager, reason="late change")
+    with pytest.raises(errors.PlacementClosed):
+        placement_services.assign_mentor(active_placement.id, other_mentor.id, actor=nurse_manager)
+    with pytest.raises(errors.PlacementClosed):
+        placement_services.allocate_ward(active_placement.id, ward.id, actor=nurse_manager)

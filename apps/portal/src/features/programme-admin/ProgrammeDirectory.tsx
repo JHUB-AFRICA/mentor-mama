@@ -1,19 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
   ArrowRight,
+  BedDouble,
+  BookOpen,
   Building2,
+  Check,
   CheckCircle2,
+  Download,
+  FileText,
   FileUp,
   Hospital,
+  Mail,
+  MapPin,
   MoreHorizontal,
   Pencil,
+  Phone,
   Plus,
-  Search,
-  ShieldAlert,
   Upload,
   X,
 } from "lucide-react";
-import { Button, Card, Skeleton } from "@mentormama/ui";
+import { Skeleton } from "@mentormama/ui";
+import { Button } from "./SetupControls";
+import {
+  AdminButton,
+  AdminCard,
+  EmptyState,
+  ListRow,
+  SearchField,
+  SelectField,
+  StatCard,
+  StatGrid,
+  StatusPill,
+} from "./ui/AdminKit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -39,7 +61,8 @@ import {
   ProgrammeDirectoryRecordDetail,
   type DirectoryRecordSelection,
 } from "./ProgrammeDirectoryRecordDetail";
-import { useAccessibleDialog } from "./useAccessibleDialog";
+import { Field, FieldRow, Modal, SelectInput, TextInput } from "../../components/kit";
+import "./directory-kit.css";
 import { useToast } from "../../components/ToastProvider";
 
 type ResourceTab = "institutions" | "facilities" | "wards";
@@ -294,85 +317,45 @@ export function ProgrammeDirectory({
         />
       ) : (
         <>
-      <div className="programme-directory-heading">
-        <div>
-          <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-            Operating context
-          </p>
-          <h3 className="mt-3 font-display text-3xl font-bold tracking-tight text-navy">
-            Directory
-          </h3>
-          <p className="mt-2 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-            Set up the institutions, facilities, and wards that placements will
-            use. Facilities are programme-wide and can serve more than one institution.
-          </p>
-        </div>
-        <div className="programme-directory-callout">
-          <span>
-            <Building2 size={20} />
-          </span>
-          <div>
-            <p className="font-body text-sm font-bold text-navy">
-              Build your programme directory
-            </p>
-            <p className="mt-1 font-body text-xs leading-5 text-navy-muted">
-              Add the operating context used in placements.
+      <section className="pa-card" aria-labelledby="directory-heading">
+        <header className="pa-card__header">
+          <div className="min-w-0">
+            <h3 id="directory-heading" className="pa-card__title">Directory</h3>
+            <p className="pa-card__description">
+              Set up the institutions, facilities, and wards that placements will use. Facilities are programme-wide and can serve more than one institution.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowGuidance(true)}
-            className="ml-auto inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 font-body text-xs font-semibold text-navy"
-          >
-            View guidance <ArrowRight size={14} />
-          </button>
-        </div>
-      </div>
-      <div className="programme-directory-kpis">
-        {[
-          [
-            "Institutions",
-            counts.institutions,
-            "Universities and training institutions",
-            <Building2 size={22} />,
-            "teal",
-          ],
-          [
-            "Facilities",
-            counts.facilities,
-            "Hospitals, clinics and training sites",
-            <Hospital size={22} />,
-            "blue",
-          ],
-          [
-            "Wards",
-            counts.wards,
-            "Placement wards and departments",
-            <ShieldAlert size={22} />,
-            "red",
-          ],
-        ].map(([label, count, detail, icon, tone]) => (
-          <article
-            key={String(label)}
-            className={`programme-directory-kpi programme-directory-kpi--${tone}`}
-          >
-            <span>{icon}</span>
-            <div>
-              <p className="font-body text-sm font-semibold text-navy-muted">
-                {label}
-              </p>
-              <strong>{loading ? "—" : count}</strong>
-              <small>{detail}</small>
-            </div>
-          </article>
-        ))}
-      </div>
-      <div className="programme-directory-layout">
-        <div className="min-w-0">
-          <nav
-            className="programme-directory-tabs"
-            aria-label="Directory resources"
-          >
+        </header>
+      </section>
+      <StatGrid columns={3}>
+        <StatCard
+          icon={<Building2 />}
+          tone="teal"
+          label="Institutions"
+          value={counts.institutions}
+          hint="Universities and training institutions"
+          loading={loading}
+        />
+        <StatCard
+          icon={<Hospital />}
+          tone="blue"
+          label="Facilities"
+          value={counts.facilities}
+          hint="Hospitals, clinics and training sites"
+          loading={loading}
+        />
+        <StatCard
+          icon={<BedDouble />}
+          tone="violet"
+          label="Wards"
+          value={counts.wards}
+          hint="Placement wards and departments"
+          loading={loading}
+        />
+      </StatGrid>
+      <div className="pd-layout">
+        <div className="ps-stack">
+          <nav className="pa-tabs" aria-label="Directory resources">
             {(
               [
                 ["institutions", "Institutions"],
@@ -384,14 +367,14 @@ export function ProgrammeDirectory({
                 key={id}
                 type="button"
                 aria-current={tab === id ? "page" : undefined}
-                className={tab === id ? "is-active" : ""}
+                className="pa-tab"
                 onClick={() => selectDirectoryTab(id)}
               >
                 {label}
               </button>
             ))}
           </nav>
-          <Card padding="sm" className="programme-directory-table-card">
+          <div className="pa-table-wrap">
             {tab === "institutions" && (
               <ResourceTable
                 title="Institutions"
@@ -481,80 +464,67 @@ export function ProgrammeDirectory({
                 onError={onError}
               />
             )}
-          </Card>
+          </div>
         </div>
-        <aside className="programme-directory-sidebar">
-          <Card padding="sm">
-            <h3 className="font-display text-lg font-bold text-navy">
-              Quick actions
-            </h3>
-            <QuickAction
-              icon={<Building2 size={18} />}
-              title="Add institution"
-              detail="Include a new university or training institution"
-              onClick={() => setKind("institution")}
-            />
-            <QuickAction
-              icon={<Hospital size={18} />}
-              title="Add facility"
-              detail="Add a hospital, clinic or training site"
-              onClick={() => setKind("facility")}
-            />
-            <QuickAction
-              icon={<ShieldAlert size={18} />}
-              title="Add ward"
-              detail="Add a ward or department"
-              onClick={() => {
-                setPrefillFacilityId(null);
-                setKind("ward");
-              }}
-            />
-          </Card>
-          <Card padding="sm">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal">
-                <FileUp size={19} />
-              </span>
-              <div>
-                <h3 className="font-display text-lg font-bold text-navy">
-                  Import from file
-                </h3>
-                <p className="mt-2 font-body text-sm leading-6 text-navy-muted">
-                  Add up to 500 institutions, facilities, or wards from a reviewed CSV file.
-                </p>
-                <button
-                  type="button"
-                  className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 font-body text-xs font-semibold text-navy"
-                  onClick={() => setShowImport(true)}
-                >
-                  <Upload size={15} />
-                  Import CSV
-                </button>
-              </div>
+        <aside className="ps-stack">
+          <AdminCard title="Quick actions" flush>
+            <div className="pa-list">
+              <ListRow
+                icon={<Building2 />}
+                tone="teal"
+                title="Add institution"
+                meta={<span className="ap-wrap">Include a new university or training institution</span>}
+                onClick={() => setKind("institution")}
+              />
+              <ListRow
+                icon={<Hospital />}
+                tone="blue"
+                title="Add facility"
+                meta={<span className="ap-wrap">Add a hospital, clinic or training site</span>}
+                onClick={() => setKind("facility")}
+              />
+              <ListRow
+                icon={<BedDouble />}
+                tone="violet"
+                title="Add ward"
+                meta={<span className="ap-wrap">Add a ward or department</span>}
+                onClick={() => {
+                  setPrefillFacilityId(null);
+                  setKind("ward");
+                }}
+              />
             </div>
-          </Card>
-          <Card padding="sm" className="bg-teal-light/35">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-teal">
-                <CheckCircle2 size={19} />
-              </span>
-              <div>
-                <h3 className="font-display text-lg font-bold text-navy">
-                  Need help?
-                </h3>
-                <p className="mt-2 font-body text-sm leading-6 text-navy-muted">
-                  Learn more about setting up your programme directory.
-                </p>
-                <button
-                  type="button"
-                  className="mt-4 inline-flex items-center gap-2 font-body text-sm font-bold text-teal"
-                  onClick={() => setShowGuidance(true)}
-                >
-                  View documentation <ArrowRight size={14} />
-                </button>
-              </div>
+          </AdminCard>
+          <AdminCard title="Import from file">
+            <p className="ps-copy">
+              Add up to 500 institutions, facilities, or wards from a reviewed CSV file.
+            </p>
+            <div className="ps-actions-col">
+              <AdminButton
+                variant="secondary"
+                size="sm"
+                icon={<Upload />}
+                onClick={() => setShowImport(true)}
+              >
+                Import CSV
+              </AdminButton>
             </div>
-          </Card>
+          </AdminCard>
+          <AdminCard title="Need help?">
+            <p className="ps-copy">
+              Learn more about setting up your programme directory.
+            </p>
+            <div className="ps-actions-col">
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                icon={<ArrowRight />}
+                onClick={() => setShowGuidance(true)}
+              >
+                View documentation
+              </AdminButton>
+            </div>
+          </AdminCard>
         </aside>
       </div>
         </>
@@ -667,113 +637,99 @@ function ResourceTable({
   });
   return (
     <>
-      <div className="programme-directory-table-heading">
-        <div>
-          <h3 className="font-display text-lg font-bold text-navy">{title}</h3>
-          <p className="mt-1 font-body text-xs leading-5 text-navy-muted">
-            {description}
-          </p>
+      <div className="pa-card__header">
+        <div className="min-w-0">
+          <h3 className="pa-card__title">{title}</h3>
+          <p className="pa-card__description">{description}</p>
         </div>
-        <Button size="sm" onClick={onAdd}>
-          <Plus size={15} className="mr-1" />
+        <AdminButton size="sm" icon={<Plus />} onClick={onAdd}>
           Add {title.slice(0, -1).toLowerCase()}
-        </Button>
+        </AdminButton>
       </div>
-      <div className="programme-directory-filter">
-        <label className="relative flex-1">
-          <Search
-            size={16}
-            className="absolute left-3.5 top-3 text-navy-muted"
-          />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-10 w-full rounded-lg border border-border bg-white pl-10 pr-3 font-body text-sm text-navy outline-none focus:border-teal focus:ring-2 focus:ring-teal/20"
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-          />
-        </label>
-        <label className="sr-only" htmlFor={`${title.toLowerCase()}-status-filter`}>Filter {title.toLowerCase()} by status</label>
-        <select
-          id={`${title.toLowerCase()}-status-filter`}
+      <div className="pd-filter">
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder={searchPlaceholder}
+          label={searchPlaceholder}
+        />
+        <SelectField
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-          className="h-10 rounded-lg border border-border bg-white px-3 font-body text-sm text-navy focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
-        >
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="archived">Archived</option>
-          <option value="all">All records</option>
-        </select>
-        <span className="font-body text-xs font-semibold text-navy-muted">
-          {`${filtered.length} shown · ${items.length} total`}
-        </span>
+          onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+          label={`Filter ${title.toLowerCase()} by status`}
+          options={[
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+            { value: "archived", label: "Archived" },
+            { value: "all", label: "All records" },
+          ]}
+        />
+        <span className="pd-count">{`${filtered.length} shown · ${items.length} total`}</span>
       </div>
       {loading ? (
-        <div className="space-y-3 py-5">
+        <div className="pd-state space-y-3">
           {[1, 2, 3].map((row) => (
             <Skeleton key={row} className="h-12 w-full" />
           ))}
         </div>
       ) : error ? (
-        <div className="border-l-2 border-error bg-error/5 px-4 py-5">
-          <p className="font-body text-sm font-semibold text-error">
-            We could not load {title.toLowerCase()}.
-          </p>
-          <button
-            type="button"
-            className="mt-2 font-body text-xs font-semibold text-teal underline"
-            onClick={onRetry}
-          >
+        <div className="pd-error">
+          <p>We could not load {title.toLowerCase()}.</p>
+          <button type="button" onClick={onRetry}>
             Try again
           </button>
         </div>
       ) : filtered.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-left">
+        <div className="pa-table-scroll">
+          <table className="pa-table">
             <thead>
-              <tr className="border-y border-border">
-                <th className="px-3 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.1em] text-navy-muted">
-                  Name
-                </th>
+              <tr>
+                <th scope="col">Name</th>
                 {columns.map(([label]) => (
-                  <th
-                    key={label}
-                    className="px-3 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.1em] text-navy-muted"
-                  >
+                  <th key={label} scope="col">
                     {label}
                   </th>
                 ))}
-                <th className="px-3 py-3 text-right font-body text-[0.68rem] font-bold uppercase tracking-[0.1em] text-navy-muted">
+                <th scope="col" className="text-right">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-border last:border-0 hover:bg-mist/40"
-                >
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      {item.logo_url ? <img src={item.logo_url} alt="" className="size-8 shrink-0 rounded-md border border-border bg-white object-contain p-0.5" /> : <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-md bg-teal-light/60 text-teal"><Building2 size={15} /></span>}
-                      <div className="min-w-0"><p className="font-body text-sm font-semibold text-navy">{item.name}</p>
-                        <button type="button" onClick={() => onView(item)} className="mt-1 inline-flex min-h-8 items-center gap-1 font-body text-xs font-bold text-teal hover:underline">
-                          View details <ArrowRight size={13} aria-hidden="true" />
+                <tr key={item.id}>
+                  <td>
+                    <div className="pa-cell-title">
+                      {item.logo_url ? (
+                        <img src={item.logo_url} alt="" className="pd-logo pd-logo--img" />
+                      ) : (
+                        <span aria-hidden="true" className="pd-logo pd-logo--ph">
+                          <Building2 size={16} />
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <strong>{item.name}</strong>
+                        <button type="button" onClick={() => onView(item)} className="pd-link">
+                          View details <ArrowRight size={12} aria-hidden="true" />
                         </button>
                       </div>
                     </div>
                   </td>
                   {columns.map(([label, value]) => (
-                    <td
-                      key={label}
-                      className="px-3 py-3 font-body text-xs text-navy-muted"
-                    >
-                      {label === "Contact" && (item.contact_email || item.contact_phone) ? <span className="block max-w-44" title={[item.contact_email, item.contact_phone].filter(Boolean).join(" · ")}>{item.contact_email && <a className="block truncate text-teal hover:underline" href={`mailto:${item.contact_email}`}>{item.contact_email}</a>}{item.contact_phone && <a className="block truncate hover:text-teal" href={`tel:${item.contact_phone}`}>{item.contact_phone}</a>}</span> : value(item)}
+                    <td key={label}>
+                      {label === "Status" ? (
+                        <StatusPill tone={statusTone(value(item))}>{value(item)}</StatusPill>
+                      ) : label === "Contact" && (item.contact_email || item.contact_phone) ? (
+                        <span className="pd-contact block" title={[item.contact_email, item.contact_phone].filter(Boolean).join(" · ")}>
+                          {item.contact_email && <a href={`mailto:${item.contact_email}`}>{item.contact_email}</a>}
+                          {item.contact_phone && <a href={`tel:${item.contact_phone}`}>{item.contact_phone}</a>}
+                        </span>
+                      ) : (
+                        value(item)
+                      )}
                     </td>
                   ))}
-                  <td className="px-3 py-3 text-right">
+                  <td className="text-right">
                     <ResourceActionMenu
                       item={item}
                       onEdit={() => onEdit(item)}
@@ -786,48 +742,20 @@ function ResourceTable({
           </table>
         </div>
       ) : (
-        <div className="py-12 text-center">
-          <p className="font-body text-sm font-semibold text-navy">
-            No {title.toLowerCase()} found
-          </p>
-          <p className="mt-1 font-body text-xs text-navy-muted">
-            Add the first record to make it available to placements.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Building2 size={22} />}
+          title={`No ${title.toLowerCase()} found`}
+          text="Add the first record to make it available to placements."
+        />
       )}
     </>
   );
 }
 
-function QuickAction({
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 border-b border-border py-3 text-left last:border-0"
-    >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-light text-teal">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <strong className="block font-body text-sm text-navy">{title}</strong>
-        <small className="mt-1 block font-body text-xs leading-5 text-navy-muted">
-          {detail}
-        </small>
-      </span>
-      <ArrowRight size={15} className="text-navy-muted" />
-    </button>
-  );
+function statusTone(label: string): "success" | "neutral" | "warning" {
+  if (label === "Active") return "success";
+  if (label === "Archived") return "neutral";
+  return "warning";
 }
 
 function ResourceActionMenu({
@@ -850,21 +778,20 @@ function ResourceActionMenu({
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
   return (
-    <span ref={menuRef} className="relative inline-flex">
+    <span ref={menuRef} className="pd-menu">
       <button
         type="button"
         aria-label={`Actions for ${item.name}`}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="rounded-lg border border-border p-2 text-navy-muted hover:border-teal hover:text-teal"
+        className="pd-icon-btn"
       >
         <MoreHorizontal size={16} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-40 rounded-xl border border-border bg-white p-1 text-left shadow-lg">
+        <div className="pd-menu__list">
           <button
             type="button"
-            className="block w-full rounded-lg px-3 py-2 text-left font-body text-xs font-semibold text-navy hover:bg-mist"
             onClick={() => {
               setOpen(false);
               onEdit();
@@ -874,7 +801,7 @@ function ResourceActionMenu({
           </button>
           <button
             type="button"
-            className={`block w-full rounded-lg px-3 py-2 text-left font-body text-xs font-semibold ${item.archived_at ? "text-teal" : "text-error"} hover:bg-mist`}
+            className={item.archived_at ? "is-teal" : "is-danger"}
             onClick={() => {
               setOpen(false);
               onArchive();
@@ -885,6 +812,49 @@ function ResourceActionMenu({
         </div>
       )}
     </span>
+  );
+}
+function DirectoryFormFooter({
+  formId,
+  onCancel,
+  busy,
+  label,
+  busyLabel = "Saving…",
+}: {
+  formId: string;
+  onCancel: () => void;
+  busy: boolean;
+  label: string;
+  busyLabel?: string;
+}) {
+  return (
+    <>
+      <Button type="button" variant="tertiary" onClick={onCancel} disabled={busy}>
+        Cancel
+      </Button>
+      <Button type="submit" form={formId} disabled={busy} aria-busy={busy}>
+        {busy ? busyLabel : label}
+      </Button>
+    </>
+  );
+}
+
+function ContactFields({ defaults, optional }: { defaults?: Institution | Facility; optional?: boolean }) {
+  return (
+    <fieldset className="pd-group">
+      <legend>Contact</legend>
+      <Field label="Contact person" optional={optional}>
+        <TextInput name="contact_person" defaultValue={defaults?.contact_person} autoComplete="off" />
+      </Field>
+      <FieldRow>
+        <Field label="Contact email" optional>
+          <TextInput name="contact_email" type="email" autoComplete="email" defaultValue={defaults?.contact_email} leading={<Mail />} />
+        </Field>
+        <Field label="Contact phone" optional hint={defaults ? undefined : "Include the country code where possible."}>
+          <TextInput name="contact_phone" type="tel" autoComplete="tel" defaultValue={defaults?.contact_phone} leading={<Phone />} />
+        </Field>
+      </FieldRow>
+    </fieldset>
   );
 }
 
@@ -901,7 +871,10 @@ function EditDirectoryModal({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
+  const [saving, setSaving] = useState(false);
+  const [logoError, setLogoError] = useState("");
+  const working = busy || saving;
+  const isInstitution = resource.kind === "institution";
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -920,11 +893,14 @@ function EditDirectoryModal({
     };
     const logo = form.get("logo");
     if (logo instanceof File && logo.size > 2 * 1024 * 1024) {
+      setLogoError("Choose a logo that is 2 MB or smaller.");
       onError("Choose a logo that is 2 MB or smaller.");
       return;
     }
+    setLogoError("");
     if (logo instanceof File && logo.size) input.logo = logo;
     if (form.get("clear_logo") === "on") input.clear_logo = true;
+    setSaving(true);
     try {
       if (resource.kind === "institution")
         await updateInstitution(resource.item.id, input);
@@ -948,118 +924,55 @@ function EditDirectoryModal({
           ? cause.message
           : "We could not save this directory record.",
       );
+    } finally {
+      setSaving(false);
     }
   }
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!working}
+      size="md"
+      icon={isInstitution ? <Building2 /> : <Hospital />}
+      title={`Edit ${resource.kind}`}
+      description={resource.item.name}
+      footer={<DirectoryFormFooter formId="edit-directory-form" onCancel={onClose} busy={working} label="Save changes" />}
     >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-directory-title"
-        tabIndex={-1}
-        className="max-h-[min(88vh,52rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-              Operating context
-            </p>
-            <h3
-              id="edit-directory-title"
-              className="mt-2 font-display text-2xl font-bold text-navy"
-            >
-              Edit {resource.kind}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-navy-muted hover:bg-mist"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={save} className="mt-5 grid gap-3">
-          <label className="font-body text-sm font-semibold text-navy">
-            Name
-            <input
-              name="name"
-              className="auth-control mt-1"
-              defaultValue={resource.item.name}
-              required
-              minLength={2}
+      <form id="edit-directory-form" onSubmit={save} className="pd-form">
+        <Field label="Name" required>
+          <TextInput name="name" defaultValue={resource.item.name} required minLength={2} />
+        </Field>
+        <FieldRow>
+          <Field label={isInstitution ? "Type" : "Level"}>
+            <TextInput
+              name={isInstitution ? "type" : "level"}
+              defaultValue={isInstitution ? (resource.item as Institution).type : (resource.item as Facility).level}
             />
-          </label>
-          <label className="font-body text-sm font-semibold text-navy">
-            {resource.kind === "institution" ? "Type" : "Level"}
-            <input
-              name={resource.kind === "institution" ? "type" : "level"}
-              className="auth-control mt-1"
-              defaultValue={
-                resource.kind === "institution"
-                  ? (resource.item as Institution).type
-                  : (resource.item as Facility).level
-              }
-            />
-          </label>
-          <label className="font-body text-sm font-semibold text-navy">
-            County / location
-            <input
-              name="county"
-              className="auth-control mt-1"
-              defaultValue={resource.item.county}
-            />
-          </label>
-      {resource.kind === "facility" && (
-            <label className="font-body text-sm font-semibold text-navy">
-              Maternity unit name
-              <input
-                name="maternity_unit_name"
-                className="auth-control mt-1"
-                defaultValue={(resource.item as Facility).maternity_unit_name}
-              />
+          </Field>
+          <Field label="County / location">
+            <TextInput name="county" defaultValue={resource.item.county} leading={<MapPin />} />
+          </Field>
+        </FieldRow>
+        {resource.kind === "facility" && (
+          <Field label="Maternity unit name">
+            <TextInput name="maternity_unit_name" defaultValue={(resource.item as Facility).maternity_unit_name} />
+          </Field>
+        )}
+        <ContactFields defaults={resource.item} />
+        <Field label="Logo" optional error={logoError || undefined} hint="PNG, JPEG or WebP, up to 2 MB.">
+          <TextInput name="logo" type="file" accept="image/png,image/jpeg,image/webp" className="pd-file" />
+        </Field>
+        {resource.item.logo_url && (
+          <div className="pd-logo-current">
+            <img src={resource.item.logo_url} alt={`${resource.item.name} logo`} />
+            <label className="pd-check">
+              <input name="clear_logo" type="checkbox" /> Remove current logo
             </label>
-          )}
-          <label className="font-body text-sm font-semibold text-navy">
-            Contact person
-            <input
-              name="contact_person"
-              className="auth-control mt-1"
-              defaultValue={resource.item.contact_person}
-            />
-          </label>
-          <label className="font-body text-sm font-semibold text-navy">
-            Contact email <span className="font-normal text-navy-muted">(optional)</span>
-            <input name="contact_email" type="email" className="auth-control mt-1" defaultValue={resource.item.contact_email} autoComplete="email" />
-          </label>
-          <label className="font-body text-sm font-semibold text-navy">
-            Contact phone <span className="font-normal text-navy-muted">(optional)</span>
-            <input name="contact_phone" type="tel" className="auth-control mt-1" defaultValue={resource.item.contact_phone} autoComplete="tel" />
-          </label>
-          <label className="font-body text-sm font-semibold text-navy">
-            Logo <span className="font-normal text-navy-muted">(optional, PNG/JPEG/WebP, up to 2 MB)</span>
-            {resource.item.logo_url && <img src={resource.item.logo_url} alt={`${resource.item.name} logo`} className="mt-2 size-14 rounded-lg border border-border object-contain p-1" />}
-            <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" className="mt-2 block w-full text-sm text-navy-muted file:mr-3 file:rounded-lg file:border-0 file:bg-teal-light file:px-3 file:py-2 file:font-semibold file:text-teal" />
-            {resource.item.logo_url && <label className="mt-2 flex items-center gap-2 text-xs font-medium text-navy-muted"><input name="clear_logo" type="checkbox" /> Remove current logo</label>}
-          </label>
-          <div className="flex justify-end gap-3 pt-3">
-            <Button type="button" variant="tertiary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : "Save changes"}
-            </Button>
           </div>
-        </form>
-      </section>
-    </div>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -1078,65 +991,41 @@ function ArchiveDirectoryModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
   const restoring = Boolean(resource.item.archived_at);
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="archive-directory-title"
-        tabIndex={-1}
-        className="max-h-[min(88vh,52rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <p
-          className={`font-body text-xs font-bold uppercase tracking-[0.14em] ${restoring ? "text-teal" : "text-error"}`}
-        >
-          {restoring ? "Restore directory record" : "Archive directory record"}
-        </p>
-        <h3
-          id="archive-directory-title"
-          className="mt-2 font-display text-2xl font-bold text-navy"
-        >
-          {restoring
-            ? `Restore ${resource.item.name}?`
-            : `Archive ${resource.item.name}?`}
-        </h3>
-        <p className="mt-3 font-body text-sm leading-6 text-navy-muted">
-          {restoring
-            ? "This will make the record available for new programme operations again."
-            : "This will hide the record from active programme operations. Existing historical references are retained."}
-        </p>
-        {!restoring && resource.kind === "facility" && (
-          <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 font-body text-xs leading-5 text-amber-950">
-            This facility currently has {activeWardCount} active {activeWardCount === 1 ? "ward" : "wards"} and {occupiedPlacementCount} occupying {occupiedPlacementCount === 1 ? "placement" : "placements"}. Archiving prevents new ward allocations; existing placement history remains available.
-          </p>
-        )}
-        <div className="mt-6 flex justify-end gap-3">
-          <Button type="button" variant="tertiary" onClick={onClose}>
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!busy}
+      size="sm"
+      icon={restoring ? <ArchiveRestore /> : <Archive className="pd-icon-danger" />}
+      title={restoring ? `Restore ${resource.item.name}?` : `Archive ${resource.item.name}?`}
+      description={restoring ? "Restore directory record" : "Archive directory record"}
+      footer={
+        <>
+          <Button type="button" variant="tertiary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button
-            type="button"
-            className={!restoring ? "bg-error hover:bg-error/90" : ""}
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            {busy
-              ? "Updating…"
-              : restoring
-                ? "Restore record"
-                : "Archive record"}
+          <Button type="button" variant={restoring ? "primary" : "danger"} onClick={onConfirm} disabled={busy} aria-busy={busy}>
+            {busy ? "Updating…" : restoring ? "Restore record" : "Archive record"}
           </Button>
+        </>
+      }
+    >
+      <p>
+        {restoring
+          ? "This will make the record available for new programme operations again."
+          : "This will hide the record from active programme operations. Existing historical references are retained."}
+      </p>
+      {!restoring && resource.kind === "facility" && (
+        <div className="pd-callout pd-callout--warn" role="note">
+          <AlertTriangle aria-hidden="true" />
+          <p>
+            This facility currently has {activeWardCount} active {activeWardCount === 1 ? "ward" : "wards"} and {occupiedPlacementCount} occupying {occupiedPlacementCount === 1 ? "placement" : "placements"}. Archiving prevents new ward allocations; existing placement history remains available.
+          </p>
         </div>
-      </section>
-    </div>
+      )}
+    </Modal>
   );
 }
 
@@ -1189,102 +1078,120 @@ function WardTable({
   }
   return (
     <>
-      <div className="programme-directory-table-heading">
-        <div>
-          <h3 className="font-display text-lg font-bold text-navy">Wards</h3>
-          <p className="mt-1 font-body text-xs leading-5 text-navy-muted">
+      <div className="pa-card__header">
+        <div className="min-w-0">
+          <h3 className="pa-card__title">Wards</h3>
+          <p className="pa-card__description">
             Placement wards and departments available for allocation.
           </p>
         </div>
-        <Button size="sm" onClick={onAdd}>
-          <Plus size={15} className="mr-1" />
+        <AdminButton size="sm" icon={<Plus />} onClick={onAdd}>
           Add ward
-        </Button>
+        </AdminButton>
       </div>
-      <div className="programme-directory-filter">
-        <label className="relative flex-1">
-          <Search
-            size={16}
-            className="absolute left-3.5 top-3 text-navy-muted"
-          />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-10 w-full rounded-lg border border-border bg-white pl-10 pr-3 font-body text-sm text-navy outline-none focus:border-teal"
-            placeholder="Search wards or facilities…"
-            aria-label="Search wards or facilities"
-          />
-        </label>
-        <label className="sr-only" htmlFor="ward-status-filter">Filter wards by status</label>
-        <select id="ward-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="h-10 rounded-lg border border-border bg-white px-3 font-body text-sm text-navy focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20">
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="all">All wards</option>
-        </select>
-        <span className="font-body text-xs font-semibold text-navy-muted">
+      <div className="pd-filter">
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search wards or facilities…"
+          label="Search wards or facilities"
+        />
+        <SelectField
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+          label="Filter wards by status"
+          options={[
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+            { value: "all", label: "All wards" },
+          ]}
+        />
+        <span className="pd-count">
           {filtered.length} of {wards.length}
         </span>
       </div>
       {loading ? (
-        <div className="space-y-3 py-5">
+        <div className="pd-state space-y-3">
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </div>
       ) : error ? (
-        <div className="border-l-2 border-error bg-error/5 px-4 py-5">
-          <p className="font-body text-sm text-error">
-            We could not load wards.
-          </p>
-          <button
-            type="button"
-            className="mt-2 font-body text-xs text-teal underline"
-            onClick={onRetry}
-          >
+        <div className="pd-error">
+          <p>We could not load wards.</p>
+          <button type="button" onClick={onRetry}>
             Try again
           </button>
         </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {filtered.map((ward) => (
-            <div
-              key={ward.id}
-              className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="font-body text-sm font-semibold text-navy">
-                  {ward.name}
-                </p>
-                <p className="mt-1 font-body text-xs text-navy-muted">
-                  {ward.facility_name} · {ward.allocated_students}/
-                  {ward.max_students} occupying placements · {ward.available_slots}{" "}
-                  capacity remaining
-                </p>
-              </div>
-              <span className={`rounded-full px-2.5 py-1 font-body text-[0.68rem] font-bold ${ward.available ? "bg-teal-light text-teal" : "bg-mist text-navy-muted"}`}>
-                {facilities.find((facility) => facility.id === ward.facility_id)?.archived_at ? "Facility archived" : ward.archived_at ? "Archived" : "Active"}
-              </span>
-              <button type="button" onClick={() => onView(ward.id)} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 font-body text-xs font-bold text-teal hover:bg-teal-light">
-                View details <ArrowRight size={14} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditing(ward)}
-                aria-label={`Edit ${ward.name}`}
-                className="rounded-lg border border-border p-2 text-navy-muted hover:border-teal hover:text-teal"
-              >
-                <Pencil size={15} />
-              </button>
-              <Button
-                size="sm"
-                variant="tertiary"
-                onClick={() => void toggle(ward)}
-                disabled={busy || Boolean(facilities.find((facility) => facility.id === ward.facility_id)?.archived_at)}
-              >
-                {facilities.find((facility) => facility.id === ward.facility_id)?.archived_at ? "Facility archived" : ward.archived_at ? "Restore" : "Archive"}
-              </Button>
-            </div>
-          ))}
+      ) : filtered.length ? (
+        <div className="pa-table-scroll">
+          <table className="pa-table">
+            <thead>
+              <tr>
+                <th scope="col">Ward</th>
+                <th scope="col">Occupancy</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((ward) => {
+                const facilityArchived = Boolean(
+                  facilities.find((facility) => facility.id === ward.facility_id)?.archived_at,
+                );
+                return (
+                  <tr key={ward.id}>
+                    <td>
+                      <div className="pa-cell-title">
+                        <div className="min-w-0">
+                          <strong>{ward.name}</strong>
+                          <small>{ward.facility_name}</small>
+                          <button type="button" onClick={() => onView(ward.id)} className="pd-link">
+                            View details <ArrowRight size={12} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {ward.allocated_students}/{ward.max_students} occupying placements · {ward.available_slots}{" "}
+                      capacity remaining
+                    </td>
+                    <td>
+                      <StatusPill tone={ward.available ? "success" : "neutral"}>
+                        {facilityArchived ? "Facility archived" : ward.archived_at ? "Archived" : "Active"}
+                      </StatusPill>
+                    </td>
+                    <td className="text-right">
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(ward)}
+                          aria-label={`Edit ${ward.name}`}
+                          className="pd-icon-btn"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <Button
+                          size="sm"
+                          variant="tertiary"
+                          onClick={() => void toggle(ward)}
+                          disabled={busy || facilityArchived}
+                        >
+                          {facilityArchived ? "Facility archived" : ward.archived_at ? "Restore" : "Archive"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+      ) : (
+        <EmptyState
+          icon={<BedDouble size={22} />}
+          title="No wards found"
+          text="Add the first ward to make it available to placements."
+        />
       )}
       {editing && (
         <WardDialog
@@ -1320,135 +1227,93 @@ function CreateDirectoryModal({
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
+  const duplicate =
+    (kind === "institution" || kind === "facility") &&
+    name.trim() !== "" &&
+    existingNames.some((existing) => existing.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase());
+  const description =
+    kind === "institution"
+      ? "A university or training institution that sends students on placement."
+      : kind === "facility"
+        ? "A hospital, clinic or training site. Facilities are programme-wide."
+        : "A ward or department students are allocated to.";
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-navy/45 p-4 sm:items-center"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!busy}
+      size="md"
+      icon={kind === "institution" ? <Building2 /> : kind === "facility" ? <Hospital /> : <BedDouble />}
+      title={`Add ${kind}`}
+      description={description}
+      footer={<DirectoryFormFooter formId="create-directory-form" onCancel={onClose} busy={busy} label={`Add ${kind}`} />}
     >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="directory-dialog-title"
-        tabIndex={-1}
-        className="max-h-[min(88vh,52rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-              Operating context
-            </p>
-            <h3
-              id="directory-dialog-title"
-              className="mt-2 font-display text-2xl font-bold text-navy"
-            >
-              Add {kind}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-navy-muted hover:bg-mist"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-          {kind === "ward" && (
-            <label className="block font-body text-sm font-semibold text-navy">
-              Facility
-              <select
-                name="facility_id"
-                className="auth-control mt-2"
-                required
-                defaultValue={prefilledFacilityId ?? ""}
-              >
-                <option value="" disabled>
-                  Select facility
-                </option>
-                {facilities
-                  .filter((facility) => !facility.archived_at)
-                  .map((facility) => (
-                    <option key={facility.id} value={facility.id}>
-                      {facility.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
-          <label className="block font-body text-sm font-semibold text-navy">
-            Name
-            <input
-              className="auth-control mt-2"
-              value={name}
-              name="name"
-              onChange={(event) => setName(event.target.value)}
-              required
-              minLength={2}
-              autoFocus
-            />
-          </label>
-          {(kind === "institution" || kind === "facility") && existingNames.some((existing) => existing.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()) && (
-            <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 font-body text-xs leading-5 text-amber-950">
+      <form id="create-directory-form" className="pd-form" onSubmit={onSubmit}>
+        {kind === "ward" && (
+          <Field label="Facility" required>
+            <SelectInput name="facility_id" required defaultValue={prefilledFacilityId ?? ""}>
+              <option value="" disabled>
+                Select facility
+              </option>
+              {facilities
+                .filter((facility) => !facility.archived_at)
+                .map((facility) => (
+                  <option key={facility.id} value={facility.id}>
+                    {facility.name}
+                  </option>
+                ))}
+            </SelectInput>
+          </Field>
+        )}
+        <Field label="Name" required>
+          <TextInput value={name} name="name" onChange={(event) => setName(event.target.value)} required minLength={2} autoFocus />
+        </Field>
+        {duplicate && (
+          <div role="status" className="pd-callout pd-callout--warn">
+            <AlertTriangle aria-hidden="true" />
+            <p>
               A {kind} with this name already exists. Check the directory before continuing; same-name campuses or sites may still be valid.
             </p>
-          )}
-          {(kind === "institution" || kind === "facility") && <>
-            <label className="block font-body text-sm font-semibold text-navy">
-              {kind === "institution" ? "Type" : "Level"} <span className="font-normal text-navy-muted">(optional)</span>
-              <input name={kind === "institution" ? "type" : "level"} className="auth-control mt-2" />
-            </label>
-            <label className="block font-body text-sm font-semibold text-navy">
-              County / location <span className="font-normal text-navy-muted">(optional)</span>
-              <input name="county" className="auth-control mt-2" />
-            </label>
-            {kind === "facility" && <label className="block font-body text-sm font-semibold text-navy">Maternity unit name <span className="font-normal text-navy-muted">(optional)</span><input name="maternity_unit_name" className="auth-control mt-2" /></label>}
-            <label className="block font-body text-sm font-semibold text-navy">Contact person <span className="font-normal text-navy-muted">(optional)</span><input name="contact_person" className="auth-control mt-2" /></label>
-            <label className="block font-body text-sm font-semibold text-navy">Contact email <span className="font-normal text-navy-muted">(optional)</span><input name="contact_email" type="email" autoComplete="email" className="auth-control mt-2" /></label>
-            <label className="block font-body text-sm font-semibold text-navy">Contact phone <span className="font-normal text-navy-muted">(optional)</span><input name="contact_phone" type="tel" autoComplete="tel" className="auth-control mt-2" placeholder="Include country code where possible" /></label>
-            <label className="block font-body text-sm font-semibold text-navy">Logo <span className="font-normal text-navy-muted">(optional, PNG/JPEG/WebP, up to 2 MB)</span><input name="logo" type="file" accept="image/png,image/jpeg,image/webp" className="mt-2 block w-full text-sm text-navy-muted file:mr-3 file:rounded-lg file:border-0 file:bg-teal-light file:px-3 file:py-2 file:font-semibold file:text-teal" /></label>
-            <p className="text-xs leading-5 text-navy-muted">Contact details and logos are stored for programme directory use. Public partner display is not enabled.</p>
-          </>}
-          {kind === "ward" && (
-            <>
-              <label className="block font-body text-sm font-semibold text-navy">
-                Student capacity
-                <input
-                  name="max_students"
-                  type="number"
-                  min="1"
-                  className="auth-control mt-2"
-                  placeholder="Enter the maximum active placements"
-                  required
-                />
-                <span className="mt-1 block text-xs font-normal leading-5 text-navy-muted">Counts Orientation, Induction, Active, and Paused placements. This is a hard limit; reductions below current occupancy are blocked.</span>
-              </label>
-              <label className="block font-body text-sm font-semibold text-navy">
-                Shift pattern{" "}
-                <span className="font-normal text-navy-muted">(optional)</span>
-                <input
-                  name="shift_pattern"
-                  className="auth-control mt-2"
-                  placeholder="e.g. Day and night"
-                />
-              </label>
-            </>
-          )}
-          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Button type="button" variant="tertiary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : `Add ${kind}`}
-            </Button>
           </div>
-        </form>
-      </section>
-    </div>
+        )}
+        {(kind === "institution" || kind === "facility") && (
+          <>
+            <FieldRow>
+              <Field label={kind === "institution" ? "Type" : "Level"} optional>
+                <TextInput name={kind === "institution" ? "type" : "level"} />
+              </Field>
+              <Field label="County / location" optional>
+                <TextInput name="county" leading={<MapPin />} />
+              </Field>
+            </FieldRow>
+            {kind === "facility" && (
+              <Field label="Maternity unit name" optional>
+                <TextInput name="maternity_unit_name" />
+              </Field>
+            )}
+            <ContactFields optional />
+            <Field label="Logo" optional hint="PNG, JPEG or WebP, up to 2 MB.">
+              <TextInput name="logo" type="file" accept="image/png,image/jpeg,image/webp" className="pd-file" />
+            </Field>
+            <p className="pd-fineprint">Contact details and logos are stored for programme directory use. Public partner display is not enabled.</p>
+          </>
+        )}
+        {kind === "ward" && (
+          <>
+            <Field
+              label="Student capacity"
+              required
+              hint="Counts Orientation, Induction, Active, and Paused placements. This is a hard limit; reductions below current occupancy are blocked."
+            >
+              <TextInput name="max_students" type="number" min="1" inputMode="numeric" placeholder="Enter the maximum active placements" required />
+            </Field>
+            <Field label="Shift pattern" optional>
+              <TextInput name="shift_pattern" placeholder="e.g. Day and night" />
+            </Field>
+          </>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -1467,10 +1332,12 @@ function WardDialog({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
+  const [saving, setSaving] = useState(false);
+  const working = busy || saving;
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setSaving(true);
     try {
       await updateWard(ward.id, {
         name: String(form.get("name") ?? "").trim(),
@@ -1483,86 +1350,46 @@ function WardDialog({
       pushToast({ kind: "success", title: "Ward details updated", message: `${ward.name} was saved.` });
       onClose();
     } catch (cause) {
-      onError(
-        cause instanceof ApiError
-          ? cause.message
-          : "We could not save this ward.",
-      );
+      onError(cause instanceof ApiError ? cause.message : "We could not save this ward.");
+    } finally {
+      setSaving(false);
     }
   }
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!working}
+      size="md"
+      icon={<BedDouble />}
+      title="Edit ward"
+      description={ward.name}
+      footer={<DirectoryFormFooter formId="edit-ward-form" onCancel={onClose} busy={working} label="Save changes" />}
     >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ward-dialog-title"
-        tabIndex={-1}
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <h3
-          id="ward-dialog-title"
-          className="font-display text-2xl font-bold text-navy"
-        >
-          Edit ward
-        </h3>
-        <form onSubmit={save} className="mt-6 space-y-4">
-          <label className="block font-body text-sm font-semibold text-navy">
-            Facility
-            <input
-              className="auth-control mt-2 bg-mist"
-              value={
-                facilities.find((item) => item.id === ward.facility_id)?.name ??
-                ward.facility_name
-              }
-              readOnly
-            />
-          </label>
-          <label className="block font-body text-sm font-semibold text-navy">
-            Ward name
-            <input
-              name="name"
-              className="auth-control mt-2"
-              defaultValue={ward.name}
-              required
-            />
-          </label>
-          <label className="block font-body text-sm font-semibold text-navy">
-            Student capacity
-            <input
-              name="max_students"
-              type="number"
-              min="1"
-              className="auth-control mt-2"
-              defaultValue={ward.max_students}
-              required
-            />
-            <span className="mt-1 block text-xs font-normal leading-5 text-navy-muted">Current occupancy is {ward.allocated_students}. Counts Orientation, Induction, Active, and Paused placements; reductions below occupancy are blocked.</span>
-          </label>
-          <label className="block font-body text-sm font-semibold text-navy">
-            Shift pattern
-            <input
-              name="shift_pattern"
-              className="auth-control mt-2"
-              defaultValue={ward.shift_pattern}
-            />
-          </label>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="tertiary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              Save changes
-            </Button>
-          </div>
-        </form>
-      </section>
-    </div>
+      <form id="edit-ward-form" onSubmit={save} className="pd-form">
+        <Field label="Facility" hint="A ward cannot be moved to another facility.">
+          <TextInput
+            value={facilities.find((item) => item.id === ward.facility_id)?.name ?? ward.facility_name}
+            readOnly
+            leading={<Hospital />}
+          />
+        </Field>
+        <Field label="Ward name" required>
+          <TextInput name="name" defaultValue={ward.name} required />
+        </Field>
+        <FieldRow>
+          <Field label="Student capacity" required>
+            <TextInput name="max_students" type="number" min="1" inputMode="numeric" defaultValue={ward.max_students} required />
+          </Field>
+          <Field label="Shift pattern">
+            <TextInput name="shift_pattern" defaultValue={ward.shift_pattern} />
+          </Field>
+        </FieldRow>
+        <p className="pd-fineprint">
+          Current occupancy is {ward.allocated_students}. Counts Orientation, Induction, Active, and Paused placements; reductions below occupancy are blocked.
+        </p>
+      </form>
+    </Modal>
   );
 }
 
@@ -1573,63 +1400,17 @@ function DirectoryGuidanceModal({
   onClose: () => void;
   onError: (message: string) => void;
 }) {
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="directory-guidance-title"
-        tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-              Programme directory
-            </p>
-            <h3
-              id="directory-guidance-title"
-              className="mt-2 font-display text-2xl font-bold text-navy"
-            >
-              Keep your operating context accurate
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-navy-muted hover:bg-mist"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="mt-5 space-y-3 font-body text-sm leading-6 text-navy-muted">
-          <p>
-            Add institutions and facilities used by your programme, then add
-            wards under each facility. Facilities are programme-wide; they are
-            not owned by a single institution and can serve multiple institutions.
-          </p>
-          <p>
-            Archive records when they are no longer available. Historical
-            placements remain intact, and archived facilities cannot receive new
-            wards.
-          </p>
-          <p>CSV imports use a type-specific template, a row-by-row preview, and an all-or-nothing commit. Institution and facility contacts can be imported; logos must be added to each record separately.</p>
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="tertiary"
-            to="mailto:support@mentormama.org?subject=Programme directory guidance"
-            onClick={onClose}
-          >
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      icon={<BookOpen />}
+      title="Keep your operating context accurate"
+      description="Programme directory"
+      footer={
+        <>
+          <Button type="button" variant="tertiary" to="mailto:support@mentormama.org?subject=Programme directory guidance" onClick={onClose}>
             Contact support
           </Button>
           <Button
@@ -1643,10 +1424,60 @@ function DirectoryGuidanceModal({
           >
             Done
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <ul className="pd-guide">
+        <li>
+          <span aria-hidden="true"><Building2 /></span>
+          <p>
+            Add institutions and facilities used by your programme, then add wards under each facility. Facilities are programme-wide; they are not owned by a single institution and can serve multiple institutions.
+          </p>
+        </li>
+        <li>
+          <span aria-hidden="true"><Archive /></span>
+          <p>
+            Archive records when they are no longer available. Historical placements remain intact, and archived facilities cannot receive new wards.
+          </p>
+        </li>
+        <li>
+          <span aria-hidden="true"><FileUp /></span>
+          <p>
+            CSV imports use a type-specific template, a row-by-row preview, and an all-or-nothing commit. Institution and facility contacts can be imported; logos must be added to each record separately.
+          </p>
+        </li>
+      </ul>
+    </Modal>
   );
+}
+
+const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const IMPORT_STEPS = ["Choose file", "Review", "Done"] as const;
+
+function ImportSteps({ current }: { current: 1 | 2 | 3 }) {
+  return (
+    <ol className="pd-steps" aria-label="Import progress">
+      {IMPORT_STEPS.map((label, index) => {
+        const number = index + 1;
+        const state = number < current || current === 3 ? "done" : number === current ? "current" : "todo";
+        return (
+          <li key={label} className={`pd-steps__item is-${state}`} aria-current={number === current ? "step" : undefined}>
+            <span className="pd-steps__dot" aria-hidden="true">
+              {state === "done" ? <Check /> : number}
+            </span>
+            <span className="pd-steps__label">
+              {label}
+              <span className="sr-only">{state === "done" ? " (complete)" : state === "current" ? " (current step)" : ""}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function formatBytes(size: number) {
+  return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
 function DirectoryImportModal({
@@ -1667,14 +1498,23 @@ function DirectoryImportModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [dragging, setDragging] = useState(false);
   const commandKey = useRef<string | null>(null);
-  const dialogRef = useAccessibleDialog<HTMLElement>(onClose);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   function resetPreview() {
     setPreview(null);
     setConfirmWarnings(false);
     setError("");
     commandKey.current = null;
+  }
+
+  function chooseFile(selected: File | null) {
+    setFile(selected);
+    resetPreview();
+    if (!selected) return;
+    if (!/\.csv$/i.test(selected.name) && selected.type !== "text/csv") setError("Choose a CSV file (.csv).");
+    else if (selected.size > IMPORT_MAX_BYTES) setError("Choose a CSV file that is 2 MB or smaller.");
   }
 
   function downloadTemplate() {
@@ -1745,76 +1585,220 @@ function DirectoryImportModal({
     }
   }
 
+  const step: 1 | 2 | 3 = success ? 3 : preview ? 2 : 1;
+  const fileTooBig = Boolean(file && file.size > IMPORT_MAX_BYTES);
   const canCommit = Boolean(preview && preview.rows.length && !preview.errors.length && (!preview.warning_count || confirmWarnings));
+  const readyCount = preview ? preview.rows.filter((row) => row.status === "ready").length : 0;
+
+  let footer: React.ReactNode;
+  if (step === 3) {
+    footer = <Button type="button" onClick={onClose}>Done</Button>;
+  } else if (step === 2 && preview) {
+    footer = (
+      <>
+        <Button type="button" variant="tertiary" disabled={busy} onClick={resetPreview}>
+          <ArrowLeft size={15} aria-hidden="true" /> Choose another file
+        </Button>
+        <Button type="button" disabled={busy || !canCommit} aria-busy={busy} onClick={() => void commitImport()}>
+          {busy ? "Importing…" : `Import ${preview.rows.length} ${kind}`}
+        </Button>
+      </>
+    );
+  } else {
+    footer = (
+      <>
+        <Button type="button" variant="tertiary" disabled={busy} onClick={onClose}>Cancel</Button>
+        <Button
+          type="button"
+          disabled={busy || !file || fileTooBig || (kind === "wards" && !facilityId)}
+          aria-busy={busy}
+          onClick={() => void createPreview()}
+        >
+          {busy ? "Checking file…" : "Preview records"}
+        </Button>
+      </>
+    );
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-3 sm:p-5"
-      onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!busy}
+      size="lg"
+      icon={<Upload />}
+      title="Import directory records"
+      description="Preview every row before adding anything. Each file is limited to 500 records and 2 MB, and commits as one all-or-nothing operation."
+      closeLabel="Close import"
+      footer={footer}
     >
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="directory-import-title" tabIndex={-1} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">Programme directory</p>
-            <h3 id="directory-import-title" className="mt-2 font-display text-2xl font-bold text-navy">Import directory records</h3>
-            <p className="mt-2 max-w-2xl font-body text-sm leading-6 text-navy-muted">Preview every row before adding anything. Each file is limited to 500 records and 2 MB, and commits as one all-or-nothing operation.</p>
-          </div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Close import" className="rounded-full p-2 text-navy-muted hover:bg-mist disabled:opacity-50"><X size={18} /></button>
+      <ImportSteps current={step} />
+
+      {step === 3 && (
+        <div role="status" className="pd-done">
+          <span aria-hidden="true"><CheckCircle2 /></span>
+          <p className="pd-done__title">Import complete</p>
+          <p className="pd-done__text">{success}</p>
         </div>
+      )}
 
-        {success ? (
-          <div role="status" className="mt-6 rounded-xl border border-teal/20 bg-teal-light/35 p-5">
-            <p className="font-body text-sm font-semibold text-navy">{success}</p>
-            <Button type="button" className="mt-4" onClick={onClose}>Done</Button>
+      {step === 1 && (
+        <div className="pd-import-step">
+          <FieldRow>
+            <Field label="Record type">
+              <SelectInput
+                value={kind}
+                disabled={busy}
+                onChange={(event) => { setKind(event.target.value as DirectoryImportKind); resetPreview(); }}
+              >
+                <option value="institutions">Institutions</option>
+                <option value="facilities">Facilities</option>
+                <option value="wards">Wards</option>
+              </SelectInput>
+            </Field>
+            {kind === "wards" ? (
+              <Field
+                label="Facility for these wards"
+                error={!facilities.length ? "Add an active facility to the programme directory before importing wards." : undefined}
+              >
+                <SelectInput
+                  value={facilityId}
+                  disabled={busy || !facilities.length}
+                  onChange={(event) => { setFacilityId(event.target.value); resetPreview(); }}
+                >
+                  <option value="">Choose a facility</option>
+                  {facilities.map((facility) => <option key={facility.id} value={facility.id}>{facility.name}</option>)}
+                </SelectInput>
+              </Field>
+            ) : (
+              <p className="pd-fineprint pd-fineprint--end">Facilities are programme-wide. Wards are imported into one selected active facility.</p>
+            )}
+          </FieldRow>
+
+          <div className="pd-template">
+            <span aria-hidden="true"><FileText /></span>
+            <p>
+              <strong>Start with the matching template.</strong> Use the exact column names. Contact fields are available for institutions and facilities.
+            </p>
+            <Button type="button" variant="secondary" size="sm" onClick={downloadTemplate}>
+              <Download size={15} aria-hidden="true" /> Download CSV template
+            </Button>
           </div>
-        ) : (
-          <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <label className="font-body text-sm font-semibold text-navy">Record type
-                <select value={kind} disabled={busy} onChange={(event) => { setKind(event.target.value as DirectoryImportKind); resetPreview(); }} className="mt-2 min-h-11 w-full rounded-xl border border-border bg-white px-3 font-normal">
-                  <option value="institutions">Institutions</option><option value="facilities">Facilities</option><option value="wards">Wards</option>
-                </select>
-              </label>
-              {kind === "wards" ? (
-                <div>
-                  <label className="font-body text-sm font-semibold text-navy">Facility for these wards
-                    <select value={facilityId} disabled={busy || !facilities.length} onChange={(event) => { setFacilityId(event.target.value); resetPreview(); }} className="mt-2 min-h-11 w-full rounded-xl border border-border bg-white px-3 font-normal">
-                      <option value="">Choose a facility</option>{facilities.map((facility) => <option key={facility.id} value={facility.id}>{facility.name}</option>)}
-                    </select>
-                  </label>
-                  {!facilities.length && <p className="mt-2 font-body text-xs leading-5 text-amber-800">Add an active facility to the programme directory before importing wards.</p>}
-                </div>
-              ) : <div className="flex items-end"><p className="pb-2 font-body text-xs leading-5 text-navy-muted">Facilities are programme-wide. Wards are imported into one selected active facility.</p></div>}
+
+          <div
+            className={`pd-drop${dragging ? " is-dragging" : ""}${file ? " has-file" : ""}`}
+            onDragOver={(event) => { event.preventDefault(); if (!busy) setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              if (!busy) chooseFile(event.dataTransfer.files?.[0] ?? null);
+            }}
+          >
+            <input
+              ref={fileInput}
+              id="directory-import-file"
+              type="file"
+              accept=".csv,text/csv"
+              disabled={busy}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(event) => { chooseFile(event.target.files?.[0] ?? null); event.target.value = ""; }}
+            />
+            {file ? (
+              <div className="pd-drop__file">
+                <span aria-hidden="true"><FileText /></span>
+                <p>
+                  <strong>{file.name}</strong>
+                  <small>{formatBytes(file.size)}</small>
+                </p>
+                <Button type="button" variant="tertiary" size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
+                  Replace file
+                </Button>
+                <button type="button" className="pd-icon-btn" aria-label={`Remove ${file.name}`} disabled={busy} onClick={() => chooseFile(null)}>
+                  <X size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="pd-drop__icon" aria-hidden="true"><Upload /></span>
+                <p className="pd-drop__title">Drag and drop your completed CSV here</p>
+                <p className="pd-drop__hint">or</p>
+                <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
+                  Choose file
+                </Button>
+                <p className="pd-drop__hint">CSV only · up to 500 rows · 2 MB</p>
+              </>
+            )}
+          </div>
+          {error && (
+            <p role="alert" className="pd-callout pd-callout--error">
+              <AlertTriangle aria-hidden="true" />
+              <span>{error}</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {step === 2 && preview && (
+        <div className="pd-import-step">
+          <div className="pd-summary" role="group" aria-label="Review summary">
+            <span className="pd-summary__item is-ok"><strong>{readyCount}</strong> ready</span>
+            {preview.warning_count > 0 && <span className="pd-summary__item is-warn"><strong>{preview.warning_count}</strong> {preview.warning_count === 1 ? "duplicate warning" : "duplicate warnings"}</span>}
+            {preview.error_count > 0 && <span className="pd-summary__item is-bad"><strong>{preview.error_count}</strong> {preview.error_count === 1 ? "row with errors" : "rows with errors"}</span>}
+          </div>
+          <p className="sr-only">{preview.rows.length} rows · {preview.error_count} with errors · {preview.warning_count} with duplicate warnings</p>
+          {preview.errors.length > 0 && (
+            <div className="pd-callout pd-callout--error" role="alert">
+              <AlertTriangle aria-hidden="true" />
+              <div>
+                <p className="pd-callout__title">Resolve these issues in the CSV, then preview it again.</p>
+                <ul>
+                  {preview.errors.slice(0, 12).map((issue, index) => (
+                    <li key={`${issue.row}-${issue.field}-${index}`}>{issue.row ? `Row ${issue.row}: ` : "File: "}{issue.message}</li>
+                  ))}
+                </ul>
+                {preview.errors.length > 12 && <p>And {preview.errors.length - 12} more.</p>}
+              </div>
             </div>
-
-            <div className="mt-5 rounded-xl border border-border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div><p className="font-body text-sm font-semibold text-navy">1. Start with the matching template</p><p className="mt-1 font-body text-xs text-navy-muted">Use the exact column names. Contact fields are available for institutions and facilities.</p></div>
-                <Button type="button" variant="secondary" onClick={downloadTemplate}><FileUp size={15} /> Download CSV template</Button>
-              </div>
-              <label className="mt-5 block font-body text-sm font-semibold text-navy">2. Choose your completed CSV
-                <input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const selected = event.target.files?.[0] ?? null; setFile(selected); resetPreview(); if (selected && selected.size > 2 * 1024 * 1024) setError("Choose a CSV file that is 2 MB or smaller."); }} className="mt-2 block min-h-11 w-full rounded-xl border border-border p-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-teal-light file:px-3 file:py-2 file:font-semibold file:text-teal" />
-              </label>
-              {file && <p className="mt-2 font-body text-xs text-navy-muted">{file.name} · {(file.size / 1024).toFixed(0)} KB</p>}
-              <Button type="button" disabled={busy || !file || file.size > 2 * 1024 * 1024 || (kind === "wards" && !facilityId)} onClick={() => void createPreview()} className="mt-4">{busy && !preview ? "Checking file…" : "Preview records"}</Button>
-            </div>
-
-            {preview && <div className="mt-5 rounded-xl border border-border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div><p className="font-body text-sm font-semibold text-navy">3. Review before import</p><p className="mt-1 font-body text-xs text-navy-muted">{preview.rows.length} rows · {preview.error_count} with errors · {preview.warning_count} with duplicate warnings</p></div>
-              </div>
-              {preview.errors.length > 0 && <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Resolve these issues in the CSV, then preview it again.</p><ul className="mt-2 list-inside list-disc">{preview.errors.slice(0, 12).map((issue, index) => <li key={`${issue.row}-${issue.field}-${index}`}>{issue.row ? `Row ${issue.row}: ` : "File: "}{issue.message}</li>)}</ul>{preview.errors.length > 12 && <p className="mt-1">And {preview.errors.length - 12} more.</p>}</div>}
-              <div className="mt-3 max-h-52 overflow-auto rounded-lg border border-border">
-                <table className="w-full min-w-[34rem] text-left text-xs"><thead className="sticky top-0 bg-mist text-navy-muted"><tr><th className="p-2">Row</th><th className="p-2">Name</th><th className="p-2">Review</th><th className="p-2">Issue</th></tr></thead><tbody>{preview.rows.map((row) => <tr key={row.row} className="border-t border-border"><td className="p-2">{row.row}</td><td className="p-2 font-medium text-navy">{row.name || "Unnamed record"}</td><td className="p-2 capitalize">{row.status === "ready" ? "Ready" : row.status === "warning" ? "Check" : "Fix"}</td><td className="p-2 text-navy-muted">{row.issues.map((issue) => issue.message).join(" ") || "No issues"}</td></tr>)}</tbody></table>
-              </div>
-              {preview.warning_count > 0 && <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg bg-amber-50 p-3 font-body text-sm leading-5 text-amber-950"><input type="checkbox" checked={confirmWarnings} onChange={(event) => setConfirmWarnings(event.target.checked)} className="mt-1 accent-teal" />I reviewed the duplicate-name warnings. These may be distinct campuses or branches, and I want to continue.</label>}
-              <p className="mt-3 font-body text-xs leading-5 text-navy-muted">Import is permanent as a batch. After import, records can be archived individually. Logos are not included.</p>
-            </div>}
-
-            {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 font-body text-sm text-red-800">{error}</p>}
-            <div className="mt-6 flex flex-wrap justify-end gap-3"><Button type="button" variant="tertiary" disabled={busy} onClick={onClose}>Cancel</Button>{preview && <Button type="button" disabled={busy || !canCommit} onClick={() => void commitImport()}>{busy ? "Importing…" : `Import ${preview.rows.length} ${kind}`}</Button>}</div>
-          </>
-        )}
-      </section>
-    </div>
+          )}
+          <div className="pd-review" tabIndex={0} role="region" aria-label="Row-by-row validation">
+            <table>
+              <thead>
+                <tr><th scope="col">Row</th><th scope="col">Name</th><th scope="col">Review</th><th scope="col">Issue</th></tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((row) => (
+                  <tr key={row.row} className={`is-${row.status}`}>
+                    <td data-label="Row">{row.row}</td>
+                    <td data-label="Name" className="pd-review__name">{row.name || "Unnamed record"}</td>
+                    <td data-label="Review">
+                      <StatusPill tone={row.status === "ready" ? "success" : row.status === "warning" ? "warning" : "danger"}>
+                        {row.status === "ready" ? "Ready" : row.status === "warning" ? "Check" : "Fix"}
+                      </StatusPill>
+                    </td>
+                    <td data-label="Issue" className="pd-review__issue">{row.issues.map((issue) => issue.message).join(" ") || "No issues"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {preview.warning_count > 0 && (
+            <label className="pd-confirm">
+              <input type="checkbox" checked={confirmWarnings} onChange={(event) => setConfirmWarnings(event.target.checked)} />
+              <span>I reviewed the duplicate-name warnings. These may be distinct campuses or branches, and I want to continue.</span>
+            </label>
+          )}
+          <p className="pd-fineprint">Import is permanent as a batch. After import, records can be archived individually. Logos are not included.</p>
+          {error && (
+            <p role="alert" className="pd-callout pd-callout--error">
+              <AlertTriangle aria-hidden="true" />
+              <span>{error}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }

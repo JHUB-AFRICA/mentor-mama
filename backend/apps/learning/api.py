@@ -21,6 +21,47 @@ def progress(user) -> dict:
 
 
 def visible_modules(user):
-    return TrainingModule.objects.filter(program_id=user.program_id, is_published=True).filter(
+    return TrainingModule.objects.filter(program_id=user.program_id, is_published=True, archived_at=None).filter(
         visible_roles__contains=[user.role]
     ).prefetch_related("lessons", "quiz__questions").order_by("title")
+
+
+def knowledge_documents(user) -> list[dict]:
+    """Published lessons this user may read, as plain dicts for grounded assistants."""
+    return [
+        {"kind": "Training", "title": f"{module.title}: {lesson.title}", "text": lesson.body}
+        for module in visible_modules(user)
+        for lesson in module.lessons.all()
+    ]
+
+
+def catalogue(user, limit: int = 25) -> list[dict]:
+    """Titles of published modules this user may open, with their own completion state."""
+    done = set(ModuleCompletion.objects.filter(user=user).values_list("module_id", flat=True))
+    return [
+        {"title": module.title, "required": module.is_required, "completed": module.id in done,
+         "lessons": module.lessons.count(), "description": (module.description or "")[:160]}
+        for module in visible_modules(user)[:limit]
+    ]
+
+
+def programme_catalogue(user, limit: int = 40) -> list[dict]:
+    """Every module in the user's programme with audience and status (for content managers)."""
+    rows = TrainingModule.objects.filter(program_id=user.program_id).prefetch_related("lessons").order_by("title")[:limit]
+    return [
+        {"title": module.title, "required": module.is_required, "published": module.is_published,
+         "audience": list(module.visible_roles), "lessons": module.lessons.count(),
+         "description": (module.description or "")[:160]}
+        for module in rows
+    ]
+
+
+def programme_knowledge_documents(user) -> list[dict]:
+    """Lessons of every published module in the programme (content managers may read all of them)."""
+    modules = TrainingModule.objects.filter(program_id=user.program_id, is_published=True).prefetch_related("lessons")
+    return [
+        {"kind": "Training", "title": f"{module.title}: {lesson.title}", "text": lesson.body}
+        for module in modules
+        for lesson in module.lessons.all()
+    ]
+

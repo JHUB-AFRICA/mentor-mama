@@ -69,7 +69,7 @@ export function NurseManagerWorkspace({
     return (
       <FacilityWorkspaceFrame
         user={user}
-        active="overview"
+        active="account"
         title="Account & security"
         onAccount={() => undefined}
         onError={onError}

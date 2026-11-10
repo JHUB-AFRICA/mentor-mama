@@ -1,0 +1,40 @@
+/* Programme Admin placements register, built on the admin kit. */
+.pm-toolbar-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
+.pm-filters-extra {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.pm-table { min-width: 62rem; }
+.pm-row { cursor: pointer; }
+.pm-name {
+  display: block;
+  color: var(--pa-ink);
+  font-weight: 700;
+  text-align: left;
+}
+.pm-row:hover .pm-name { color: var(--pa-teal-ink); }
+.pm-name:focus-visible, .pm-icon-btn:focus-visible { outline: 2px solid var(--pa-teal); outline-offset: 2px; border-radius: 4px; }
+.pm-next { color: var(--pa-teal-ink); font-size: 0.74rem; font-weight: 600; }
+.pm-icon-btn {
+  display: inline-grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-radius);
+  background: #fff;
+  color: var(--pa-muted);
+}
+.pm-icon-btn:hover { border-color: var(--pa-teal); color: var(--pa-teal-ink); }
+.pm-pager { display: inline-flex; align-items: center; gap: 0.6rem; }
+.pm-skeleton > div { height: 4.2rem; border-bottom: 1px solid var(--pa-line-soft); background: var(--pa-subtle); }
+.pa .pa-tabs { scroll-padding: 0; }
+@media (max-width: 1180px) { .pm-filters-extra { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .pm-filters-extra { grid-template-columns: minmax(0, 1fr); }
+  .pa-table-footer { flex-wrap: wrap; }
+}
+.pa.placement-management-page { min-width: 0; max-width: 100%; }
+.pa.placement-management-page > * { min-width: 0; max-width: 100%; }
+.pm-table th { position: relative; }

@@ -1591,20 +1591,8 @@
     box-shadow: 12px 0 32px rgb(8 25 53 / 8%);
   }
 
-  .workspace-header {
-    position: fixed;
-    top: 0;
-    right: 0;
-    left: 0;
-    z-index: 50;
-    min-height: 5.3rem;
-    background: rgb(255 255 255 / 94%);
-    backdrop-filter: blur(14px);
-  }
-
-  .workspace-shell main {
-    padding-top: 7.8rem;
-  }
+  /* The legacy fixed .workspace-header and its 7.8rem main clearance were
+     removed: every role now uses the in-flow sticky PortalHeader. */
 
   /* Mentor pages own their inner rhythm. Removing Container's default
      gutters prevents a doubled gutter from collapsing mobile content. */
@@ -1612,11 +1600,9 @@
     padding-inline: 0 !important;
   }
 
-  /* The fixed header needs one clearance allowance. The previous 7.8rem
-     value was added to each page's own top rhythm, creating a large blank
-     band between the header and the first meaningful content. */
+  /* The shared PortalHeader is sticky and in flow, so mentor pages need no
+     fixed-header clearance; the workspace content padding sets the rhythm. */
   .workspace-content--mentor {
-    padding-top: 5.3rem !important;
     font-size: 1.02rem;
   }
 
@@ -1669,13 +1655,6 @@
     border-radius: 1rem;
     background: #fff;
     padding: 1.25rem;
-  }
-
-  @media (min-width: 1024px) {
-    .mentor-log-register {
-      position: sticky;
-      top: 7rem;
-    }
   }
 
   @media (min-width: 640px) {

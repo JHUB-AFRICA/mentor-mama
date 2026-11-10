@@ -61,3 +61,7 @@ class TrainingModuleWriteSerializer(serializers.Serializer):
 
 class QuizAttemptSerializer(serializers.Serializer):
     answers = serializers.DictField(child=serializers.CharField(), allow_empty=False)
+
+
+class LessonExplanationSerializer(serializers.Serializer):
+    lesson_id = serializers.UUIDField()

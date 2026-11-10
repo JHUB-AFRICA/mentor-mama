@@ -9,6 +9,9 @@ urlpatterns = [
     path("content/<uuid:content_id>/document", views.ContentDocumentDownloadView.as_view()),
     path("content/<uuid:content_id>/cover", views.ContentCoverImageView.as_view()),
     path("content/<uuid:content_id>/publish", views.ContentPublishView.as_view()),
+    path("content/<uuid:content_id>/unpublish", views.ContentUnpublishView.as_view()),
+    path("content/<uuid:content_id>/duplicate", views.ContentDuplicateView.as_view()),
+    path("content/<uuid:content_id>/revisions", views.ContentRevisionListView.as_view()),
     path("content/<uuid:content_id>/archive", views.ContentArchiveView.as_view()),
     path("content/<uuid:content_id>/revise", views.ContentReviseView.as_view()),
 ]

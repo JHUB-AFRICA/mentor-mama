@@ -10,6 +10,8 @@ import {
   ArrowUp,
   Bold,
   BookOpen,
+  Heading2,
+  Heading3,
   Check,
   FileText,
   GraduationCap,
@@ -43,6 +45,79 @@ import {
 } from "../../services/api";
 import type { LessonType } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
+import { isGuideBodyEmpty } from "./ContentReader";
+import { audienceOptions, groupsFromRoles, rolesFromGroups, type AudienceGroup } from "./contentMeta";
+import "./content-detail.css";
+
+export interface SavedContent {
+  kind: AuthoringKind;
+  id: string;
+}
+
+type ExistingStatus = "draft" | "published" | "archived";
+
+function AudiencePicker({ value, onChange }: { value: AudienceGroup[]; onChange: (value: AudienceGroup[]) => void }) {
+  return (
+    <fieldset className="content-authoring-field" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend style={{ padding: 0 }}>
+        Audience <span className="content-authoring-required">*</span>
+      </legend>
+      <div style={{ display: "grid", gap: "0.45rem", marginTop: "0.45rem" }}>
+        {audienceOptions.map((option) => {
+          const checked = value.includes(option.value);
+          return (
+            <label
+              key={option.value}
+              style={{
+                display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer",
+                border: `1px solid ${checked ? "#1d8c8c" : "#dbe4ed"}`, borderRadius: "0.65rem",
+                background: checked ? "#e8f7f5" : "#fff", padding: "0.55rem 0.75rem",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onChange(checked ? value.filter((item) => item !== option.value) : [...value, option.value])}
+              />
+              <span style={{ display: "grid", lineHeight: 1.25 }}>
+                <strong style={{ fontSize: "0.82rem", color: "#10223b" }}>{option.label}</strong>
+                <small style={{ fontSize: "0.72rem", color: "#607392" }}>{option.hint}</small>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {value.length === 0 && (
+        <small role="alert" style={{ color: "#b83e3e", marginTop: "0.4rem", display: "block" }}>
+          Choose at least one audience so someone can see this.
+        </small>
+      )}
+    </fieldset>
+  );
+}
+
+function ReadinessChecklist({ items }: { items: Array<{ label: string; done: boolean }> }) {
+  const remaining = items.filter((item) => !item.done).length;
+  return (
+    <div className="content-authoring-side-card">
+      <p>Publishing checklist</p>
+      {items.map((item) => (
+        <div className="content-authoring-check" key={item.label}>
+          <span className={item.done ? "is-checked" : ""} aria-hidden="true">
+            <Check size={13} />
+          </span>
+          <strong style={{ fontWeight: item.done ? 600 : 500, color: item.done ? "#10223b" : "#607392" }}>
+            {item.label}
+            <span className="sr-only">{item.done ? " (done)" : " (still needed)"}</span>
+          </strong>
+        </div>
+      ))}
+      <small style={{ display: "block", marginTop: "0.5rem", color: remaining ? "#a35f00" : "#2f845d" }} role="status">
+        {remaining ? `${remaining} ${remaining === 1 ? "item" : "items"} left before publishing.` : "Ready to publish."}
+      </small>
+    </div>
+  );
+}
 
 export type AuthoringKind = "guide" | "module" | "document" | "external";
 
@@ -79,18 +154,17 @@ export function ContentAuthoringWorkspace({
   kind: AuthoringKind;
   onBack: () => void;
   onError: (message: string) => void;
-  onSaved: () => void;
+  onSaved: (saved?: SavedContent) => void;
   editId?: string;
 }) {
   const queryClient = useQueryClient();
-  function handleSaved() {
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["content-items"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-library-overview"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-training-modules"] }),
-      queryClient.invalidateQueries({ queryKey: ["library"] }),
-    ]);
-    onSaved();
+  function handleSaved(saved?: SavedContent) {
+    void Promise.all(
+      ["content-items", "admin-library-overview", "admin-training-modules", "library", "content-detail", "content-revisions", "content-edit", "module-edit", "training-modules"].map(
+        (key) => queryClient.invalidateQueries({ queryKey: [key] }),
+      ),
+    );
+    onSaved(saved);
   }
   if (kind === "guide")
     return (
@@ -113,6 +187,8 @@ export function ContentAuthoringWorkspace({
 
 function AuthoringShell({
   kind,
+  mode,
+  existingStatus,
   preview,
   onPreview,
   onBack,
@@ -122,26 +198,40 @@ function AuthoringShell({
   children,
 }: {
   kind: AuthoringKind;
+  mode: "create" | "edit";
+  existingStatus?: ExistingStatus;
   preview: boolean;
   onPreview: () => void;
   onBack: () => void;
-  onSaveDraft?: () => void;
-  onPublish?: () => void;
+  onSaveDraft: () => void;
+  onPublish: () => void;
   busy?: boolean;
   children: React.ReactNode;
 }) {
   const meta = kindMeta[kind];
   const Icon = meta.icon;
+  const live = mode === "edit" && existingStatus === "published";
+  const verb = mode === "edit" ? "Edit" : "Create";
+  const stateLabel =
+    mode === "create"
+      ? "New draft · not saved yet"
+      : existingStatus === "published"
+        ? "Live · changes apply when you save"
+        : existingStatus === "archived"
+          ? "Archived · restored when published"
+          : "Draft";
   return (
     <div className="content-authoring-page">
       <div className="content-authoring-titlebar">
         <div className="content-authoring-breadcrumb">
           <button type="button" onClick={onBack}>
             <ArrowLeft size={16} />
-            Content library
+            {mode === "edit" ? "Back" : "Content library"}
           </button>
           <span>/</span>
-          <strong>Create {meta.label.toLowerCase()}</strong>
+          <strong>
+            {verb} {meta.label.toLowerCase()}
+          </strong>
         </div>
         <div className="content-authoring-titlebar-row">
           <div>
@@ -150,37 +240,31 @@ function AuthoringShell({
               {meta.label}
             </p>
             <h1>
-              {preview
-                ? `Preview ${meta.label.toLowerCase()}`
-                : `Create ${meta.label.toLowerCase()}`}
+              {preview ? `Preview ${meta.label.toLowerCase()}` : `${verb} ${meta.label.toLowerCase()}`}
             </h1>
             <p>{meta.description}</p>
           </div>
           <div className="content-authoring-topbar-actions">
             <span className="content-authoring-save-state">
               <span />
-              Draft · Not saved
+              {stateLabel}
             </span>
             <Button type="button" variant="tertiary" onClick={onPreview}>
               {preview ? "Edit content" : "Preview"}
             </Button>
             <Button
-              type={onSaveDraft ? "button" : "submit"}
-              form={onSaveDraft ? undefined : "content-authoring-form"}
+              type="button"
+              variant={live ? "tertiary" : undefined}
               onClick={onSaveDraft}
               disabled={busy}
+              title={live ? "Takes this content down and saves your edits as a draft" : undefined}
             >
               <Save size={16} />
-              {busy ? "Saving…" : "Save draft"}
+              {busy ? "Saving…" : live ? "Save as draft" : "Save draft"}
             </Button>
-            <Button
-              type={onPublish ? "button" : "submit"}
-              form={onPublish ? undefined : "content-authoring-form"}
-              onClick={onPublish}
-              disabled={busy}
-            >
+            <Button type="button" onClick={onPublish} disabled={busy}>
               <Send size={16} />
-              Publish {meta.label.toLowerCase()}
+              {live ? "Save changes" : `Publish ${meta.label.toLowerCase()}`}
             </Button>
           </div>
         </div>
@@ -188,6 +272,14 @@ function AuthoringShell({
       {children}
     </div>
   );
+}
+
+function savedToast(variables: { publish: boolean; keepLive?: boolean }) {
+  if (variables.keepLive)
+    return { kind: "success" as const, title: "Changes saved", message: "Your edits are live for the selected audience." };
+  if (variables.publish)
+    return { kind: "success" as const, title: "Content published", message: "The content is now available to its selected audience." };
+  return { kind: "success" as const, title: "Draft saved", message: "Your changes have been saved. Publish when you are ready." };
 }
 
 function GuideAuthoring({
@@ -200,9 +292,10 @@ function GuideAuthoring({
   const [preview, setPreview] = useState(false);
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [audience, setAudience] = useState("mentor");
+  const [audience, setAudience] = useState<AudienceGroup[]>(["mentor"]);
   const [category, setCategory] = useState("onboarding");
   const [contentId, setContentId] = useState<string | null>(null);
+  const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -222,12 +315,15 @@ function GuideAuthoring({
   useEffect(() => {
     const item = existing.data;
     if (!item || !editor) return;
-    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setAudience(item.visible_roles[0] ?? "mentor"); setCategory(item.category ?? "onboarding");
+    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "onboarding");
+    setExistingStatus(item.status ?? (item.published ? "published" : "draft"));
     if (item.cover_image) setCoverPreview(item.cover_image);
     try { editor.commands.setContent(JSON.parse(item.body), { emitUpdate: false }); } catch { editor.commands.clearContent(); }
   }, [editor, existing.data]);
+  const bodyJson = JSON.stringify(editor?.getJSON() ?? {});
+  const bodyEmpty = isGuideBodyEmpty(bodyJson);
   const save = useMutation({
-    mutationFn: async ({ publish }: { publish: boolean }) => {
+    mutationFn: async ({ publish, keepLive = false }: { publish: boolean; keepLive?: boolean }) => {
       const input = {
         title,
         slug: slugify(title),
@@ -235,8 +331,9 @@ function GuideAuthoring({
         body: JSON.stringify(editor?.getJSON() ?? {}),
         content_type: "guide",
         category,
-        visible_roles: [audience],
+        visible_roles: rolesFromGroups(audience),
         cover_image: coverFile,
+        keep_published: keepLive,
       };
       const item = contentId
         ? await reviseContentItem(contentId, input)
@@ -245,7 +342,7 @@ function GuideAuthoring({
       if (publish) await publishContentItem(item.id);
       return item;
     },
-    onSuccess: (_result, variables) => { pushToast({ kind: "success", title: variables.publish ? "Content published" : "Draft saved", message: variables.publish ? "The content is now available to its selected audience." : "Your changes have been saved." }); onSaved(); },
+    onSuccess: (result, variables) => { pushToast(savedToast(variables)); onSaved({ kind: "guide", id: result.id }); },
     onError: (cause) =>
       onError(
         cause instanceof ApiError
@@ -255,15 +352,31 @@ function GuideAuthoring({
   });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!title.trim()) return;
+    saveDraft();
+  }
+  function saveDraft() {
+    if (!title.trim()) {
+      onError("Add a title before saving this guide.");
+      return;
+    }
     void save.mutate({ publish: false });
   }
   function publish() {
-    if (!title.trim()) {
-      onError("Add a title before publishing this guide.");
+    const problem = !title.trim()
+      ? "Add a title before publishing this guide."
+      : !summary.trim()
+        ? "Add a short summary so people know what this guide covers."
+        : bodyEmpty
+          ? "Write some content before publishing this guide."
+          : audience.length === 0
+            ? "Choose at least one audience before publishing."
+            : null;
+    if (problem) {
+      onError(problem);
       return;
     }
-    void save.mutate({ publish: true });
+    if (existingStatus === "published") void save.mutate({ publish: false, keepLive: true });
+    else void save.mutate({ publish: true });
   }
   function insertImage(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -298,9 +411,12 @@ function GuideAuthoring({
   return (
     <AuthoringShell
       kind="guide"
+      mode={editId ? "edit" : "create"}
+      existingStatus={existingStatus}
       preview={preview}
       onPreview={() => setPreview((value) => !value)}
       onBack={onBack}
+      onSaveDraft={saveDraft}
       onPublish={publish}
       busy={save.isPending}
     >
@@ -337,6 +453,22 @@ function GuideAuthoring({
                     onClick={() => editor?.chain().focus().setParagraph().run()}
                   >
                     Paragraph
+                  </button>
+                  <button
+                    type="button"
+                    title="Section heading"
+                    aria-label="Section heading"
+                    onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                  >
+                    <Heading2 size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Sub-heading"
+                    aria-label="Sub-heading"
+                    onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+                  >
+                    <Heading3 size={18} />
                   </button>
                   <ToolbarDivider />
                   <button
@@ -445,11 +577,17 @@ function GuideAuthoring({
             </Button>
             <Button type="submit" disabled={save.isPending}>
               <Save size={16} />
-              {save.isPending ? "Saving…" : "Save draft"}
+              {save.isPending ? "Saving…" : existingStatus === "published" ? "Save as draft" : "Save draft"}
             </Button>
           </div>
         </div>
         <GuideSettings
+          checklist={[
+            { label: "Title added", done: Boolean(title.trim()) },
+            { label: "Summary added", done: Boolean(summary.trim()) },
+            { label: "Content written", done: !bodyEmpty },
+            { label: "Audience selected", done: audience.length > 0 },
+          ]}
           audience={audience}
           setAudience={setAudience}
           category={category}
@@ -473,8 +611,9 @@ function ModuleAuthoring({
   const [preview, setPreview] = useState(false);
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [audience, setAudience] = useState("mentor");
+  const [audience, setAudience] = useState<AudienceGroup[]>(["mentor"]);
   const [category, setCategory] = useState("clinical_care");
+  const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const [required, setRequired] = useState(false);
   const [includeQuiz, setIncludeQuiz] = useState(false);
   const [passMark, setPassMark] = useState(70);
@@ -482,13 +621,7 @@ function ModuleAuthoring({
   const [lessons, setLessons] = useState([
     { title: "", body: "", lesson_type: "reading" as LessonType, duration_minutes: 5 },
   ]);
-  const [quiz, setQuiz] = useState([
-    {
-      prompt: "",
-      options: ["", "", ""],
-      correct_option: "",
-    },
-  ]);
+  const [quiz, setQuiz] = useState<QuizQuestionDraft[]>([]);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -496,39 +629,34 @@ function ModuleAuthoring({
   useEffect(() => {
     const module = existing.data?.find((row) => row.id === editId);
     if (!module) return;
-    setTitle(module.title); setSummary(module.description); setAudience(module.visible_roles[0] ?? "mentor"); setCategory(module.category); setRequired(module.is_required); setPassMark(module.pass_mark);
+    setTitle(module.title); setSummary(module.description); setAudience(groupsFromRoles(module.visible_roles)); setCategory(module.category); setRequired(module.is_required); setPassMark(module.pass_mark);
+    setExistingStatus(module.status);
     setLessons(module.lessons.map((lesson) => ({ title: lesson.title, body: lesson.body, lesson_type: lesson.lesson_type, duration_minutes: lesson.duration_minutes })));
     setSelectedLesson(0); setIncludeQuiz(module.quiz.length > 0);
     if (module.quiz.length > 0) setQuiz(module.quiz.map((question) => ({ prompt: question.prompt, options: question.options, correct_option: question.correct_option ?? "" })));
     if (module.cover_image) setCoverPreview(module.cover_image);
   }, [editId, existing.data]);
+  const buildInput = (keepLive: boolean) => ({
+    title,
+    description: summary,
+    pass_mark: passMark,
+    is_required: required,
+    visible_roles: rolesFromGroups(audience),
+    category,
+    lessons,
+    quiz: includeQuiz ? quiz : [],
+    cover_image: coverFile,
+    keep_published: keepLive,
+  });
   const save = useMutation({
-    mutationFn: ({ publish }: { publish: boolean }) =>
-      (editId ? reviseTrainingModule(editId, {
-        title,
-        description: summary,
-        pass_mark: passMark,
-        is_required: required,
-        visible_roles: [audience],
-        category,
-        lessons,
-        quiz: includeQuiz ? quiz : [],
-        cover_image: coverFile,
-      }) : createTrainingModule({
-        title,
-        description: summary,
-        pass_mark: passMark,
-        is_required: required,
-        visible_roles: [audience],
-        category,
-        lessons,
-        quiz: includeQuiz ? quiz : [],
-        cover_image: coverFile,
-      })).then(async (module) => {
-        if (publish) await publishTrainingModule(module.id);
-        return module;
-      }),
-    onSuccess: (_result, variables) => { pushToast({ kind: "success", title: variables.publish ? "Content published" : "Draft saved", message: variables.publish ? "The content is now available to its selected audience." : "Your changes have been saved." }); onSaved(); },
+    mutationFn: async ({ publish, keepLive = false }: { publish: boolean; keepLive?: boolean }) => {
+      const module = editId
+        ? await reviseTrainingModule(editId, buildInput(keepLive))
+        : await createTrainingModule(buildInput(false));
+      if (publish) await publishTrainingModule(module.id);
+      return module;
+    },
+    onSuccess: (result, variables) => { pushToast(savedToast(variables)); onSaved({ kind: "module", id: result.id }); },
     onError: (cause) =>
       onError(
         cause instanceof ApiError
@@ -564,34 +692,43 @@ function ModuleAuthoring({
     };
     reader.readAsDataURL(file);
   }
+  const lessonsComplete = lessons.length > 0 && lessons.every((lesson) => lesson.title.trim() && lesson.body.trim());
+  const quizComplete = !includeQuiz || (quiz.length > 0 && quiz.every((question) => question.prompt.trim() && question.options.filter(Boolean).length >= 2 && question.correct_option));
+  function publishProblem(): string | null {
+    if (!title.trim()) return "Add a title to this module.";
+    if (!summary.trim()) return "Add a description so learners know what the module covers.";
+    if (!lessonsComplete) return "Give every lesson a title and some content.";
+    if (!quizComplete) return "Finish every knowledge check question: a prompt, at least two answers and the correct answer.";
+    if (audience.length === 0) return "Choose at least one audience.";
+    return null;
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (
-      !title.trim() ||
-      !summary.trim() ||
-      lessons.some((lesson) => !lesson.title.trim() || !lesson.body.trim()) ||
-      (includeQuiz && (quiz.length === 0 || quiz.some((question) => !question.prompt.trim() || question.options.filter(Boolean).length < 2 || !question.correct_option)))
-    ) {
-      onError(
-        "Add a title and content to every lesson before saving this module.",
-      );
+    saveDraft();
+  }
+  function saveDraft() {
+    if (!title.trim()) {
+      onError("Add a title before saving this module.");
+      return;
+    }
+    if (lessons.some((lesson) => !lesson.title.trim() || !lesson.body.trim())) {
+      onError("Give every lesson a title and some content, or remove the empty lesson.");
+      return;
+    }
+    if (!quizComplete) {
+      onError("Finish every knowledge check question or remove the incomplete one.");
       return;
     }
     void save.mutate({ publish: false });
   }
   function publish() {
-    if (
-      !title.trim() ||
-      !summary.trim() ||
-      lessons.some((lesson) => !lesson.title.trim() || !lesson.body.trim()) ||
-      (includeQuiz && (quiz.length === 0 || quiz.some((question) => !question.prompt.trim() || question.options.filter(Boolean).length < 2 || !question.correct_option)))
-    ) {
-      onError(
-        "Add a title and content to every lesson before publishing this module.",
-      );
+    const problem = publishProblem();
+    if (problem) {
+      onError(problem);
       return;
     }
-    void save.mutate({ publish: true });
+    if (existingStatus === "published") void save.mutate({ publish: false, keepLive: true });
+    else void save.mutate({ publish: true });
   }
   const activeLesson = lessons[selectedLesson];
   function removeLesson(index: number) {
@@ -604,9 +741,12 @@ function ModuleAuthoring({
   return (
     <AuthoringShell
       kind="module"
+      mode={editId ? "edit" : "create"}
+      existingStatus={existingStatus}
       preview={preview}
       onPreview={() => setPreview((value) => !value)}
       onBack={onBack}
+      onSaveDraft={saveDraft}
       onPublish={publish}
       busy={save.isPending}
     >
@@ -704,7 +844,7 @@ function ModuleAuthoring({
               <span className={required ? "is-checked" : ""}>
                 <Check size={13} />
               </span>
-              <strong>Require all lessons to be completed</strong>
+              <strong>Required for mentors before placement</strong>
             </label>
             <label className="content-authoring-check">
               <input
@@ -720,6 +860,11 @@ function ModuleAuthoring({
               </span>
               <strong>Include a knowledge check</strong>
             </label>
+            {!includeQuiz && (
+              <small className="content-authoring-field-help">
+                Without a knowledge check, mentors complete this module by marking it as read after the last lesson.
+              </small>
+            )}
             {includeQuiz && (
               <label className="content-authoring-module-score">
                 Passing score
@@ -735,13 +880,21 @@ function ModuleAuthoring({
             )}
             {includeQuiz && <QuizManager questions={quiz} onChange={setQuiz} onError={onError} />}
           </div>
+          <ReadinessChecklist
+            items={[
+              { label: "Title and description added", done: Boolean(title.trim() && summary.trim()) },
+              { label: "Every lesson has a title and content", done: lessonsComplete },
+              { label: includeQuiz ? "Knowledge check questions complete" : "Knowledge check (optional)", done: includeQuiz ? quizComplete && quiz.length > 0 : true },
+              { label: "Audience selected", done: audience.length > 0 },
+            ]}
+          />
           <div className="content-authoring-bottom-actions">
             <Button type="button" variant="tertiary" onClick={onBack}>
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
               <Save size={16} />
-              {save.isPending ? "Saving…" : "Save draft"}
+              {save.isPending ? "Saving…" : existingStatus === "published" ? "Save as draft" : "Save draft"}
             </Button>
           </div>
         </aside>
@@ -1046,7 +1199,9 @@ function ModuleDetails({
   coverInputRef,
   coverPreview,
   onCoverChange,
-}: React.ComponentProps<typeof AuthoringDetails> & {
+}: Omit<React.ComponentProps<typeof AuthoringDetails>, "audience" | "setAudience"> & {
+  audience: AudienceGroup[];
+  setAudience: (value: AudienceGroup[]) => void;
   coverInputRef: React.RefObject<HTMLInputElement | null>;
   coverPreview: string | null;
   onCoverChange: (file: File) => void;
@@ -1080,17 +1235,7 @@ function ModuleDetails({
           placeholder="Describe what learners will gain from this module."
         />
       </label>
-      <label className="content-authoring-field">
-        Audience <span className="content-authoring-required">*</span>
-        <select
-          value={audience}
-          onChange={(event) => setAudience(event.target.value)}
-        >
-          <option value="mentor">Mentors</option>
-          <option value="student">Students</option>
-          <option value="coordinator">Programme staff</option>
-        </select>
-      </label>
+      <AudiencePicker value={audience} onChange={setAudience} />
       <label className="content-authoring-field">
         Category <span className="content-authoring-required">*</span>
         <select
@@ -1155,18 +1300,26 @@ function ModulePreview({
           </div>
         </section>
       ))}
-      {includeQuiz && quiz[0] && (
+      {includeQuiz && quiz.length > 0 && (
         <section className="content-module-preview-quiz">
           <div>
             <span>Knowledge check</span>
-            <small>Pass mark {passMark}%</small>
+            <small>
+              {quiz.length} {quiz.length === 1 ? "question" : "questions"} · pass mark {passMark}%
+            </small>
           </div>
-          <h3>{quiz[0].prompt || "Your question will appear here."}</h3>
-          <ul>
-            {quiz[0].options.map((option, index) => (
-              <li key={`preview-option-${index}`}>{option || `Answer option ${index + 1}`}</li>
-            ))}
-          </ul>
+          {quiz.map((question, questionIndex) => (
+            <div key={`preview-question-${questionIndex}`}>
+              <h3>
+                {questionIndex + 1}. {question.prompt || "Your question will appear here."}
+              </h3>
+              <ul>
+                {question.options.map((option, index) => (
+                  <li key={`preview-option-${questionIndex}-${index}`}>{option || `Answer option ${index + 1}`}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )}
     </article>
@@ -1186,8 +1339,9 @@ function ResourceAuthoring({
   const { pushToast } = useToast();
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [audience, setAudience] = useState("mentor");
+  const [audience, setAudience] = useState<AudienceGroup[]>(["mentor"]);
   const [category, setCategory] = useState("reference");
+  const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const [resourceUrl, setResourceUrl] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState("");
@@ -1204,10 +1358,11 @@ function ResourceAuthoring({
   useEffect(() => {
     const item = existing.data;
     if (!item) return;
-    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setResourceUrl(item.resource_url.startsWith("/api/v1/content/") ? "" : item.resource_url); setAudience(item.visible_roles[0] ?? "mentor"); setCategory(item.category ?? "reference");
+    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setResourceUrl(item.resource_url.startsWith("/api/v1/content/") ? "" : item.resource_url); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "reference");
+    setExistingStatus(item.status ?? (item.published ? "published" : "draft"));
   }, [existing.data]);
   const save = useMutation({
-    mutationFn: async ({ publish }: { publish: boolean }) => {
+    mutationFn: async ({ publish, keepLive = false }: { publish: boolean; keepLive?: boolean }) => {
       const input = {
         title,
         slug: slugify(title),
@@ -1217,7 +1372,8 @@ function ResourceAuthoring({
         document_file: documentFile,
         content_type: kind,
         category,
-        visible_roles: [audience],
+        visible_roles: rolesFromGroups(audience),
+        keep_published: keepLive,
       };
       const item = contentId
         ? await reviseContentItem(contentId, input)
@@ -1226,7 +1382,7 @@ function ResourceAuthoring({
       if (publish) await publishContentItem(item.id);
       return item;
     },
-    onSuccess: (_result, variables) => { pushToast({ kind: "success", title: variables.publish ? "Content published" : "Draft saved", message: variables.publish ? "The content is now available to its selected audience." : "Your changes have been saved." }); onSaved(); },
+    onSuccess: (result, variables) => { pushToast(savedToast(variables)); onSaved({ kind, id: result.id }); },
     onError: (cause) =>
       onError(
         cause instanceof ApiError
@@ -1234,27 +1390,46 @@ function ResourceAuthoring({
           : "We could not save this resource.",
       ),
   });
+  const hasSource = kind === "document"
+    ? Boolean(documentFile || resourceUrl.trim() || existing.data?.document_name)
+    : Boolean(resourceUrl.trim());
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!title.trim() || (kind === "document" ? !documentFile && !resourceUrl.trim() && !existing.data?.document_name : !resourceUrl.trim())) {
-      onError(kind === "document" ? "Choose a document file or add its managed link before saving." : "Add a title and a valid resource URL before saving.");
+    saveDraft();
+  }
+  function saveDraft() {
+    if (!title.trim()) {
+      onError("Add a title before saving.");
       return;
     }
     void save.mutate({ publish: false });
   }
   function publish() {
-    if (!title.trim() || (kind === "document" ? !documentFile && !resourceUrl.trim() && !existing.data?.document_name : !resourceUrl.trim())) {
-      onError(kind === "document" ? "Choose a document file or add its managed link before publishing." : "Add a title and a valid resource URL before publishing.");
+    const problem = !title.trim()
+      ? "Add a title before publishing."
+      : !hasSource
+        ? kind === "document"
+          ? "Choose a document file or add its managed link before publishing."
+          : "Add a valid resource URL before publishing."
+        : audience.length === 0
+          ? "Choose at least one audience before publishing."
+          : null;
+    if (problem) {
+      onError(problem);
       return;
     }
-    void save.mutate({ publish: true });
+    if (existingStatus === "published") void save.mutate({ publish: false, keepLive: true });
+    else void save.mutate({ publish: true });
   }
   return (
     <AuthoringShell
       kind={kind}
+      mode={editId ? "edit" : "create"}
+      existingStatus={existingStatus}
       preview={preview}
       onPreview={() => setPreview((value) => !value)}
       onBack={onBack}
+      onSaveDraft={saveDraft}
       onPublish={publish}
       busy={save.isPending}
     >
@@ -1319,11 +1494,18 @@ function ResourceAuthoring({
             </Button>
             <Button type="submit" disabled={save.isPending}>
               <Save size={16} />
-              {save.isPending ? "Saving…" : "Save draft"}
+              {save.isPending ? "Saving…" : existingStatus === "published" ? "Save as draft" : "Save draft"}
             </Button>
           </div>
         </div>
-        <AuthoringSidePanel kind={kind} />
+        <AuthoringSidePanel
+          kind={kind}
+          items={[
+            { label: "Title added", done: Boolean(title.trim()) },
+            { label: kind === "document" ? "Document or link attached" : "Valid resource URL added", done: hasSource },
+            { label: "Audience selected", done: audience.length > 0 },
+          ]}
+        />
       </form>
     </AuthoringShell>
   );
@@ -1399,6 +1581,7 @@ function GuideDetails({
 }
 
 function GuideSettings({
+  checklist,
   audience,
   setAudience,
   category,
@@ -1407,8 +1590,9 @@ function GuideSettings({
   coverPreview,
   onCoverChange,
 }: {
-  audience: string;
-  setAudience: (value: string) => void;
+  checklist: Array<{ label: string; done: boolean }>;
+  audience: AudienceGroup[];
+  setAudience: (value: AudienceGroup[]) => void;
   category: string;
   setCategory: (value: string) => void;
   coverInputRef: React.RefObject<HTMLInputElement | null>;
@@ -1429,17 +1613,7 @@ function GuideSettings({
             </small>
           </div>
         </div>
-        <label className="content-authoring-field">
-          Audience <span className="content-authoring-required">*</span>
-          <select
-            value={audience}
-            onChange={(event) => setAudience(event.target.value)}
-          >
-            <option value="mentor">Mentors</option>
-            <option value="student">Students</option>
-            <option value="coordinator">Programme staff</option>
-          </select>
-        </label>
+        <AudiencePicker value={audience} onChange={setAudience} />
         <label className="content-authoring-field">
           Category <span className="content-authoring-required">*</span>
           <select
@@ -1477,20 +1651,7 @@ function GuideSettings({
           />
         </div>
       </div>
-      <div className="content-authoring-side-card">
-        <div className="content-authoring-card-heading">
-          <span className="content-authoring-card-icon">
-            <BookOpen size={17} />
-          </span>
-          <div>
-            <strong>Guide outline</strong>
-            <small>Headings are generated automatically.</small>
-          </div>
-        </div>
-        <p className="content-authoring-outline-empty">
-          Add headings to your guide to build its outline.
-        </p>
-      </div>
+      <ReadinessChecklist items={checklist} />
     </aside>
   );
 }
@@ -1509,8 +1670,8 @@ function AuthoringDetails({
   setTitle: (value: string) => void;
   summary: string;
   setSummary: (value: string) => void;
-  audience: string;
-  setAudience: (value: string) => void;
+  audience: AudienceGroup[];
+  setAudience: (value: AudienceGroup[]) => void;
   category: string;
   setCategory: (value: string) => void;
 }) {
@@ -1540,17 +1701,7 @@ function AuthoringDetails({
             placeholder="What will this help people do?"
           />
         </label>
-        <label className="content-authoring-field">
-          Audience
-          <select
-            value={audience}
-            onChange={(event) => setAudience(event.target.value)}
-          >
-            <option value="mentor">Mentors</option>
-            <option value="student">Students</option>
-            <option value="coordinator">Programme staff</option>
-          </select>
-        </label>
+        <AudiencePicker value={audience} onChange={setAudience} />
         <label className="content-authoring-field">
           Category
           <select
@@ -1569,27 +1720,11 @@ function AuthoringDetails({
   );
 }
 
-function AuthoringSidePanel({ kind }: { kind: AuthoringKind }) {
+function AuthoringSidePanel({ kind, items }: { kind: AuthoringKind; items: Array<{ label: string; done: boolean }> }) {
   const Icon = kindMeta[kind].icon;
   return (
     <aside className="content-authoring-sidebar">
-      <div className="content-authoring-side-card">
-        <p>Publishing checklist</p>
-        {[
-          "Title and summary added",
-          "Audience and category selected",
-          kind === "module"
-            ? "Lessons are in the right order"
-            : "Content is ready to publish",
-        ].map((item) => (
-          <div className="content-authoring-check" key={item}>
-            <span>
-              <Check size={13} />
-            </span>
-            {item}
-          </div>
-        ))}
-      </div>
+      <ReadinessChecklist items={items} />
       <div className="content-authoring-side-card content-authoring-side-card--quiet">
         <Icon size={18} />
         <strong>{kindMeta[kind].label}</strong>

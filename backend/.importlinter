@@ -12,7 +12,7 @@ include_external_packages = True
 name = Module layers point downward only
 type = layers
 layers =
-    apps.analytics | apps.notifications
+    apps.analytics | apps.notifications | apps.assistant
     apps.induction | apps.mentorship | apps.assessments | apps.safeguarding
     apps.placements
     apps.institutions | apps.facilities | apps.learning | apps.content

@@ -37,3 +37,23 @@
 - Reduced-motion users receive effectively static transitions.
 - Empty, loading, error, success, and offline states remain feature-owned and
   are not hidden by the visual shell.
+
+## Programme Admin design kit (2026-11-10)
+
+Every Programme Admin screen composes `apps/portal/src/features/programme-admin/ui/AdminKit.tsx` (styles in `ui/admin-kit.css`), derived from the Content library page:
+
+- **Page header** — eyebrow 0.75rem/700 teal uppercase, title 2.25rem/700, description 1rem muted, actions right-aligned.
+- **Stat card** — 2.8rem icon tile, value 1.5rem/700, label 0.76rem, optional hint; clickable when it leads somewhere.
+- **Card** — 1px `#dbe4ed` border, 0.75rem radius, header title 0.98rem/700 with 0.76rem description; list rows via `ListRow`.
+- **Controls** — one 2.8rem height and 0.75rem radius for search, selects and buttons (primary, secondary, ghost); no pill-shaped buttons.
+- **Tabs** — underline tabs with optional count badge. **Tables** — `.pa-table` with 0.64rem uppercase headers. **Status** — `StatusPill` tones success, warning, danger, info, teal, neutral.
+
+All roles share `features/workspaces/PortalSidebar.tsx`: a 17rem navy sidebar with grouped navigation, a sliding active indicator, an "Ask Menta" card (Ctrl/⌘+K), a profile block, and a drawer below 1024px.
+
+## Overlays, fields, header (2026-11-10)
+
+- `src/components/kit`: `Modal` and `Drawer` render in a portal at z-index 70 (above sidebar, header and Menta), trap and restore focus, close on Escape/backdrop unless `dismissible={false}`, lock page scroll, and animate (reduced-motion aware). On phones modals become bottom sheets. `DetailList`/`DetailSection` render record details. `Field`, `TextInput`, `PasswordInput` (show/hide), `SelectInput`, `TextArea` and `FieldRow` give one 2.8rem control, label, hint and error style.
+- `features/workspaces/PortalHeader.tsx`: one sticky in-flow header for every role (breadcrumb or eyebrow/title, "Search or ask Menta" Ctrl/Cmd+K, context chip, notifications, keyboard-navigable account menu). Shell roots use `overflow-x: clip` because `overflow-x: hidden` breaks sticky positioning.
+- Kit tokens (`--pa-*`) are defined on `:root` so portal-mounted dialogs keep them.
+- Account settings: header, sticky section nav and one content column; password strength checklist, device sign-out confirmation, switch toggles.
+- Auth pages: split brand/form layout, animated brand panel, step transitions, six-box authenticator code input (single labelled input underneath), Caps Lock warning, copyable setup key, recovery-code copy/download/confirm, password strength and match indicators.

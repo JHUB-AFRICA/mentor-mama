@@ -3,8 +3,74 @@ project: mentor-mama
 current_stage: VERIFY
 tier: medium
 tier_reason: User-visible learning-module creation bug spans the portal form and API serializer; no schema or authorization-boundary change.
-last_updated: 2026-11-09T18:43:45Z
+last_updated: 2026-11-10T00:00:00Z
 ---
+
+## Current session update — Student sessions redesign, Menta greeting position (2026-11-10)
+
+Menta greeting cause: the bubble was vertically centred beside the mascot, which rests at the bottom-right corner, so its lower half (greeting plus tip) fell below the viewport edge; on phones Menta also sat on top of the bottom tab bar. The bubble now opens above Menta (below it when Menta is in the top half), aligned to its outer edge with a matching tail, and on phones Menta rests above the tab bar. Student Mentorship sessions page rebuilt on the Programme Admin kit: stat cards, search plus type/placement filters, month-grouped session cards with topic chips, kit modal for details, calm empty/error states. Verified in real Chrome at 1366x768 and 390px (empty-data state); the populated list and detail modal were not rendered (no session data for that student). Portal tsc/ESLint clean.
+
+## Current session update — Single source for placement progress (2026-11-10)
+
+Cause: the Student journey, Admin steppers, status chips and "next step" copy each mapped placement state on their own. The Student journey had no completed/archived/withdrawn case, so a completed placement showed step 2 "Acknowledged" next to a "completed" chip and "record being prepared". Added `features/placements/placementJourney.ts` (state rank -> stages, progress label, status label, summary, `isPlacementClosed`) and moved the Student journey/detail/overview, both Admin steppers, Mentor student detail copy and Nurse Manager labels onto it. Backend: completed placements now reject mentor assign/reassign and ward allocation (`PlacementClosed`; previously only archived/withdrawn did); UI hides Change mentor/ward and bulk-reassign selection for closed placements. Verified: backend suite and Ruff, portal tsc/ESLint, real-Chrome render of the completed Student placement (all six stages done, one summary). Not verified visually: Admin/Coordinator/Mentor detail screens for completed and paused placements.
+
+## Current session update — Content & training module lifecycle, scroll fix (2026-11-10)
+
+Audit found: no unpublish/delete/duplicate/restore for content or modules (the library "…" button did one hard-wired action and refused modules); module archive did not exist; edits to live items silently unpublished them and the revision snapshot stored the NEW values; cover images were dropped on edit; duplicate titles caused 500s (slug uniqueness); quiz-free modules could never be completed (a required one blocked placement forever); admins could not open a draft module by id; audience was a single role (so "Programme staff" only reached coordinators); guides rendered only plain paragraphs to readers; authoring said "Create" while editing, showed a fake "Not saved" state, an always-green checklist and an empty fake outline.
+
+Backend: `learning.0005` adds `TrainingModule.archived_at`; new endpoints content `unpublish|duplicate|revisions|DELETE`, modules `unpublish|archive(restore)|duplicate|complete|DELETE|admin GET`; unique slugs; revise snapshots previous state, persists cover, `keep_published`; delete only for non-live items (modules with learner records are archive-only); module payload now carries attempts/best score/learner counts. Frontend: shared lifecycle actions (confirm dialogs, keyboard menu), redesigned content detail (formatted guide reader, status banner, learner progress, version history), guided mentor training runner (outline, progress, retake, mark-as-read), multi-audience picker, live readiness checklist, heading tools, edit-aware save buttons ("Save changes" keeps live), save lands on the detail page, time-aware greeting on Mentor/Student/Nurse Manager (Nurse Manager was hard-coded "Good morning").
+
+Scroll cause: page header blocks (detail pages, directory/placement records, account settings) plus Mentor log side panels were `position: sticky`, so 150-250px of every page was pinned under the portal header. Only the portal header is sticky now. Verified with real Chrome wheel-scroll on 11 role pages, detail, authoring and after closing a modal.
+
+Verified: backend 4 new content + 3 new learning tests and full suite pass, Ruff clean, portal tsc/ESLint/build clean, content-authoring e2e passes (updated: save now lands on the detail page). Not verified: Student/Nurse Manager visual after greeting change, phone widths, delete/duplicate through the UI, Concept-note gap audit of induction checklist, feedback form, session log and profile fields (NOT done this pass).
+
+## Current session update — Overlays, header, account settings and auth redesign (2026-11-10)
+
+Added the shared overlay/field kit (`src/components/kit`: Modal, Drawer, DetailList, Field inputs) and moved every Programme Admin modal, drawer and detail page onto it: Invite, person drawer, status/edit access, recovery decision, add content, content detail, export, directory dialogs and CSV import (3-step with drag-and-drop), directory record detail, placement creation, lifecycle confirmations and a new admin placement detail with lifecycle stepper; phone card layout for admin placements. Fixed modal stacking (backdrops now cover sidebar and Menta). Added a shared sticky `PortalHeader` for all roles with a working "Search or ask Menta" command; fixed sticky being broken by `overflow-x: hidden`; compacted the sidebar footer so all items fit at 1366x768; fixed the wrong active sidebar item on account pages; removed legacy fixed-header clearance that pushed Mentor/Student content down. Redesigned Account settings (all roles) and all signed-out auth screens with motion and UX additions (OTP boxes, Caps Lock, strength meter, recovery-code actions). Fixed a latent strict-mode flake in content-module-authoring.spec.ts.
+
+Verified: portal tsc, full ESLint and build clean; CI browser journeys (auth smoke 3/3, content authoring 1/1 x3, Menta 7/7) pass with system Chrome; screenshots of the redesigned screens at 1366x768 and phone widths against local data via temporary dev sessions, which were revoked. Not verified: authenticated MFA sign-in journey (needs E2E credentials), the live-data directory/placement acceptance specs (they mutate data), Pause/Withdraw/reassign dialogs and Edit access visually. The Mentor overview keeps its own extra internal top padding; other role dashboards still use their older visual language.
+
+## Current session update — Programme Admin redesign, shared sidebar, portal-aware Menta (2026-11-10)
+
+Design: added the Programme Admin design kit (`features/programme-admin/ui/AdminKit.tsx`, `admin-kit.css`) derived from the Content library page and moved Overview, Placements, Reports, People & access, Authenticator recovery, Programme setup (Identity/Directory/Access policy) and Activity onto it: one header, stat card, card, tab, toolbar, table, pill and button system with one radius and type scale. Fixed bare-text buttons, mixed pill/rectangle controls, word-valued stat cards and lowercase status labels. Added `features/workspaces/PortalSidebar.tsx` used by all five roles (sliding active indicator, Ask Menta card with Ctrl/Cmd+K, profile block, 1024px drawer); fixed the undefined `text-teal-bright` utility and the mismatched Student/Mentor drawer breakpoint. Each frame keeps its existing link/button semantics.
+
+Menta: portal-aware answers from a server navigation registry (validated `[[go:id]]` actions), the user's own live status (`assistant/context.py`, no personal identifiers), 176 curated help sections, catalogue (programme-wide for content managers) and content passages with a minimum relevance score; `GET /api/v1/assistant/navigation`; frontend jump-to suggestions, reply navigation buttons, screen-aware suggestions, copy, tab-session persistence, outside-press close, wander bounds. Test settings now force AI off so a developer `.env` key can never be used by tests. ADR 0027 amended; design kit documented in `docs/ux/dashboard-design-system.md`.
+
+Verified: backend 184/184 (clean run), Ruff clean, portal tsc/ESLint/build clean, Compose valid; Playwright (system Chrome, API mocked) Menta 7/7, content authoring 1/1, auth smoke 3/3; Menta spec added to CI. Live OpenAI check (gpt-4o-mini) answered training-catalogue, invite, navigation, cohort and clinical-refusal questions correctly after fixing two help-guide errors it exposed. Screenshots of all admin pages and every role's sidebar were taken against local data using temporary dev sessions, which were revoked afterwards. Not verified: real-browser journeys against the live API for non-admin roles, People/Setup dialogs visually, and mobile table layouts (Placements now scrolls horizontally on phones instead of using cards). Help guides need a product-owner review before the pilot. Import-linter still reports the 9 pre-existing broken contracts; none involve `apps.assistant`.
+
+## Current session update — Menta AI buddy (2026-11-10)
+
+Added `.env` AI variables (key left blank for the operator). Built Menta: `apps/assistant`
+(grounded in role guides plus the asker's own published, role-scoped lessons/library items;
+stateless; identifier guard; 40/hour throttle; ADR 0027), `GET /ai/status` now reports
+`assistant`, and a portal-wide draggable/keyboard-movable floating widget
+(`features/assistant/MentaBuddy.tsx`) that persists its position and becomes a bottom sheet
+on phones. Verified: `tests/test_assistant.py` + `test_ai.py` pass, Ruff clean, portal
+tsc/eslint/build clean, and a Playwright spec (`e2e/menta-buddy.spec.ts`, real Chrome, API
+mocked) covering hidden-when-off, drag, clamping, reload persistence, Shift+Arrow, chat,
+history, failure, Escape/focus return, and a 375px viewport. Not verified: a real OpenAI
+reply (no key yet) and answer quality on real content.
+
+## Current session update — OpenAI MVP integration (2026-11-10)
+
+PM review of the full docs set and the uncommitted AI slice. Environment recovered
+(15 GB free, Docker up; `mentormama-postgres` was stopped and was restarted), so
+backend verification is possible again. Switched the AI slice from Qwen to the
+OpenAI API for the MVP and presentation (ADR 0026 amended). Moved transport into
+a feature-agnostic `apps/core/ai.py` (OpenAI Chat Completions, `max_completion_tokens`,
+optional temperature for reasoning models, bounded timeout/input/output, content-free
+logs, no secrets or HTTP bodies logged); `apps/learning/ai.py` now holds only the
+lesson prompt, hardened with the no-clinical-advice boundary. Added
+`GET /api/v1/ai/status` so the portal only offers "Explain this lesson" when AI is
+live, per-lesson explainer state (fixes a shared-error bug), and a 429 message.
+Added `manage.py ai_smoke_test`, dev/prod compose and env wiring (dev compose
+previously passed no AI variables), and `tests/test_ai.py` (network always mocked:
+request shape, disabled/keyless, failures without leakage, scoping: other programme,
+unpublished, role-hidden, cross-module lesson). Full backend suite 150 passed, Ruff
+clean on `apps tests`, portal `tsc` and ESLint clean, both Compose files validate.
+NOT verified: a real OpenAI call (no key supplied), live browser rendering, and
+import-linter (9 contracts were already broken before this change). Next: operator
+sets `AI_ENABLED=true` + `AI_API_KEY`, runs `ai_smoke_test`, then a browser pass.
 
 ## Current session update — Learning module authoring repair (2026-11-09)
 
@@ -183,6 +249,7 @@ portal production build pass. Portal-wide lint remains blocked by two pre-existi
 browser target is available; this remains VERIFY / MAJOR.
 
 ## Current feature
+
 Managed VPS Docker production setup Implement production containers, reverse proxy load balancing, local monitoring, and safe operational defaults for a managed VPS.
 
 ## Current session update — Mentor batch workflow and induction design (2026-11-09)
@@ -1700,6 +1767,7 @@ confirmation, and a scope-aware setup-to-invitation handoff. Do not claim setup
 is operationally ready based only on directory record counts. Next: recover the
 local DB/verification environment, apply and inspect migrations, then decide the
 next enhancement slice.
+
 ## 2026-10-01 Programme setup governance update
 
 Programme setup governance is resolved in ADR-0018. Programme Admin owns the
@@ -1886,17 +1954,16 @@ remains blocked by the Sinaps low-disk gate (about 7% free) and unavailable
 runtime. No migration, build, API request, or UI verification was run in this
 pass. See `docs/verification/student-flow-04-placement-signing-and-visual-states.md`.
 
-
 ## Current session update — Email and cohort lifecycle expansion (2026-11-09)
 
 Converted all notification mail construction to plain text and removed HTML alternatives. Security, invitations, verification, password reset, and MFA remain mandatory; optional placement, programme, and account activity notifications now follow email preferences. Added safe lifecycle notifications for placement scheduling, orientation acknowledgement, induction completion, safeguarding report status, and both mentors during reassignment. Session and safeguarding message bodies remain generic and omit restricted narrative.
 
 Implemented the approved cohort improvements: edit with overlap validation, archive while preserving records, bulk enrol preview and overlap counts with commit-time revalidation, cohort placement state counts, and reasoned soft membership removal with an audit record. Added migration `institutions.0004` for removal history and active-only uniqueness. Targeted portal ESLint/TypeScript, Django checks, migration model drift, Python compilation, and `git diff --check` pass. Focused pytest cannot connect to PostgreSQL, so migrations are generated but unapplied and database assertions did not run. Browser acceptance remains blocked by missing browser/device access and resource health; Coordinator remains VERIFY / BLOCKED.
 
-
 ## Current session update — Module MVP readiness audit (2026-11-09)
 
 Audited the backend domains, portal roles, product requirements, recent actor verification records, open questions, and current environment. Added `docs/verification/module-mvp-readiness-2026-11-09.md` with per-module and per-role readiness, source gaps, unverified runtime paths, conditional enhancements, and ranked next actions. Current gate remains VERIFY / MAJOR. `sinaps health` reports disk BLOCKED at 7% free, Docker unavailable, and no listeners; PostgreSQL is unreachable and no browser target is available. This was a source-and-record audit; no module runtime tests were run. The highest-priority product blocker is anonymous feedback privacy; the highest-priority verification blocker is the unavailable database/browser environment.
+
 ## Current session update — Anonymous feedback privacy and reporting (2026-11-09)
 
 Implemented the accepted anonymous-feedback flow as a dedicated ratings-only endpoint. Anonymous
@@ -1912,3 +1979,7 @@ ESLint, and whitespace checks pass. Focused API tests could not initialize becau
 unreachable; migrations were not applied. No browser target is available. Anonymous feedback is
 implemented in source but remains VERIFY / BLOCKED pending database migration, tests, and live
 browser/API acceptance. See `docs/verification/anonymous-feedback-implementation-2026-11-09.md`.
+
+## Current session update — Initial AI learning integration (2026-11-09)
+
+Product owner authorized a bounded AI integration beginning with an API key and later a self-hosted local LLM. Added ADR 0026 and `docs/architecture/ai-integration-plan.md`. Implemented an OpenAI-compatible Qwen provider boundary and a first learner feature that explains one role/programme-scoped published lesson from its authored content only. It accepts no learner free text, stores no prompt/response, excludes quiz answers and patient/placement/mentorship/safeguarding records, applies per-user throttling, emits content-free provider outcome/latency logs, and has bounded input/output/timeout. AI remains disabled by default. VPS configuration passes the provider key only to the API container; the portal does not receive it. Added user-facing explanation UI, product requirements clarification, and VPS runbook setup/rollback instructions. No provider key was supplied, so no paid external call was made. `git diff --check` and Python compileall pass. Full Compose, backend/database tests, portal lint/build, and staging provider smoke test remain unrun due to Sinaps resource health (disk 7% free, Docker unavailable); the feature needs a staging API-key verification before production activation.

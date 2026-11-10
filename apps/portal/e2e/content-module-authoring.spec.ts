@@ -123,7 +123,7 @@ test("programme admin can save a structured learning module draft", async ({
   await page.getByRole("button", { name: "Save draft" }).first().click();
 
   await expect(page.getByText("Your changes have been saved.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Content library" })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/content\/item\/module\//);
   expect(submittedForm).toContain('name="lessons"');
   expect(submittedForm).toContain('"title":"SBAR handover"');
   expect(submittedForm).toContain('"body":"Use a structured handover."');

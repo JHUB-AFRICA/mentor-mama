@@ -1,0 +1,50 @@
+/* Student mentorship sessions: built on the Programme Admin kit tokens. */
+.ss-private {
+  display: inline-flex; align-items: center; gap: 0.45rem; border: 1px solid var(--pa-line); border-radius: 999px;
+  background: #fff; padding: 0.45rem 0.85rem; color: var(--pa-ink-2); font: 600 0.76rem/1 "Inter", sans-serif;
+}
+.ss-private svg { width: 0.95rem; height: 0.95rem; color: var(--pa-teal); }
+.ss-loading { display: grid; gap: 0.7rem; }
+.ss-timeline { display: grid; gap: 1.5rem; }
+.ss-month__title {
+  display: flex; align-items: baseline; gap: 0.7rem; margin-bottom: 0.7rem;
+  color: var(--pa-ink); font: 700 1rem/1.2 "Inter", sans-serif;
+}
+.ss-month__title span { color: var(--pa-muted); font-size: 0.76rem; font-weight: 500; }
+.ss-list { display: grid; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.ss-row {
+  display: grid; width: 100%; grid-template-columns: 3.4rem minmax(0, 1fr) auto; align-items: center; gap: 1rem; cursor: pointer; text-align: left;
+  border: 1px solid var(--pa-line); border-radius: 0.9rem; background: var(--pa-surface); padding: 0.85rem 1rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.ss-row:hover { border-color: #b9d8d8; box-shadow: var(--pa-shadow-hover); }
+.ss-row:focus-visible { outline: 2px solid var(--pa-teal); outline-offset: 2px; }
+.ss-row__date {
+  display: grid; width: 3.4rem; height: 3.4rem; place-items: center; align-content: center; border-radius: 0.8rem;
+  background: var(--pa-teal-soft); color: var(--pa-teal-ink);
+}
+.ss-row__date strong { font: 700 1.15rem/1 "Inter", sans-serif; }
+.ss-row__date small { margin-top: 0.15rem; font: 700 0.62rem/1 "Inter", sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+.ss-row__main { display: grid; min-width: 0; gap: 0.25rem; }
+.ss-row__title { color: var(--pa-ink); font: 700 0.95rem/1.3 "Inter", sans-serif; }
+.ss-row__meta { overflow: hidden; color: var(--pa-muted); font: 400 0.8rem/1.4 "Inter", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.ss-row__chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.2rem; }
+.ss-chip { border-radius: 999px; background: #eef2f6; padding: 0.22rem 0.55rem; color: #4b5f7c; font: 600 0.68rem/1 "Inter", sans-serif; }
+.ss-chip--more { background: transparent; color: var(--pa-muted); }
+.ss-row__arrow { width: 1.1rem; height: 1.1rem; color: #8a9bb3; }
+.ss-notes { display: grid; gap: 0.9rem; margin-top: 1rem; }
+.ss-notes h3 { color: var(--pa-muted); font: 700 0.68rem/1.2 "Inter", sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
+.ss-notes p { margin-top: 0.3rem; color: var(--pa-ink-2); font: 400 0.88rem/1.65 "Inter", sans-serif; white-space: pre-line; overflow-wrap: anywhere; }
+.ss-submitted { margin-top: 1rem; color: var(--pa-muted); font: 400 0.74rem/1.4 "Inter", sans-serif; }
+.ss-footnote { display: flex; align-items: flex-start; gap: 0.5rem; color: var(--pa-muted); font: 400 0.78rem/1.5 "Inter", sans-serif; }
+.ss-footnote svg { flex: 0 0 auto; width: 0.95rem; height: 0.95rem; margin-top: 0.1rem; color: var(--pa-teal); }
+@media (max-width: 640px) {
+  .ss-row { grid-template-columns: 3rem minmax(0, 1fr) auto; gap: 0.75rem; padding: 0.75rem; }
+  .ss-row__date { width: 3rem; height: 3rem; }
+  .ss-row__meta { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .ss-row { transition: none; } }
+@media (max-width: 640px) {
+  .ss .pa-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .ss .pa-stat { flex-direction: column; align-items: flex-start; gap: 0.6rem; padding: 0.85rem; }
+}

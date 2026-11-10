@@ -1,27 +1,41 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { motion, useReducedMotion } from "motion/react";
 import {
   Bell,
   CheckCircle2,
+  CircleHelp,
   CircleUserRound,
   KeyRound,
+  Loader2,
+  MonitorSmartphone,
   ShieldAlert,
   SlidersHorizontal,
-  MonitorSmartphone,
-  CircleHelp,
+  UserRound,
 } from "lucide-react";
-import { Button, Card } from "@mentormama/ui";
 import {
   ApiError,
+  getMfaDevices,
+  getSessions,
   submitMfaRecoveryRequest,
   updateProfile,
 } from "../../services/api";
-import type { CurrentUser, StudentProfile } from "../../services/api";
+import type { CurrentUser, StudentProfile, UserSession } from "../../services/api";
 import { AccountSecurity } from "./AccountSecurity";
 import { NotificationPreferences } from "./NotificationPreferences";
 import { useToast } from "../../components/ToastProvider";
 import { StudentProfileSettings } from "./StudentProfileSettings";
+import { Field, FieldRow, SelectInput, TextArea, TextInput } from "../../components/kit";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  ListRow,
+  StatusPill,
+} from "../programme-admin/ui/AdminKit";
+import "./account-settings.css";
 
 type SettingsTab =
   | "overview"
@@ -59,6 +73,26 @@ function isSettingsTab(value: unknown): value is SettingsTab {
   );
 }
 
+const navItems: Array<{
+  value: SettingsTab;
+  label: string;
+  description: string;
+  Icon: typeof Bell;
+}> = [
+  { value: "overview", label: "Account overview", description: "Your identity and access", Icon: CircleUserRound },
+  { value: "profile", label: "Profile", description: "Name and contact details", Icon: UserRound },
+  { value: "security", label: "Security", description: "Password, authenticator, codes", Icon: KeyRound },
+  { value: "devices", label: "Connected devices", description: "Where you’re signed in", Icon: MonitorSmartphone },
+  { value: "notifications", label: "Notifications", description: "Choose what reaches you", Icon: Bell },
+  { value: "preferences", label: "Preferences", description: "Language, zone and theme", Icon: SlidersHorizontal },
+  { value: "support", label: "Support", description: "Help and account recovery", Icon: CircleHelp },
+];
+
+/** Recovery is a deep-link alias of the Support section. */
+function navTabFor(tab: SettingsTab): SettingsTab {
+  return tab === "recovery" ? "support" : tab;
+}
+
 export function AccountSettings({
   user,
   onSignedOut,
@@ -80,6 +114,7 @@ export function AccountSettings({
   const safeInitialTab = isSettingsTab(initialTab) ? initialTab : "overview";
   const [, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<SettingsTab>(safeInitialTab);
+  const reduceMotion = useReducedMotion() ?? false;
   useEffect(() => setTab(safeInitialTab), [safeInitialTab]);
   function selectTab(next: SettingsTab) {
     setTab(next);
@@ -87,138 +122,90 @@ export function AccountSettings({
   }
   if (profileOnly) {
     return (
-      <section aria-label="Student profile" className="space-y-6">
-        <div className="border-b border-border pb-6">
-          <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-            Personal learning record
-          </p>
-          <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl">
-            Your student profile
-          </h2>
-          <p className="mt-2 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-            Keep your identity, programme details, and emergency contact ready
-            so your institution can support you throughout placement.
-          </p>
-        </div>
-        <ProfileSettings
-          user={user}
-          onUserUpdated={onUserUpdated}
-          onError={onError}
-        />
-        <StudentProfileSettings
-          onError={onError}
-          onComplete={onStudentProfileComplete}
-        />
-      </section>
+      <AdminPage className="acct">
+        <section aria-label="Student profile" className="acct-stack">
+          <AdminPageHeader
+            eyebrow="Personal learning record"
+            title="Your student profile"
+            description="Keep your identity, programme details, and emergency contact ready so your institution can support you throughout placement."
+          />
+          <div className="acct-content">
+            <ProfileSettings user={user} onUserUpdated={onUserUpdated} onError={onError} />
+            <StudentProfileSettings onError={onError} onComplete={onStudentProfileComplete} />
+          </div>
+        </section>
+      </AdminPage>
     );
   }
+  const activeNav = navTabFor(tab);
   return (
-    <section aria-label="Account settings" className="settings-page">
-      <div className="settings-breadcrumb">
-        Settings <span>›</span> <strong>Account settings</strong>
-      </div>
-      <div className="settings-page-heading">
-        <div>
-          <h2>Settings</h2>
-          <p>Manage your account, preferences, and security in one place.</p>
-        </div>
-        <div className="settings-page-secure">
-          <ShieldAlert size={21} />
-          <span>
-            <strong>Account settings</strong>
-            <small>Review your profile and sign-in preferences.</small>
-          </span>
-        </div>
-      </div>
-      <div className="settings-layout">
-        <nav className="settings-sidebar" aria-label="Settings sections">
-          {(
-            [
-              ["overview", "Account overview", CircleUserRound],
-              ["security", "Security", KeyRound],
-              ["notifications", "Notifications", Bell],
-              ["preferences", "Preferences", SlidersHorizontal],
-              ["devices", "Connected devices", MonitorSmartphone],
-              ["support", "Support", CircleHelp],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <button
-              key={label}
-              type="button"
-              className={tab === value ? "active" : ""}
-              onClick={() => selectTab(value)}
+    <AdminPage className="acct">
+      <section aria-label="Account settings" className="settings-page acct-stack">
+        <StickyHeader>
+          <AdminPageHeader
+            eyebrow="Account"
+            title="Settings"
+            description="Manage your profile, sign-in security, notifications, and preferences in one place."
+          />
+        </StickyHeader>
+        <div className="acct-layout">
+          <nav className="acct-nav" aria-label="Settings sections">
+            {navItems.map(({ value, label, description, Icon }) => (
+              <button
+                key={value}
+                type="button"
+                className={`acct-nav__item${activeNav === value ? " is-active" : ""}`}
+                aria-current={activeNav === value ? "page" : undefined}
+                onClick={() => selectTab(value)}
+              >
+                <span className="acct-nav__icon" aria-hidden="true"><Icon /></span>
+                <span>
+                  <span className="acct-nav__label">{label}</span>
+                  <span className="acct-nav__desc">{description}</span>
+                </span>
+              </button>
+            ))}
+          </nav>
+            <motion.div
+              key={activeNav}
+              className="acct-content"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              transition={{ duration: reduceMotion ? 0.01 : 0.22, ease: "easeOut" }}
             >
-              <Icon size={19} />
-              {label}
-            </button>
-          ))}
-        </nav>
-        <main className="settings-page-main">
-          {tab === "overview" && (
-            <SettingsOverview
-              user={user}
-              onEdit={() => selectTab("profile")}
-              onSelect={selectTab}
-            />
-          )}
-          {tab === "security" && (
-            <div className="settings-tab-panel">
-              <AccountSecurity
-                user={user}
-                onSignedOut={onSignedOut}
-                onError={onError}
-              />
-            </div>
-          )}
-          {tab === "profile" && (
-            <div className="settings-tab-panel">
-              <ProfileSettings
-                user={user}
-                onUserUpdated={onUserUpdated}
-                onError={onError}
-              />
-              {user.role === "student" && (
-                <div className="mt-5">
-                  <StudentProfileSettings
-                    onError={onError}
-                    onComplete={onStudentProfileComplete}
-                  />
-                </div>
+              {tab === "overview" && <SettingsOverview user={user} onEdit={() => selectTab("profile")} onSelect={selectTab} />}
+              {tab === "security" && <AccountSecurity user={user} onSignedOut={onSignedOut} onError={onError} />}
+              {tab === "devices" && <AccountSecurity user={user} onSignedOut={onSignedOut} onError={onError} view="devices" />}
+              {tab === "profile" && (
+                <>
+                  <ProfileSettings user={user} onUserUpdated={onUserUpdated} onError={onError} />
+                  {user.role === "student" && <StudentProfileSettings onError={onError} onComplete={onStudentProfileComplete} />}
+                </>
               )}
-            </div>
-          )}
-          {tab === "notifications" && (
-            <div className="settings-tab-panel">
-              <NotificationPreferences onError={onError} />
-            </div>
-          )}
-          {tab === "preferences" && (
-            <div className="settings-tab-panel">
-              <PreferencesPanel />
-            </div>
-          )}
-          {tab === "devices" && (
-            <div className="settings-tab-panel">
-              <AccountSecurity
-                user={user}
-                onSignedOut={onSignedOut}
-                onError={onError}
-              />
-            </div>
-          )}
-          {tab === "support" && (
-            <div className="settings-tab-panel">
-              <MfaRecovery onError={onError} />
-            </div>
-          )}
-          {tab === "recovery" && (
-            <div className="settings-tab-panel">
-              <MfaRecovery onError={onError} />
-            </div>
-          )}
-        </main>
-      </div>
-    </section>
+              {tab === "notifications" && <NotificationPreferences onError={onError} />}
+              {tab === "preferences" && <PreferencesPanel />}
+              {(tab === "support" || tab === "recovery") && <MfaRecovery onError={onError} />}
+            </motion.div>
+        </div>
+      </section>
+    </AdminPage>
+  );
+}
+
+/** Page title block. It scrolls with the page; only the portal header is sticky. */
+function StickyHeader({ children }: { children: ReactNode }) {
+  return <div className="acct-sticky">{children}</div>;
+}
+
+function initialsOf(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?"
   );
 }
 
@@ -231,135 +218,64 @@ function SettingsOverview({
   onEdit: () => void;
   onSelect: (tab: SettingsTab) => void;
 }) {
+  const [mfa, setMfa] = useState<"loading" | "on" | "off" | "unknown">("loading");
+  const [sessions, setSessions] = useState<UserSession[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    getMfaDevices()
+      .then((devices) => {
+        if (active) setMfa(devices.some((device) => device.type === "totp") ? "on" : "off");
+      })
+      .catch(() => { if (active) setMfa("unknown"); });
+    getSessions()
+      .then((result) => { if (active) setSessions(result); })
+      .catch(() => { if (active) setSessions([]); });
+    return () => { active = false; };
+  }, [user.id]);
+  const current = sessions?.find((session) => session.current);
+  const scope = user.scope?.institution_name ?? (user.scope?.program_id ? "Assigned programme" : "Not assigned");
   return (
-    <div className="settings-overview">
-      <div className="settings-overview-main">
-        <Card padding="lg">
-          <div className="settings-card-heading">
-            <div>
-              <p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">
-                Account overview
-              </p>
-              <h2 className="mt-1 font-display text-h2 text-navy">
-                Your basic information and programme access.
-              </h2>
-            </div>
-            <Button size="sm" variant="tertiary" onClick={onEdit}>
-              Edit profile
-            </Button>
+    <>
+      <AdminCard
+        title="Account overview"
+        description="Your basic information and programme access."
+        titleId="overview-title"
+        action={<AdminButton variant="secondary" size="sm" onClick={onEdit}>Edit profile</AdminButton>}
+      >
+        <div className="acct-identity">
+          <span className="acct-avatar" aria-hidden="true">{initialsOf(user.name)}</span>
+          <div className="min-w-0">
+            <p className="acct-identity__name">{user.name}</p>
+            <p className="acct-identity__email">{user.email}</p>
           </div>
-          <div className="settings-profile-summary">
-            <span className="settings-avatar">
-              {user.name
-                .split(/\s+/)
-                .map((part) => part[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
-            </span>
-            <div>
-              <h3>{user.name}</h3>
-              <p>{accountRoleLabel(user.role)}</p>
-              <span>{user.email}</span>
-            </div>
-            <div className="settings-profile-facts">
-              <p>
-                <small>Email</small>
-                <strong>{user.email}</strong>
-              </p>
-              <p>
-                <small>Phone</small>
-                <strong>{user.phone || "Optional"}</strong>
-              </p>
-              <p>
-                <small>Programme</small>
-                <strong>
-                  {user.scope?.program_id
-                    ? "Assigned"
-                    : "Not assigned"}
-                </strong>
-              </p>
-            </div>
-          </div>
-        </Card>
-        <div className="settings-overview-grid">
-          <SettingsSummaryCard
-            icon={<KeyRound size={18} />}
-            title="Security"
-            description="Keep your account safe."
-            rows={[
-              "Password",
-              "Multi-factor authentication",
-              "Active sessions",
-            ]}
-            onClick={() => onSelect("security")}
-          />
-          <SettingsSummaryCard
-            icon={<Bell size={18} />}
-            title="Notifications"
-            description="Choose what you want to receive."
-            rows={[
-              "Email notifications",
-              "Programme updates",
-              "Placement updates",
-            ]}
-            onClick={() => onSelect("notifications")}
-          />
-          <SettingsSummaryCard
-            icon={<SlidersHorizontal size={18} />}
-            title="Preferences"
-            description="Personalize your experience."
-            rows={["Language", "Time zone", "Theme"]}
-            onClick={() => onSelect("preferences")}
-          />
-          <SettingsSummaryCard
-            icon={<CircleHelp size={18} />}
-            title="Support"
-            description="Get help or manage your account."
-            rows={[
-              "Help centre",
-              "Contact support",
-              "Request account recovery",
-            ]}
-            onClick={() => onSelect("support")}
-          />
         </div>
-      </div>
-    </div>
-  );
-}
-
-function SettingsSummaryCard({
-  icon,
-  title,
-  description,
-  rows,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  rows: string[];
-  onClick: () => void;
-}) {
-  return (
-    <Card padding="lg">
-      <button type="button" className="settings-summary-card" onClick={onClick}>
-        <span className="settings-summary-icon">{icon}</span>
-        <span className="settings-summary-copy">
-          <strong>{title}</strong>
-          <small>{description}</small>
-        </span>
-        <span className="settings-summary-rows">
-          {rows.map((row) => (
-            <span key={row}>
-              {row}
-              <b>›</b>
-            </span>
-          ))}
-        </span>
-      </button>
-    </Card>
+        <dl className="acct-facts">
+          <div><dt>Role</dt><dd>{accountRoleLabel(user.role)}</dd></div>
+          <div><dt>Scope</dt><dd>{scope}</dd></div>
+          <div><dt>Account status</dt><dd><StatusPill tone="success">Active</StatusPill></dd></div>
+          <div>
+            <dt>Multi-factor authentication</dt>
+            <dd>
+              {mfa === "loading" ? "Checking…" : mfa === "unknown" ? "Unavailable" : (
+                <StatusPill tone={mfa === "on" ? "success" : "neutral"}>{mfa === "on" ? "Authenticator on" : "Not set up"}</StatusPill>
+              )}
+            </dd>
+          </div>
+          <div><dt>Phone</dt><dd>{user.phone || "Not added"}</dd></div>
+          <div>
+            <dt>This session started</dt>
+            <dd>{sessions === null ? "Checking…" : current ? new Date(current.created_at).toLocaleString("en-GB") : "Not available"}</dd>
+          </div>
+        </dl>
+      </AdminCard>
+      <AdminCard title="Manage your account" description="Jump to the settings you use most." titleId="overview-links-title" flush>
+        <ListRow icon={<KeyRound />} title="Security" meta="Password, authenticator app, and backup codes" onClick={() => onSelect("security")} />
+        <ListRow icon={<MonitorSmartphone />} tone="blue" title="Connected devices" meta="Review and sign out devices" onClick={() => onSelect("devices")} />
+        <ListRow icon={<Bell />} tone="amber" title="Notifications" meta="Email and programme updates" onClick={() => onSelect("notifications")} />
+        <ListRow icon={<SlidersHorizontal />} tone="violet" title="Preferences" meta="Language, time zone, and theme" onClick={() => onSelect("preferences")} />
+        <ListRow icon={<CircleHelp />} tone="slate" title="Support" meta="Request account recovery" onClick={() => onSelect("support")} />
+      </AdminCard>
+    </>
   );
 }
 
@@ -384,60 +300,34 @@ function PreferencesPanel() {
     });
   }
   return (
-    <Card padding="lg">
-      <div className="max-w-2xl">
-        <p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">
-          Preferences
-        </p>
-        <h2 className="mt-1 font-display text-h2 text-navy">
-          Personalize your experience
-        </h2>
-        <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
-          These preferences are saved for this browser and applied to your
-          programme workspace.
-        </p>
-        <div className="settings-preferences-list">
-          <label>
-            Language
-            <select
-              value={language}
-              onChange={(event) =>
-                save("mentor-mama-language", event.target.value, setLanguage)
-              }
-            >
-              <option>English (UK)</option>
-              <option>English (US)</option>
-            </select>
-          </label>
-          <label>
-            Time zone
-            <select
-              value={timezone}
-              onChange={(event) =>
-                save("mentor-mama-timezone", event.target.value, setTimezone)
-              }
-            >
-              <option>(GMT+03:00) Nairobi</option>
-              <option>(GMT+00:00) London</option>
-              <option>(GMT+01:00) Lagos</option>
-            </select>
-          </label>
-          <label>
-            Theme
-            <select
-              value={theme}
-              onChange={(event) =>
-                save("mentor-mama-theme", event.target.value, setTheme)
-              }
-            >
-              <option>System default</option>
-              <option>Light</option>
-              <option>Dark</option>
-            </select>
-          </label>
-        </div>
+    <AdminCard
+      title="Personalize your experience"
+      description="These preferences are saved for this browser and applied to your programme workspace."
+      titleId="preferences-title"
+    >
+      <div className="acct-form">
+        <Field label="Language">
+          <SelectInput value={language} onChange={(event) => save("mentor-mama-language", event.target.value, setLanguage)}>
+            <option>English (UK)</option>
+            <option>English (US)</option>
+          </SelectInput>
+        </Field>
+        <Field label="Time zone">
+          <SelectInput value={timezone} onChange={(event) => save("mentor-mama-timezone", event.target.value, setTimezone)}>
+            <option>(GMT+03:00) Nairobi</option>
+            <option>(GMT+00:00) London</option>
+            <option>(GMT+01:00) Lagos</option>
+          </SelectInput>
+        </Field>
+        <Field label="Theme">
+          <SelectInput value={theme} onChange={(event) => save("mentor-mama-theme", event.target.value, setTheme)}>
+            <option>System default</option>
+            <option>Light</option>
+            <option>Dark</option>
+          </SelectInput>
+        </Field>
       </div>
-    </Card>
+    </AdminCard>
   );
 }
 
@@ -455,6 +345,7 @@ function ProfileSettings({
   const [phone, setPhone] = useState(user.phone ?? "");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const dirty = name !== user.name || phone !== (user.phone ?? "");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -484,32 +375,22 @@ function ProfileSettings({
     }
   }
   return (
-    <Card padding="lg">
-      <div className="max-w-2xl">
-        <p className="font-body text-caption font-semibold uppercase tracking-[0.12em] text-navy-muted">
-          Profile
+    <AdminCard
+      title="Your account details"
+      description="Keep your contact details current. Your email, role, and programme access are managed by the programme team."
+      titleId="profile-title"
+      action={dirty ? <StatusPill tone="warning">Unsaved changes</StatusPill> : undefined}
+    >
+      {saved && !dirty && (
+        <p className="acct-message mb-4" role="status">
+          <CheckCircle2 aria-hidden="true" />
+          Changes saved for this profile.
         </p>
-        <h2 className="mt-1 font-display text-h2 text-navy">
-          Your account details
-        </h2>
-        <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
-          Keep your contact details current. Your email, role, and programme
-          access are managed by the programme team.
-        </p>
-        {saved && (
-          <p
-            className="mt-4 flex items-center gap-2 rounded-xl bg-teal-light px-4 py-3 font-body text-caption text-navy"
-            role="status"
-          >
-            <CheckCircle2 size={16} className="text-teal" />
-            Changes saved for this profile.
-          </p>
-        )}
-        <form className="mt-6 grid gap-5 sm:grid-cols-2" onSubmit={submit}>
-          <label className="block font-body text-caption font-semibold text-navy">
-            Full name
-            <input
-              className="auth-control mt-2"
+      )}
+      <form className="acct-form" onSubmit={submit}>
+        <FieldRow>
+          <Field label="Full name" required>
+            <TextInput
               value={name}
               onChange={(event) => {
                 setName(event.target.value);
@@ -518,52 +399,44 @@ function ProfileSettings({
               autoComplete="name"
               required
             />
-          </label>
-          <label className="block font-body text-caption font-semibold text-navy">
-            Email address
-            <input
-              className="auth-control mt-2 bg-mist"
-              value={user.email}
-              readOnly
-              aria-describedby="email-note"
-            />
-            <span
-              id="email-note"
-              className="mt-1 block font-body text-xs font-normal text-navy-muted"
-            >
-              Email changes require programme support.
-            </span>
-          </label>
-          <label className="block font-body text-caption font-semibold text-navy sm:col-span-2">
-            Phone number{" "}
-            <span className="font-normal text-navy-muted">(contact only)</span>
-            <input
-              className="auth-control mt-2"
-              value={phone}
-              onChange={(event) => {
-                setPhone(event.target.value);
-                setSaved(false);
-              }}
-              autoComplete="tel"
-              placeholder="Optional"
-            />
-          </label>
-          <div className="sm:col-span-2">
-            <Button type="submit" size="sm" disabled={saving}>
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Card>
+          </Field>
+          <Field label="Email address" hint="Email changes require programme support.">
+            <TextInput value={user.email} readOnly className="bg-[#f8fafb]" />
+          </Field>
+        </FieldRow>
+        <Field label="Phone number" optional hint="Used for contact only.">
+          <TextInput
+            value={phone}
+            onChange={(event) => {
+              setPhone(event.target.value);
+              setSaved(false);
+            }}
+            autoComplete="tel"
+            placeholder="Optional"
+          />
+        </Field>
+        <div className="acct-form__actions">
+          <AdminButton type="submit" disabled={saving} aria-busy={saving} icon={saving ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>
+            {saving ? "Saving…" : "Save changes"}
+          </AdminButton>
+          {dirty && !saving && (
+            <AdminButton variant="ghost" onClick={() => { setName(user.name); setPhone(user.phone ?? ""); }}>
+              Discard
+            </AdminButton>
+          )}
+        </div>
+      </form>
+    </AdminCard>
   );
 }
 
 function MfaRecovery({ onError }: { onError: (message: string) => void }) {
   const [reason, setReason] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSending(true);
     try {
       await submitMfaRecoveryRequest(reason);
       setSubmitted(true);
@@ -573,61 +446,45 @@ function MfaRecovery({ onError }: { onError: (message: string) => void }) {
           ? cause.message
           : "We could not start the recovery request.",
       );
+    } finally {
+      setSending(false);
     }
   }
   if (submitted)
     return (
-      <Card padding="lg">
-        <div className="max-w-xl">
-          <CheckCircle2 className="text-teal" size={34} />
-          <h2 className="mt-4 font-display text-h2 text-navy">
-            Request received.
-          </h2>
-          <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
-            Programme support will review your request. For your protection,
-            access is not restored automatically.
-          </p>
-          <Button
-            className="mt-6"
-            variant="tertiary"
-            size="sm"
-            onClick={() => setSubmitted(false)}
-          >
-            Submit another request
-          </Button>
-        </div>
-      </Card>
+      <AdminCard title="Request received." titleId="recovery-title">
+        <p className="acct-message" role="status">
+          <CheckCircle2 aria-hidden="true" />
+          Programme support will review your request. For your protection, access is not restored automatically.
+        </p>
+        <AdminButton className="mt-4" variant="secondary" size="sm" onClick={() => setSubmitted(false)}>
+          Submit another request
+        </AdminButton>
+      </AdminCard>
     );
   return (
-    <Card padding="lg">
-      <div className="max-w-xl">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/15 text-warning">
-          <ShieldAlert size={19} />
+    <AdminCard
+      title="Can’t use your authenticator?"
+      description="Use a recovery code first if you have one. If you no longer have access, send a request to programme support. They’ll verify your identity before restoring access."
+      titleId="recovery-title"
+      action={<span className="pa-tile pa-tile--sm pa-tile--amber" aria-hidden="true"><ShieldAlert /></span>}
+    >
+      <form className="acct-form" onSubmit={submit}>
+        <Field label="What happened?" required>
+          <TextArea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            required
+            placeholder="Tell support why you cannot use your authenticator."
+          />
+        </Field>
+        <div className="acct-form__actions">
+          <AdminButton type="submit" disabled={sending} aria-busy={sending} icon={sending ? <Loader2 className="acct-spin" aria-hidden="true" /> : undefined}>
+            {sending ? "Sending…" : "Start recovery request"}
+          </AdminButton>
+          {reason.trim() && !sending && <StatusPill tone="warning">Not sent yet</StatusPill>}
         </div>
-        <h2 className="mt-4 font-display text-h2 text-navy">
-          Can’t use your authenticator?
-        </h2>
-        <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
-          Use a recovery code first if you have one. If you no longer have
-          access, send a request to programme support. They’ll verify your
-          identity before restoring access.
-        </p>
-        <form className="mt-6 space-y-4" onSubmit={submit}>
-          <label className="block font-body text-caption font-semibold text-navy">
-            What happened?
-            <textarea
-              className="mt-2 min-h-28 w-full rounded-2xl border border-border bg-white px-4 py-3 font-body text-sm text-navy outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/15"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              required
-              placeholder="Tell support why you cannot use your authenticator."
-            />
-          </label>
-          <Button type="submit" size="sm">
-            Start recovery request
-          </Button>
-        </form>
-      </div>
-    </Card>
+      </form>
+    </AdminCard>
   );
 }

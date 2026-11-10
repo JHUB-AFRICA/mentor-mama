@@ -1,66 +1,105 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
+  Check,
   CheckCircle2,
-  ChevronRight,
   CircleAlert,
+  Clock,
   GraduationCap,
+  ListChecks,
+  PlayCircle,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
-import { Button, Card, Skeleton } from "@mentormama/ui";
+import { Skeleton } from "@mentormama/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
+  completeTrainingModule,
+  explainTrainingLesson,
+  getAIStatus,
   getTrainingModules,
   getTrainingProgress,
   submitTrainingAttempt,
+  type TrainingModule,
 } from "../../services/api";
 import { PortalErrorState } from "../../components/PortalErrorState";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  AdminTabs,
+  EmptyState,
+  StatusPill,
+} from "../programme-admin/ui/AdminKit";
+import { PlainText } from "../content/ContentReader";
+import { categoryLabel, formatMinutes } from "../content/contentMeta";
+import "../content/content-detail.css";
+import "./training.css";
 
-export function TrainingWorkspace({
-  onError,
-}: {
-  onError: (message: string) => void;
-}) {
-  const modules = useQuery({
-    queryKey: ["training-modules"],
-    queryFn: getTrainingModules,
+type Filter = "all" | "required" | "in_progress" | "completed";
+
+function moduleState(module: TrainingModule): "completed" | "in_progress" | "not_started" {
+  if (module.completed) return "completed";
+  return (module.attempt_count ?? 0) > 0 ? "in_progress" : "not_started";
+}
+
+function visitedKey(moduleId: string) {
+  return `mm.training.visited.${moduleId}`;
+}
+function readVisited(moduleId: string): number[] {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(visitedKey(moduleId)) ?? "[]") as unknown;
+    return Array.isArray(parsed) ? parsed.filter((value): value is number => Number.isInteger(value)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function LessonExplainer({ moduleId, lessonId }: { moduleId: string; lessonId: string }) {
+  const explanation = useMutation({
+    mutationFn: () => explainTrainingLesson(moduleId, lessonId),
   });
-  const progress = useQuery({
-    queryKey: ["training-progress"],
-    queryFn: getTrainingProgress,
-  });
-  const [selected, setSelected] = useState<string | null>(null);
-  const module = modules.data?.find((item) => item.id === selected) ?? null;
-  const completedCount = progress.data?.completed ?? 0;
-  const totalCount = progress.data?.total ?? 0;
-  const queryClient = useQueryClient();
-  const attempt = useMutation({
-    mutationFn: ({
-      id,
-      answers,
-    }: {
-      id: string;
-      answers: Record<string, string>;
-    }) => submitTrainingAttempt(id, answers),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["training-modules"] });
-      void queryClient.invalidateQueries({ queryKey: ["training-progress"] });
-    },
-    onError: (cause) =>
-      onError(
-        cause instanceof ApiError
-          ? cause.message
-          : "We could not record that attempt.",
-      ),
-  });
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  return (
+    <div className="tr-explain">
+      <AdminButton variant="secondary" size="sm" icon={<Sparkles />} disabled={explanation.isPending} onClick={() => explanation.mutate()}>
+        {explanation.isPending ? "Preparing explanation…" : explanation.data ? "Explain again" : "Explain this lesson"}
+      </AdminButton>
+      {explanation.data && (
+        <div className="tr-explain__box" role="status">
+          <p>{explanation.data.explanation}</p>
+          <small>AI generated from this lesson only. It is not clinical guidance; check the lesson if anything is unclear.</small>
+        </div>
+      )}
+      {explanation.isError && (
+        <p className="tr-explain__error" role="alert">
+          {explanation.error instanceof ApiError && explanation.error.status === 429
+            ? "You have reached the hourly limit for explanations. Please try again later."
+            : "We couldn’t prepare an explanation right now. Please try again later."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function TrainingWorkspace({ onError }: { onError: (message: string) => void }) {
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("module");
+  const modules = useQuery({ queryKey: ["training-modules"], queryFn: getTrainingModules });
+  const progress = useQuery({ queryKey: ["training-progress"], queryFn: getTrainingProgress });
+  const [filter, setFilter] = useState<Filter>("all");
+
   if (modules.isPending || progress.isPending)
     return (
-      <div className="space-y-5">
+      <AdminPage>
         <Skeleton className="h-10 w-80" />
         <Skeleton className="h-28" />
         <Skeleton className="h-44" />
-      </div>
+      </AdminPage>
     );
   if (modules.isError || progress.isError)
     return (
@@ -71,207 +110,417 @@ export function TrainingWorkspace({
         }}
       />
     );
-  if (module)
+
+  const open = (id: string | null) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set("module", id);
+    else next.delete("module");
+    setParams(next, { replace: false });
+  };
+
+  if (selected) {
+    const module = modules.data.find((item) => item.id === selected);
+    if (module) return <ModuleRunner key={module.id} module={module} all={modules.data} onBack={() => open(null)} onOpen={open} onError={onError} />;
     return (
-      <div className="space-y-8">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 font-body text-sm font-semibold text-teal hover:text-navy"
-          onClick={() => {
-            setSelected(null);
-            setAnswers({});
-          }}
-        >
-          <ChevronRight className="rotate-180" size={16} /> Back to training
-        </button>
-        <section className="max-w-3xl">
-          {module.cover_image && (
-            <img
-              src={module.cover_image}
-              alt=""
-              className="mb-5 h-44 w-full rounded-2xl object-cover"
-            />
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-              {module.category || "Mentor development"}
-            </p>
-            {module.is_required && <span className="rounded-full bg-warning/10 px-2 py-1 font-body text-[0.65rem] font-bold text-warning">Required</span>}
-            {module.completed && <span className="rounded-full bg-teal-light px-2 py-1 font-body text-[0.65rem] font-bold text-teal">Complete</span>}
-          </div>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl">
-            {module.title}
-          </h2>
-          <p className="mt-3 font-body leading-7 text-navy-muted">
-            {module.description ||
-              "A focused learning module for safe, consistent mentorship practice."}
-          </p>
-        </section>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl bg-mist px-4 py-3"><p className="font-body text-xs font-bold uppercase tracking-[0.1em] text-navy-muted">Lessons</p><p className="mt-1 font-display text-2xl font-bold text-navy">{module.lessons.length}</p></div>
-          <div className="rounded-xl bg-mist px-4 py-3"><p className="font-body text-xs font-bold uppercase tracking-[0.1em] text-navy-muted">Knowledge check</p><p className="mt-1 font-display text-2xl font-bold text-navy">{module.quiz.length ? `${module.quiz.length} questions` : "Not required"}</p></div>
-          <div className="rounded-xl bg-teal-light/60 px-4 py-3"><p className="font-body text-xs font-bold uppercase tracking-[0.1em] text-teal">Pass mark</p><p className="mt-1 font-display text-2xl font-bold text-navy">{module.pass_mark}%</p></div>
-        </div>
-        <div className="space-y-5">
-          {module.lessons.map((lesson) => (
-            <article key={lesson.id} className="rounded-2xl border border-border bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex items-start justify-between gap-4"><div><p className="font-body text-xs font-semibold uppercase tracking-[0.12em] text-teal">Lesson {lesson.position} · {lesson.lesson_type}</p><h3 className="mt-1 font-display text-xl font-bold text-navy">{lesson.title}</h3></div><span className="shrink-0 rounded-full bg-mist px-2 py-1 font-body text-[0.68rem] font-semibold text-navy-muted">{lesson.duration_minutes} min</span></div>
-              <p className="mt-3 whitespace-pre-line font-body text-sm leading-7 text-navy-muted">
-                {lesson.body}
-              </p>
-            </article>
-          ))}
-        </div>
-        {module.quiz.length > 0 && (
-          <section className="border-t-2 border-teal pt-5">
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-              Knowledge check
-            </p>
-            <h3 className="mt-2 font-display text-2xl font-bold text-navy">
-              Check your understanding
-            </h3>
-            <div className="mt-5 space-y-5">
-              {module.quiz.map((question) => (
-                <fieldset
-                  key={question.id}
-                  className="border-b border-border pb-5"
-                >
-                  <legend className="font-body text-sm font-bold text-navy">
-                    {question.prompt}
-                  </legend>
-                  <div className="mt-3 grid gap-2">
-                    {question.options.map((option) => (
-                      <label
-                        key={option}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 font-body text-sm ${answers[question.id] === option ? "border-teal bg-teal-light/40 text-navy" : "border-border text-navy-muted"}`}
-                      >
-                        <input
-                          type="radio"
-                          name={question.id}
-                          value={option}
-                          checked={answers[question.id] === option}
-                          onChange={() =>
-                            setAnswers((current) => ({
-                              ...current,
-                              [question.id]: option,
-                            }))
-                          }
-                        />
-                        {option}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              ))}
-            </div>
-            <Button
-              className="mt-6"
-              disabled={
-                attempt.isPending ||
-                Object.keys(answers).length !== module.quiz.length
-              }
-              onClick={() => void attempt.mutate({ id: module.id, answers })}
-            >
-              {attempt.isPending
-                ? "Checking answers…"
-                : "Submit knowledge check"}
-            </Button>
-            {attempt.data && (
-              <p
-                role="status"
-                className={`mt-4 flex items-center gap-2 font-body text-sm font-semibold ${attempt.data.passed ? "text-teal" : "text-warning"}`}
-              >
-                {attempt.data.passed ? (
-                  <CheckCircle2 size={17} />
-                ) : (
-                  <CircleAlert size={17} />
-                )}
-                {attempt.data.passed
-                  ? `Module complete — ${attempt.data.score}%`
-                  : `Not quite yet — ${attempt.data.score}%. Review the lessons and try again.`}
-              </p>
-            )}
-          </section>
-        )}
-      </div>
+      <AdminPage>
+        <EmptyState
+          icon={<BookOpen />}
+          title="This module isn’t available"
+          text="It may have been unpublished or moved. Your completed modules are still on your record."
+          action={
+            <AdminButton variant="secondary" size="sm" icon={<ArrowLeft />} onClick={() => open(null)}>
+              Back to training
+            </AdminButton>
+          }
+        />
+      </AdminPage>
     );
+  }
+
+  const list = modules.data;
+  const counts = {
+    all: list.length,
+    required: list.filter((item) => item.is_required).length,
+    in_progress: list.filter((item) => moduleState(item) === "in_progress").length,
+    completed: list.filter((item) => item.completed).length,
+  };
+  const visible = list.filter((item) =>
+    filter === "all"
+      ? true
+      : filter === "required"
+        ? item.is_required
+        : filter === "completed"
+          ? item.completed
+          : moduleState(item) === "in_progress",
+  );
+  const total = progress.data.total;
+  const percent = progress.data.percentage ?? 0;
+  const requiredLeft = progress.data.required_total - progress.data.required_completed;
+
   return (
-    <div className="space-y-8">
-      <section className="flex flex-col justify-between gap-6 border-b border-border pb-8 sm:flex-row sm:items-end">
-        <div>
-          <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-            Mentor development
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl">
-            Mentor training, in one place.
-          </h2>
-          <p className="mt-3 max-w-2xl font-body leading-7 text-navy-muted">
-            Build practical confidence through short lessons and knowledge checks. Your completion record follows you across placements.
-          </p>
-        </div>
-        <div className="shrink-0 rounded-2xl bg-teal-light px-5 py-4">
-          <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">
-            Overall progress
-          </p>
-          <p className="mt-1 font-display text-3xl font-bold text-navy">
-            {completedCount}/{totalCount}
-          </p>
-          <div className="mt-2 h-1.5 w-36 overflow-hidden rounded-full bg-white/70"><div className="h-full rounded-full bg-teal" style={{ width: `${progress.data?.percentage ?? 0}%` }} /></div>
-          <p className="mt-2 font-body text-xs text-navy-muted">{progress.data?.required_completed}/{progress.data?.required_total} required complete</p>
-        </div>
-      </section>
-      {!modules.data.length ? (
-        <Card padding="lg">
-          <BookOpen className="text-teal" />
-          <h3 className="mt-4 font-display text-xl font-bold text-navy">
-            No training is published yet
-          </h3>
-          <p className="mt-2 font-body text-sm text-navy-muted">
-            Your programme team will make modules available here.
-          </p>
-        </Card>
-      ) : (
-        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
-          {modules.data.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setSelected(item.id)}
-              className="flex w-full items-center justify-between gap-5 px-4 py-5 text-left hover:bg-mist sm:px-6"
-            >
-              <span className="flex min-w-0 items-start gap-4">
-                <span
-                  className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-xl ${item.completed ? "bg-teal-light text-teal" : "bg-mist text-teal"}`}
-                >
-                  {item.completed ? (
-                    <CheckCircle2 size={20} />
-                  ) : (
-                    <GraduationCap size={20} />
-                  )}
-                </span>
-                <span>
-                  <span className="block font-body text-sm font-bold text-navy">
-                    {item.title}
-                    {item.is_required && (
-                      <span className="ml-2 rounded-full bg-warning/10 px-2 py-1 text-[0.65rem] text-warning">
-                        Required
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-1 block font-body text-sm text-navy-muted">
-                    {item.lessons.length} lesson
-                    {item.lessons.length === 1 ? "" : "s"} ·{" "}
-                    {item.completed
-                      ? `Completed at ${item.score}%`
-                      : item.quiz.length ? `${item.quiz.length}-question check` : "Read when ready"}
-                  </span>
-                </span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-navy-muted" />
-            </button>
-          ))}
-        </div>
+    <AdminPage>
+      <AdminPageHeader
+        eyebrow="Mentor development"
+        title="Training"
+        description="Short lessons and knowledge checks that build practical mentoring confidence. Your completion record follows you across placements."
+      />
+      {list.length > 0 && (
+        <section className="tr-summary" aria-label="Your training progress">
+          <div className="tr-summary__ring" role="img" aria-label={`${percent}% complete`} style={{ ["--tr-pct" as string]: `${percent * 3.6}deg` }}>
+            <strong>{percent}%</strong>
+          </div>
+          <div className="tr-summary__text">
+            <h3>
+              {progress.data.completed} of {total} {total === 1 ? "module" : "modules"} complete
+            </h3>
+            <p>
+              {progress.data.required_total === 0
+                ? "No modules are required right now."
+                : requiredLeft === 0
+                  ? "You have finished every required module."
+                  : `${requiredLeft} required ${requiredLeft === 1 ? "module" : "modules"} still to finish before you can take placements.`}
+            </p>
+          </div>
+        </section>
       )}
-    </div>
+      {list.length === 0 ? (
+        <EmptyState
+          icon={<BookOpen />}
+          title="No training is published yet"
+          text="Your programme team will make modules available here."
+        />
+      ) : (
+        <>
+          <AdminTabs
+            label="Filter training"
+            value={filter}
+            onChange={setFilter}
+            tabs={[
+              { value: "all", label: "All", count: counts.all },
+              { value: "required", label: "Required", count: counts.required },
+              { value: "in_progress", label: "In progress", count: counts.in_progress },
+              { value: "completed", label: "Completed", count: counts.completed },
+            ]}
+          />
+          {visible.length === 0 ? (
+            <EmptyState icon={<ListChecks />} title="Nothing here yet" text="No modules match this filter." />
+          ) : (
+            <ul className="tr-grid">
+              {visible.map((item) => (
+                <li key={item.id}>
+                  <ModuleCard module={item} onOpen={() => open(item.id)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </AdminPage>
+  );
+}
+
+function ModuleCard({ module, onOpen }: { module: TrainingModule; onOpen: () => void }) {
+  const state = moduleState(module);
+  return (
+    <button type="button" className="tr-card" onClick={onOpen}>
+      <span className={`tr-card__media${module.cover_image ? "" : " is-empty"}`}>
+        {module.cover_image ? <img src={module.cover_image} alt="" /> : <GraduationCap size={28} aria-hidden="true" />}
+      </span>
+      <span className="tr-card__body">
+        <span className="tr-card__chips">
+          <span className="cd-chip">{categoryLabel(module.category)}</span>
+          {module.is_required && <span className="cd-chip cd-chip--amber">Required</span>}
+        </span>
+        <strong className="tr-card__title">{module.title}</strong>
+        <span className="tr-card__meta">
+          {module.lessons.length} {module.lessons.length === 1 ? "lesson" : "lessons"}
+          {module.total_minutes ? ` · ${formatMinutes(module.total_minutes)}` : ""}
+          {module.quiz.length ? ` · ${module.quiz.length}-question check` : ""}
+        </span>
+        <span className="tr-card__foot">
+          {state === "completed" ? (
+            <StatusPill tone="success">Completed · {module.score}%</StatusPill>
+          ) : state === "in_progress" ? (
+            <StatusPill tone="warning">In progress · best {module.best_score}%</StatusPill>
+          ) : (
+            <StatusPill tone="neutral">Not started</StatusPill>
+          )}
+          <span className="tr-card__go">
+            {state === "completed" ? "Review" : state === "in_progress" ? "Continue" : "Start"} <ArrowRight size={15} aria-hidden="true" />
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function ModuleRunner({
+  module,
+  all,
+  onBack,
+  onOpen,
+  onError,
+}: {
+  module: TrainingModule;
+  all: TrainingModule[];
+  onBack: () => void;
+  onOpen: (id: string) => void;
+  onError: (message: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const aiStatus = useQuery({ queryKey: ["ai-status"], queryFn: getAIStatus, staleTime: 5 * 60_000, retry: false });
+  const lessons = module.lessons;
+  const hasQuiz = module.quiz.length > 0;
+  const finalStep = lessons.length;
+  const [visited, setVisited] = useState<number[]>(() => readVisited(module.id));
+  const [step, setStep] = useState(() => {
+    const seen = new Set(readVisited(module.id));
+    const first = lessons.findIndex((_, index) => !seen.has(index));
+    return module.completed || first === -1 ? 0 : first;
+  });
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [retaking, setRetaking] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
+  useEffect(() => {
+    if (step >= finalStep) return;
+    setVisited((current) => {
+      if (current.includes(step)) return current;
+      const next = [...current, step];
+      sessionStorage.setItem(visitedKey(module.id), JSON.stringify(next));
+      return next;
+    });
+  }, [step, finalStep, module.id]);
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["training-modules"] });
+    void queryClient.invalidateQueries({ queryKey: ["training-progress"] });
+    void queryClient.invalidateQueries({ queryKey: ["content-detail"] });
+    void queryClient.invalidateQueries({ queryKey: ["library"] });
+  };
+  const fail = (cause: unknown) =>
+    onError(cause instanceof ApiError ? cause.message : "We could not record that. Please try again.");
+  const attempt = useMutation({
+    mutationFn: () => submitTrainingAttempt(module.id, answers),
+    onSuccess: (result) => {
+      refresh();
+      if (result.passed) setRetaking(false);
+    },
+    onError: fail,
+  });
+  const finish = useMutation({ mutationFn: () => completeTrainingModule(module.id), onSuccess: refresh, onError: fail });
+
+  const readCount = visited.filter((index) => index < lessons.length).length;
+  const pct = lessons.length ? Math.round((readCount * 100) / lessons.length) : 0;
+  const nextRequired = useMemo(
+    () => all.find((item) => item.id !== module.id && item.is_required && !item.completed),
+    [all, module.id],
+  );
+  const answeredAll = module.quiz.every((question) => answers[question.id]);
+  const passedNow = attempt.data?.passed === true;
+  const showQuiz = hasQuiz && (!module.completed || retaking) && !passedNow;
+  const lesson = step < finalStep ? lessons[step] : null;
+
+  return (
+    <AdminPage>
+      <div>
+        <AdminButton variant="ghost" size="sm" icon={<ArrowLeft />} className="po-back" onClick={onBack}>
+          Training
+        </AdminButton>
+      </div>
+      <header className="cd-hero">
+        {module.cover_image && <img className="cd-hero__cover" src={module.cover_image} alt="" />}
+        <div className="cd-hero__body">
+          <div className="cd-chips">
+            <span className="cd-chip cd-chip--teal">
+              <GraduationCap aria-hidden="true" /> Learning module
+            </span>
+            <span className="cd-chip">{categoryLabel(module.category)}</span>
+            {module.is_required && <span className="cd-chip cd-chip--amber">Required</span>}
+            {module.completed && (
+              <span className="cd-chip cd-chip--teal">
+                <CheckCircle2 aria-hidden="true" /> Completed · {module.score}%
+              </span>
+            )}
+          </div>
+          <h1 className="cd-title">{module.title}</h1>
+          {module.description && <p className="cd-lede">{module.description}</p>}
+          <div className="cd-facts">
+            <span>
+              <BookOpen aria-hidden="true" /> {lessons.length} {lessons.length === 1 ? "lesson" : "lessons"}
+            </span>
+            {module.total_minutes ? (
+              <span>
+                <Clock aria-hidden="true" /> {formatMinutes(module.total_minutes)}
+              </span>
+            ) : null}
+            <span>
+              <ListChecks aria-hidden="true" /> {hasQuiz ? `${module.quiz.length} ${module.quiz.length === 1 ? "question" : "questions"} · ${module.pass_mark}% to pass` : "No knowledge check"}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <div className="tr-layout">
+        <nav className="tr-outline" aria-label="Module outline">
+          <ol>
+            {lessons.map((item, index) => {
+              const done = visited.includes(index);
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={`tr-outline__item${step === index ? " is-current" : ""}${done ? " is-done" : ""}`}
+                    aria-current={step === index ? "step" : undefined}
+                    onClick={() => setStep(index)}
+                  >
+                    <span className="tr-outline__dot" aria-hidden="true">
+                      {done ? <Check size={13} /> : index + 1}
+                    </span>
+                    <span className="tr-outline__label">{item.title}</span>
+                    <small>{item.duration_minutes} min</small>
+                  </button>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                type="button"
+                className={`tr-outline__item${step === finalStep ? " is-current" : ""}${module.completed ? " is-done" : ""}`}
+                aria-current={step === finalStep ? "step" : undefined}
+                onClick={() => setStep(finalStep)}
+              >
+                <span className="tr-outline__dot" aria-hidden="true">
+                  {module.completed ? <Check size={13} /> : <ListChecks size={13} />}
+                </span>
+                <span className="tr-outline__label">{hasQuiz ? "Knowledge check" : "Finish"}</span>
+              </button>
+            </li>
+          </ol>
+          <div className="tr-outline__progress" role="img" aria-label={`${pct}% of lessons read`}>
+            <div className="cd-progress">
+              <span style={{ width: `${module.completed ? 100 : pct}%` }} />
+            </div>
+            <small>{module.completed ? "Module complete" : `${readCount} of ${lessons.length} lessons read`}</small>
+          </div>
+        </nav>
+
+        <main className="tr-stage" id="training-stage" aria-live="polite">
+          {lesson ? (
+            <AdminCard>
+              <p className="cd-lesson__meta">
+                Lesson {step + 1} of {lessons.length} · {lesson.lesson_type} · {lesson.duration_minutes} min
+              </p>
+              <h2 className="tr-stage__title">{lesson.title}</h2>
+              <PlainText text={lesson.body} />
+              {aiStatus.data?.lesson_explanations && <LessonExplainer key={lesson.id} moduleId={module.id} lessonId={lesson.id} />}
+              <div className="tr-stage__nav">
+                <AdminButton variant="secondary" size="sm" icon={<ArrowLeft />} disabled={step === 0} onClick={() => setStep(step - 1)}>
+                  Previous
+                </AdminButton>
+                <AdminButton size="sm" onClick={() => setStep(step + 1)}>
+                  {step === lessons.length - 1 ? (hasQuiz ? "Go to knowledge check" : "Finish module") : "Next lesson"} <ArrowRight />
+                </AdminButton>
+              </div>
+            </AdminCard>
+          ) : (
+            <AdminCard title={hasQuiz ? "Knowledge check" : "Finish this module"} description={hasQuiz ? `${module.quiz.length} ${module.quiz.length === 1 ? "question" : "questions"} · ${module.pass_mark}% needed to pass` : undefined}>
+              {(module.completed && !retaking) || passedNow ? (
+                <div className="tr-result tr-result--pass" role="status">
+                  <CheckCircle2 aria-hidden="true" />
+                  <div>
+                    <strong>Module complete{(passedNow ? attempt.data?.score : module.score) != null ? ` — ${passedNow ? attempt.data?.score : module.score}%` : ""}</strong>
+                    <p>This is now on your training record.</p>
+                  </div>
+                </div>
+              ) : null}
+              {showQuiz ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (answeredAll) attempt.mutate();
+                  }}
+                >
+                  {module.quiz.map((question, index) => (
+                    <fieldset key={question.id} className="tr-question">
+                      <legend>
+                        {index + 1}. {question.prompt}
+                      </legend>
+                      <div className="tr-options">
+                        {question.options.map((option) => (
+                          <label key={option} className={answers[question.id] === option ? "is-selected" : undefined}>
+                            <input
+                              type="radio"
+                              name={question.id}
+                              value={option}
+                              checked={answers[question.id] === option}
+                              onChange={() => setAnswers((current) => ({ ...current, [question.id]: option }))}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                  {attempt.data && !attempt.data.passed && (
+                    <div className="tr-result tr-result--fail" role="status">
+                      <CircleAlert aria-hidden="true" />
+                      <div>
+                        <strong>
+                          Not quite yet — {attempt.data.score}% (you need {module.pass_mark}%)
+                        </strong>
+                        <p>Review the lessons, change your answers and try again. There is no limit on attempts.</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="tr-stage__nav">
+                    <AdminButton variant="secondary" size="sm" icon={<ArrowLeft />} onClick={() => setStep(finalStep - 1)} disabled={lessons.length === 0}>
+                      Back to lessons
+                    </AdminButton>
+                    <AdminButton type="submit" size="sm" disabled={!answeredAll || attempt.isPending}>
+                      {attempt.isPending ? "Checking answers…" : attempt.data && !attempt.data.passed ? "Submit again" : "Submit answers"}
+                    </AdminButton>
+                  </div>
+                  {!answeredAll && <p className="cd-empty tr-hint">Answer every question to submit.</p>}
+                </form>
+              ) : !hasQuiz && !module.completed ? (
+                <>
+                  <p className="cd-empty">
+                    You have reached the end of the lessons. Mark this module complete to add it to your training record.
+                  </p>
+                  <div className="tr-stage__nav">
+                    <AdminButton variant="secondary" size="sm" icon={<ArrowLeft />} onClick={() => setStep(Math.max(0, finalStep - 1))}>
+                      Back to lessons
+                    </AdminButton>
+                    <AdminButton size="sm" icon={<CheckCircle2 />} onClick={() => finish.mutate()} disabled={finish.isPending}>
+                      {finish.isPending ? "Saving…" : "Mark module complete"}
+                    </AdminButton>
+                  </div>
+                </>
+              ) : (
+                <div className="tr-stage__nav">
+                  {hasQuiz && !retaking && !passedNow && (
+                    <AdminButton variant="secondary" size="sm" icon={<RotateCcw />} onClick={() => { setAnswers({}); attempt.reset(); setRetaking(true); }}>
+                      Retake knowledge check
+                    </AdminButton>
+                  )}
+                  {nextRequired ? (
+                    <AdminButton size="sm" icon={<PlayCircle />} onClick={() => { setStep(0); onOpen(nextRequired.id); }}>
+                      Next required: {nextRequired.title}
+                    </AdminButton>
+                  ) : (
+                    <AdminButton size="sm" onClick={onBack}>
+                      Back to training
+                    </AdminButton>
+                  )}
+                </div>
+              )}
+            </AdminCard>
+          )}
+        </main>
+      </div>
+    </AdminPage>
   );
 }

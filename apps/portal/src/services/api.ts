@@ -440,10 +440,21 @@ export interface TrainingModule {
   is_required: boolean;
   cover_image: string;
   category: string;
-  status: "draft" | "published";
+  status: "draft" | "published" | "archived";
+  archived_at?: string | null;
+  updated_at?: string;
   visible_roles: string[];
   completed: boolean;
   score: number | null;
+  completed_at?: string | null;
+  attempt_count?: number;
+  best_score?: number | null;
+  last_score?: number | null;
+  last_passed?: boolean | null;
+  total_minutes?: number;
+  has_quiz?: boolean;
+  learners_completed?: number;
+  learners_attempted?: number;
   lessons: Array<{
     id: string;
     position: number;
@@ -490,6 +501,15 @@ export interface ContentItem {
   status?: "draft" | "published" | "archived";
   archived_at?: string | null;
   updated_at?: string;
+  version?: number;
+}
+
+export interface ContentRevisionSummary {
+  version: number;
+  title: string;
+  summary: string;
+  edited_by: string;
+  created_at: string;
 }
 
 type ContentWriteInput = Omit<Partial<ContentItem>, "cover_image"> & {
@@ -497,6 +517,8 @@ type ContentWriteInput = Omit<Partial<ContentItem>, "cover_image"> & {
   slug: string;
   cover_image?: File | null;
   document_file?: File | null;
+  /** Keep a live item live while saving edits (otherwise an edit returns it to draft). */
+  keep_published?: boolean;
 };
 
 export interface LibraryEntry {
@@ -576,6 +598,65 @@ export async function submitTrainingAttempt(
   return response.data;
 }
 
+export async function getAIStatus() {
+  const response = await request<{ data: { lesson_explanations: boolean; assistant: boolean } }>(
+    "/api/v1/ai/status",
+  );
+  return response.data;
+}
+
+export interface MentaTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface MentaAction {
+  id: string;
+  label: string;
+  href: string;
+}
+
+export interface MentaReply {
+  reply: string;
+  sources: { title: string; kind: string }[];
+  actions: MentaAction[];
+}
+
+export interface MentaDestination {
+  id: string;
+  label: string;
+  href: string;
+  description: string;
+  asks: string[];
+}
+
+export async function getMentaNavigation(): Promise<MentaDestination[]> {
+  const response = await request<{ data: MentaDestination[] }>("/api/v1/assistant/navigation");
+  return response.data;
+}
+
+export async function askMenta(
+  message: string,
+  history: MentaTurn[],
+  page: string,
+): Promise<MentaReply> {
+  const response = await request<{ data: MentaReply }>("/api/v1/assistant/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history, page }),
+  });
+  return response.data;
+}
+
+export async function explainTrainingLesson(moduleId: string, lessonId: string) {
+  const response = await request<{
+    data: { lesson_id: string; lesson_title: string; explanation: string };
+  }>(`/api/v1/training/modules/${moduleId}/explain-lesson`, {
+    method: "POST",
+    body: JSON.stringify({ lesson_id: lessonId }),
+  });
+  return response.data;
+}
+
 export async function getContentItems(): Promise<ContentItem[]> {
   const response = await request<{ data: ContentItem[] }>("/api/v1/content");
   return response.data;
@@ -610,6 +691,7 @@ export async function createTrainingModule(input: {
   }>;
   quiz: Array<{ prompt: string; options: string[]; correct_option: string }>;
   cover_image?: File | null;
+  keep_published?: boolean;
 }) {
   const body = new FormData();
   Object.entries(input).forEach(([key, value]) => {
@@ -654,6 +736,57 @@ export async function publishTrainingModule(id: string) {
     `/api/v1/training/modules/${id}/publish`,
     { method: "POST", body: "{}" },
   );
+  return response.data;
+}
+
+export async function getTrainingModule(id: string): Promise<TrainingModule> {
+  const response = await request<{ data: TrainingModule }>(`/api/v1/training/modules/${id}`);
+  return response.data;
+}
+
+export async function unpublishTrainingModule(id: string) {
+  const response = await request<{ data: TrainingModule }>(`/api/v1/training/modules/${id}/unpublish`, { method: "POST", body: "{}" });
+  return response.data;
+}
+
+export async function archiveTrainingModule(id: string, restore = false) {
+  const response = await request<{ data: TrainingModule }>(`/api/v1/training/modules/${id}/archive`, { method: "POST", body: JSON.stringify({ restore }) });
+  return response.data;
+}
+
+export async function duplicateTrainingModule(id: string) {
+  const response = await request<{ data: TrainingModule }>(`/api/v1/training/modules/${id}/duplicate`, { method: "POST", body: "{}" });
+  return response.data;
+}
+
+export async function deleteTrainingModule(id: string): Promise<void> {
+  await request<void>(`/api/v1/training/modules/${id}`, { method: "DELETE" });
+}
+
+export async function completeTrainingModule(id: string) {
+  const response = await request<{ data: { id: string; score: number; passed: boolean; pass_mark: number } }>(
+    `/api/v1/training/modules/${id}/complete`,
+    { method: "POST", body: "{}" },
+  );
+  return response.data;
+}
+
+export async function unpublishContentItem(id: string) {
+  const response = await request<{ data: ContentItem }>(`/api/v1/content/${id}/unpublish`, { method: "POST", body: "{}" });
+  return response.data;
+}
+
+export async function duplicateContentItem(id: string) {
+  const response = await request<{ data: ContentItem }>(`/api/v1/content/${id}/duplicate`, { method: "POST", body: "{}" });
+  return response.data;
+}
+
+export async function deleteContentItem(id: string): Promise<void> {
+  await request<void>(`/api/v1/content/${id}`, { method: "DELETE" });
+}
+
+export async function getContentRevisions(id: string): Promise<ContentRevisionSummary[]> {
+  const response = await request<{ data: ContentRevisionSummary[] }>(`/api/v1/content/${id}/revisions`);
   return response.data;
 }
 

@@ -18,7 +18,7 @@ export function MentorWorkspace(props: WorkspaceProps & { onSignedOut: () => voi
   const navigate = useNavigate();
   if (location.pathname === "/account") {
     const tab = new URLSearchParams(location.search).get("tab");
-    return <MentorWorkspaceFrame user={props.user} title="Settings" active="more"><div className="mx-auto w-full max-w-[74rem] px-5 py-8 sm:px-8 lg:px-12"><AccountSettings user={props.user} onSignedOut={props.onSignedOut} onError={props.onError} onUserUpdated={props.onUserUpdated} initialTab={tab as "security" | "profile" | "notifications" | "recovery" | null} /></div></MentorWorkspaceFrame>;
+    return <MentorWorkspaceFrame user={props.user} title="Settings" active="more"><div className="mx-auto w-full max-w-[74rem]"><AccountSettings user={props.user} onSignedOut={props.onSignedOut} onError={props.onError} onUserUpdated={props.onUserUpdated} initialTab={tab as "security" | "profile" | "notifications" | "recovery" | null} /></div></MentorWorkspaceFrame>;
   }
   const detailMatch = location.pathname.match(/^\/mentor\/students\/([^/]+)$/);
   const libraryDetail = location.pathname.match(

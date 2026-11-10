@@ -211,8 +211,7 @@
    ========================================================================== */
 
 .mentor-log-selector {
-  position: sticky;
-  top: 1.25rem;
+  position: relative;
 
   overflow: hidden;
 

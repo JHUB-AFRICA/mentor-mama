@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.ai import is_configured as ai_is_configured
 from apps.core.errors import UnauthorizedFacilityAccess
 from apps.core.models import IdempotencyKey
 
@@ -22,6 +23,15 @@ def csrf_failure(request, reason=""):
         "message": "Your secure session needs refreshing. Please try again.",
         "retryable": True,
     }}, status=403)
+
+
+class AIStatusView(APIView):
+    """Tell the UI which AI features are live so it never offers a dead action."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"data": {"lesson_explanations": ai_is_configured(), "assistant": ai_is_configured()}})
 
 
 def live_health(_request):

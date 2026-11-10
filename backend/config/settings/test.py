@@ -18,3 +18,7 @@ CACHES = {
         "LOCATION": "mentor-mama-test-cache",
     }
 }
+
+# Tests must never reach a real AI provider or use a developer's key from .env.
+AI_ENABLED = False
+AI_API_KEY = ""

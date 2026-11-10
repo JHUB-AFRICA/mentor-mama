@@ -1,20 +1,37 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   BriefcaseBusiness,
   ChevronLeft,
   ChevronRight,
+  KeyRound,
   Mail,
   Phone,
   RefreshCw,
-  Search,
   ShieldCheck,
   UserCheck,
   UserX,
   Users,
   X,
 } from "lucide-react";
-import { Button, TableSkeleton } from "@mentormama/ui";
+import { TableSkeleton } from "@mentormama/ui";
+import {
+  AdminButton,
+  AdminPage,
+  AdminPageHeader,
+  AdminTabs,
+  EmptyState,
+  Notice,
+  SearchField,
+  SelectField,
+  StatCard,
+  StatGrid,
+  StatusPill,
+  Toolbar,
+  type PillTone,
+} from "./ui/AdminKit";
+import "./people-pages.css";
+import "./programme-overlays.css";
+import { DetailList, DetailSection, Drawer, Field, Modal, SelectInput, TextArea } from "../../components/kit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/ToastProvider";
 import {
@@ -53,33 +70,59 @@ type PendingAction = {
 };
 type Feedback = { message: string; kind: "success" | "error" };
 
+const statusTones: Record<string, PillTone> = {
+  active: "success",
+  invited: "warning",
+  suspended: "danger",
+  deactivated: "neutral",
+};
+function PersonStatus({ status }: { status: string }) {
+  return (
+    <StatusPill tone={statusTones[status] ?? "neutral"}>
+      {statusLabels[status] ?? status}
+    </StatusPill>
+  );
+}
+function Initials({ name }: { name: string }) {
+  return (
+    <span className="pa-tile pa-tile--sm pa-tile--teal" aria-hidden="true">
+      <span className="text-[0.7rem] font-bold">
+        {name
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase()}
+      </span>
+    </span>
+  );
+}
+
 export function PeopleTable({ onInvite, onOpenRecovery }: Props) {
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: getDashboardSummary,
   });
   return (
-    <div className="people-access-shell">
-      <header className="people-access-heading">
-        <div>
-          <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-            Access management
-          </p>
-          <h1>People &amp; access</h1>
-          <p>
-            Review programme roles, account access, and invitations in one
-            place.
-          </p>
-        </div>
-        <Button onClick={onInvite}>
-          <Users size={17} className="mr-2" />
-          Invite person
-        </Button>
-      </header>
+    <AdminPage className="people-access-shell">
+      <AdminPageHeader
+        eyebrow="Access management"
+        title="People & access"
+        description="Review programme roles, account access, and invitations in one place."
+        actions={
+          <>
+            <AdminButton variant="secondary" icon={<KeyRound />} onClick={onOpenRecovery}>
+              Authenticator recovery
+            </AdminButton>
+            <AdminButton icon={<Users />} onClick={onInvite}>
+              Invite person
+            </AdminButton>
+          </>
+        }
+      />
       <PeopleKpis summary={summary.data} loading={summary.isPending} error={summary.isError} />
-      <div className="mb-5 flex justify-end"><Button variant="tertiary" onClick={onOpenRecovery}>Authenticator recovery</Button></div>
       <PeopleTableContent onInvite={onInvite} />
-    </div>
+    </AdminPage>
   );
 }
 
@@ -97,52 +140,42 @@ function PeopleKpis({
   loading: boolean;
   error: boolean;
 }) {
-  const metrics = [
-    {
-      label: "Other programme accounts",
-      value: summary?.people_total ?? 0,
-      detail: "All roles and statuses; excludes your account",
-      icon: <Users size={22} />,
-      tone: "teal",
-    },
-    {
-      label: "Students",
-      value: summary?.students ?? 0,
-      detail: "Active in programme",
-      icon: <UserCheck size={22} />,
-      tone: "blue",
-    },
-    {
-      label: "Mentors",
-      value: summary?.mentors ?? 0,
-      detail: "Active in programme",
-      icon: <BriefcaseBusiness size={22} />,
-      tone: "violet",
-    },
-    {
-      label: "Other programme staff",
-      value: summary?.programme_staff ?? 0,
-      detail: "Active Programme Admins, Coordinators, Nurse Managers",
-      icon: <ShieldCheck size={22} />,
-      tone: "green",
-    },
-  ];
+  const hint = (text: string) => (error ? "Counts could not be loaded" : text);
   return (
-    <section className="people-access-kpis" aria-label="People summary">
-      {metrics.map((metric) => (
-        <article
-          key={metric.label}
-          className={`people-access-kpi people-access-kpi--${metric.tone}`}
-        >
-          <span>{metric.icon}</span>
-          <div>
-            <p>{metric.label}</p>
-            <strong>{loading || error ? "—" : metric.value}</strong>
-            <small>{error ? "Counts could not be loaded" : metric.detail}</small>
-          </div>
-        </article>
-      ))}
-    </section>
+    <StatGrid>
+      <StatCard
+        icon={<Users />}
+        tone="teal"
+        value={summary?.people_total ?? 0}
+        label="Other programme accounts"
+        hint={hint("All roles and statuses; excludes you")}
+        loading={loading || error}
+      />
+      <StatCard
+        icon={<UserCheck />}
+        tone="blue"
+        value={summary?.students ?? 0}
+        label="Students"
+        hint={hint("Active in programme")}
+        loading={loading || error}
+      />
+      <StatCard
+        icon={<BriefcaseBusiness />}
+        tone="violet"
+        value={summary?.mentors ?? 0}
+        label="Mentors"
+        hint={hint("Active in programme")}
+        loading={loading || error}
+      />
+      <StatCard
+        icon={<ShieldCheck />}
+        tone="green"
+        value={summary?.programme_staff ?? 0}
+        label="Other programme staff"
+        hint={hint("Admins, Coordinators, Nurse Managers")}
+        loading={loading || error}
+      />
+    </StatGrid>
   );
 }
 
@@ -274,86 +307,83 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
     setPage(1);
   }
 
+  const filtered = Boolean(search || role || status);
   return (
-    <div className="space-y-9">
-      <section
-        aria-label="Programme people"
-        className="overflow-hidden border-y border-border"
-      >
-        <div className="flex flex-col gap-4 border-b border-border py-5 lg:flex-row lg:items-center">
-          <form className="relative flex-1" onSubmit={applySearch}>
-            <Search
-              size={17}
-              className="absolute left-4 top-3.5 text-navy-muted"
-            />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              className="h-11 w-full rounded-xl border border-border bg-white pl-11 pr-4 font-body text-sm text-navy outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-              placeholder="Search by name or email"
-              aria-label="Search people"
-            />
-          </form>
-          <div className="grid grid-cols-2 gap-3 lg:flex">
-            <select
-              value={role}
-              onChange={(event) => {
-                setRole(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 min-w-0 rounded-xl border border-border bg-white px-3 font-body text-sm text-navy outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-              aria-label="Filter by role"
-            >
-              <option value="">All roles</option>
-              <option value="coordinator">University Coordinator</option>
-              <option value="nurse_manager">Nurse Manager</option>
-              <option value="mentor">Clinical Mentor</option>
-              <option value="student">Student</option>
-            </select>
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 min-w-0 rounded-xl border border-border bg-white px-3 font-body text-sm text-navy outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-              aria-label="Filter by status"
-            >
-              <option value="">All statuses</option>
-              <option value="invited">Invitation pending</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="deactivated">Deactivated</option>
-            </select>
-          </div>
-          {(search || role || status) && (
-            <Button variant="tertiary" size="sm" onClick={clearFilters}>
+    <>
+      <form onSubmit={applySearch} aria-label="Search and filter people">
+        <Toolbar compact filters={filtered ? 3 : 2}>
+          <SearchField
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Search by name or email"
+            label="Search people"
+          />
+          <SelectField
+            label="Filter by role"
+            value={role}
+            onChange={(value) => {
+              setRole(value);
+              setPage(1);
+            }}
+            options={[
+                { value: "", label: "All roles" },
+                { value: "coordinator", label: "University Coordinator" },
+                { value: "nurse_manager", label: "Nurse Manager" },
+                { value: "mentor", label: "Clinical Mentor" },
+                { value: "student", label: "Student" },
+              ]}
+          />
+          <SelectField
+            label="Filter by status"
+            value={status}
+            onChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+            options={[
+                { value: "", label: "All statuses" },
+                { value: "invited", label: "Invitation pending" },
+                { value: "active", label: "Active" },
+                { value: "suspended", label: "Suspended" },
+                { value: "deactivated", label: "Deactivated" },
+              ]}
+          />
+          {filtered && (
+            <AdminButton variant="ghost" onClick={clearFilters}>
               Clear
-            </Button>
+            </AdminButton>
           )}
-        </div>
-        {feedback && (
-          <div
-            role={feedback.kind === "error" ? "alert" : "status"}
-            className={`my-5 border-l-2 px-4 py-3 font-body text-sm ${feedback.kind === "error" ? "border-error bg-error/5 text-error" : "border-teal bg-teal-light/50 text-teal"}`}
-          >
+        </Toolbar>
+      </form>
+      {feedback && (
+        <div role={feedback.kind === "error" ? "alert" : "status"}>
+          <Notice icon={feedback.kind === "error" ? <X /> : <ShieldCheck />}>
             {feedback.message}
-          </div>
-        )}
+          </Notice>
+        </div>
+      )}
+      <section aria-label="Programme people" className="pa-table-wrap">
         {people.isError ? (
-          <p className="py-12 text-center font-body text-sm text-danger">
-            We could not load programme people. Please try again.
-          </p>
+          <EmptyState
+            icon={<UserX size={24} />}
+            title="We could not load programme people."
+            text="Please try again."
+            action={
+              <AdminButton variant="secondary" onClick={() => void people.refetch()}>
+                Try again
+              </AdminButton>
+            }
+          />
         ) : people.isPending ? (
           <TableSkeleton rows={6} />
         ) : people.data.results.length === 0 ? (
-          <EmptyPeople onInvite={onInvite} />
+          <EmptyPeople onInvite={onInvite} filtered={filtered} />
         ) : (
           <>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[56rem] text-left">
+            <div className="pa-table-scroll hidden md:block">
+              <table className="pa-table min-w-[56rem]">
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr>
                     <Header>Person</Header>
                     <Header>Role</Header>
                     <Header>Scope basis</Header>
@@ -378,7 +408,7 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
                 </tbody>
               </table>
             </div>
-            <div className="divide-y divide-border md:hidden">
+            <div className="md:hidden">
               {people.data.results.map((person) => (
                 <MobilePersonRow
                   key={person.id}
@@ -392,8 +422,8 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
                 />
               ))}
             </div>
-            <div className="flex flex-col gap-3 border-t border-border px-1 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="font-body text-xs text-navy-muted">
+            <div className="pa-table-footer">
+              <p>
                 Showing{" "}
                 {(people.data.pagination.page - 1) *
                   people.data.pagination.page_size +
@@ -407,23 +437,23 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
                 of {people.data.pagination.total_count}
               </p>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="tertiary"
+                <AdminButton
+                  variant="secondary"
                   size="sm"
+                  icon={<ChevronLeft />}
                   disabled={
                     !people.data.pagination.has_previous || people.isFetching
                   }
                   onClick={() => setPage((current) => current - 1)}
                 >
-                  <ChevronLeft size={16} className="mr-1" />
                   Previous
-                </Button>
-                <span className="font-body text-xs font-semibold text-navy">
+                </AdminButton>
+                <span className="font-semibold text-[var(--pa-ink)]">
                   Page {people.data.pagination.page} of{" "}
                   {people.data.pagination.total_pages}
                 </span>
-                <Button
-                  variant="tertiary"
+                <AdminButton
+                  variant="secondary"
                   size="sm"
                   disabled={
                     !people.data.pagination.has_next || people.isFetching
@@ -431,8 +461,8 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
                   onClick={() => setPage((current) => current + 1)}
                 >
                   Next
-                  <ChevronRight size={16} className="ml-1" />
-                </Button>
+                  <ChevronRight />
+                </AdminButton>
               </div>
             </div>
           </>
@@ -455,6 +485,7 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
         <PersonDrawer
           person={selectedPerson}
           busy={busyId === selectedPerson.id}
+          hidden={Boolean(pendingAction)}
           onClose={() => setSelectedPerson(null)}
           onResend={() => void resend(selectedPerson)}
           onStatus={(nextStatus) =>
@@ -473,24 +504,19 @@ function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
           }
         />
       )}
-    </div>
+    </>
   );
 }
 
 function Header({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <th
-        scope="col"
-        className="px-3 py-3 font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted"
-      >
-        {children === "Added"
-          ? "Last active"
-          : children === "Scope basis"
-            ? "Scope / ward"
-            : children}
-      </th>
-    </>
+    <th scope="col">
+      {children === "Added"
+        ? "Last active"
+        : children === "Scope basis"
+          ? "Scope / ward"
+          : children}
+    </th>
   );
 }
 function PersonRow({
@@ -507,46 +533,27 @@ function PersonRow({
   onStatus: (status: "active" | "suspended" | "deactivated") => void;
 }) {
   return (
-    <tr className="border-b border-border transition last:border-0 hover:bg-mist/45">
-      <td className="px-3 py-4">
+    <tr>
+      <td>
         <button
           type="button"
           onClick={onOpen}
           aria-label={`Open details for ${person.name}`}
-          className="flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          className="pa-cell-title rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pa-teal)]"
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-light font-body text-xs font-bold text-teal">
-            {person.name
-              .split(/\s+/)
-              .map((part) => part[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </span>
+          <Initials name={person.name} />
           <span className="min-w-0">
-            <span className="block truncate font-body text-sm font-semibold text-navy hover:text-teal">
-              {person.name}
-            </span>
-            <span className="mt-1 block truncate font-body text-xs text-navy-muted">
-              {person.email}
-            </span>
+            <strong className="truncate">{person.name}</strong>
+            <small className="truncate">{person.email}</small>
           </span>
         </button>
       </td>
-      <td className="px-3 py-4 font-body text-sm text-navy-muted">
-        {roleLabels[person.role] ?? person.role}
+      <td>{roleLabels[person.role] ?? person.role}</td>
+      <td>{person.scope ?? scopeBasis(person.role)}</td>
+      <td>
+        <PersonStatus status={person.status} />
       </td>
-      <td className="px-3 py-4 font-body text-xs text-navy-muted">
-        {person.scope ?? scopeBasis(person.role)}
-      </td>
-      <td className="px-3 py-4">
-        <span
-          className={`inline-flex rounded-full px-2.5 py-1 font-body text-xs font-semibold ${person.status === "active" ? "bg-teal-light text-teal" : person.status === "invited" ? "bg-warning/15 text-warning" : "bg-mist text-navy-muted"}`}
-        >
-          {statusLabels[person.status] ?? person.status}
-        </span>
-      </td>
-      <td className="px-3 py-4 font-body text-sm text-navy-muted">
+      <td>
         {person.last_active
           ? new Date(person.last_active).toLocaleDateString("en-GB", {
               day: "numeric",
@@ -555,15 +562,15 @@ function PersonRow({
             })
           : "—"}
       </td>
-      <td className="px-3 py-4 text-right">
+      <td className="text-right">
         <details className="relative inline-block">
           <summary
-            className="flex size-9 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-navy-muted transition hover:border-teal hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+            className="pa-btn pa-btn--secondary pa-btn--sm cursor-pointer list-none"
             aria-label={`Actions for ${person.name}`}
           >
             •••
           </summary>
-          <div className="absolute right-0 z-10 mt-2 grid min-w-40 gap-1 rounded-xl border border-border bg-white p-1 text-left shadow-xl">
+          <div className="absolute right-0 z-10 mt-2 grid min-w-44 gap-1 rounded-[0.75rem] border border-[var(--pa-line)] bg-white p-1 text-left shadow-xl">
             {person.status === "invited" && (
               <ActionButton
                 disabled={busy}
@@ -624,46 +631,26 @@ function MobilePersonRow({
   onStatus: (status: "active" | "suspended" | "deactivated") => void;
 }) {
   return (
-    <article className="space-y-4 py-5 first:pt-6">
-      <div className="flex items-start justify-between gap-4">
+    <article className="pa-row !flex-col !items-stretch gap-3">
+      <div className="flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={onOpen}
           aria-label={`Open details for ${person.name}`}
-          className="min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          className="pa-cell-title rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pa-teal)]"
         >
-          <p className="truncate font-body text-sm font-semibold text-navy">
-            {person.name}
-          </p>
-          <p className="mt-1 truncate font-body text-xs text-navy-muted">
-            {person.email}
-          </p>
+          <Initials name={person.name} />
+          <span className="min-w-0">
+            <strong className="truncate">{person.name}</strong>
+            <small className="truncate">{person.email}</small>
+          </span>
         </button>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 font-body text-xs font-semibold ${person.status === "active" ? "bg-teal-light text-teal" : person.status === "invited" ? "bg-warning/15 text-warning" : "bg-mist text-navy-muted"}`}
-        >
-          {statusLabels[person.status] ?? person.status}
-        </span>
+        <PersonStatus status={person.status} />
       </div>
-      <dl className="grid grid-cols-2 gap-4">
-        <div>
-          <dt className="font-body text-[0.68rem] font-bold uppercase tracking-[0.12em] text-navy-muted">
-            Role
-          </dt>
-          <dd className="mt-1 font-body text-sm text-navy-muted">
-            {roleLabels[person.role] ?? person.role}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-body text-[0.68em] font-bold uppercase tracking-[0.12em] text-navy-muted">
-            Scope
-          </dt>
-          <dd className="mt-1 font-body text-sm text-navy-muted">
-            {scopeBasis(person.role)}
-          </dd>
-        </div>
-      </dl>
-      <div className="flex flex-wrap gap-2">
+      <p className="pa-row__meta !whitespace-normal">
+        {roleLabels[person.role] ?? person.role} · {scopeBasis(person.role)}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
         {person.status === "invited" && (
           <ActionButton
             disabled={busy}
@@ -688,13 +675,9 @@ function MobilePersonRow({
             icon={<UserCheck size={14} />}
           />
         )}
-        <button
-          type="button"
-          onClick={onOpen}
-          className="ml-auto min-h-8 font-body text-xs font-semibold text-teal"
-        >
+        <AdminButton variant="ghost" size="sm" className="ml-auto" onClick={onOpen}>
           View details <span aria-hidden="true">→</span>
-        </button>
+        </AdminButton>
       </div>
     </article>
   );
@@ -704,25 +687,25 @@ function ActionButton({
   icon,
   onClick,
   disabled,
+  danger,
 }: {
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
   disabled: boolean;
+  danger?: boolean;
 }) {
-  const destructive =
-    label.toLowerCase().includes("remove") ||
-    label.toLowerCase().includes("deactivate");
   return (
-    <button
-      type="button"
+    <AdminButton
+      variant="secondary"
+      size="sm"
+      icon={icon}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex min-h-8 items-center gap-1 rounded-lg border px-2.5 font-body text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${destructive ? "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100" : "border-border text-navy-muted hover:border-teal hover:text-teal"}`}
+      className={danger ? "po-danger" : undefined}
     >
-      {icon}
       {label}
-    </button>
+    </AdminButton>
   );
 }
 function StatusConfirmModal({
@@ -744,85 +727,62 @@ function StatusConfirmModal({
     : action.status === "suspended"
       ? "suspend access"
       : "activate access";
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !busy) onCancel();
-    }
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [busy, onCancel]);
+  const verb = isRemoval ? "Remove" : action.status === "suspended" ? "Suspend" : "Activate";
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) onCancel();
-      }}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="status-action-title"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <p
-          className={`font-body text-xs font-bold uppercase tracking-[0.14em] ${isRemoval ? "text-error" : "text-teal"}`}
-        >
-          {isRemoval ? "Destructive access action" : "Account access"}
-        </p>
-        <h2
-          id="status-action-title"
-          className="mt-3 font-display text-2xl font-bold text-navy"
-        >
-          {isRemoval
-            ? "Remove"
-            : action.status === "suspended"
-              ? "Suspend"
-              : "Activate"}{" "}
-          {action.person.name}?
-        </h2>
-        <p className="mt-3 font-body text-sm leading-6 text-navy-muted">
-          {isRemoval
-            ? "This will revoke this person’s programme access and sign out their active sessions. You can restore access later from the account actions."
-            : action.status === "active"
-              ? "This will restore their access to the programme portal."
-              : "Their active sessions will be signed out and access will be restricted."}
-        </p>
-        <label className="mt-4 block font-body text-sm font-semibold text-navy">
-          Why are you changing access?
-          <textarea
-            value={action.reason}
-            onChange={(event) => onReasonChange(event.target.value)}
-            required
-            minLength={5}
-            maxLength={500}
-            rows={3}
-            className="mt-2 w-full rounded-xl border border-border p-3 font-normal"
-            placeholder="Add a short reason for the audit record"
-          />
-        </label>
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button variant="tertiary" onClick={onCancel} disabled={busy}>
+    <Modal
+      open
+      onClose={onCancel}
+      dismissible={!busy}
+      size="sm"
+      closeLabel="Close"
+      icon={action.status === "active" ? <UserCheck /> : <UserX />}
+      title={`${verb} ${action.person.name}?`}
+      description={
+        isRemoval
+          ? "This will revoke this person’s programme access and sign out their active sessions. You can restore access later from the account actions."
+          : action.status === "active"
+            ? "This will restore their access to the programme portal."
+            : "Their active sessions will be signed out and access will be restricted."
+      }
+      footer={
+        <>
+          <AdminButton variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
             Cancel
-          </Button>
-          <Button
+          </AdminButton>
+          <AdminButton
             variant={isRemoval ? "secondary" : "primary"}
+            size="sm"
+            className={isRemoval ? "po-danger" : undefined}
             onClick={onConfirm}
             disabled={busy || action.reason.trim().length < 5}
           >
-            {busy
-              ? "Updating…"
-              : isRemoval
-                ? "Remove access"
-                : label[0].toUpperCase() + label.slice(1)}
-          </Button>
-        </div>
-      </section>
-    </div>
+            {busy ? "Updating…" : isRemoval ? "Remove access" : label[0].toUpperCase() + label.slice(1)}
+          </AdminButton>
+        </>
+      }
+    >
+      <Field
+        label="Why are you changing access?"
+        required
+        hint="Saved to the audit record. At least 5 characters."
+      >
+        <TextArea
+          value={action.reason}
+          onChange={(event) => onReasonChange(event.target.value)}
+          required
+          minLength={5}
+          maxLength={500}
+          rows={3}
+          placeholder="Add a short reason for the audit record"
+        />
+      </Field>
+    </Modal>
   );
 }
 function PersonDrawer(props: {
   person: Person;
   busy: boolean;
+  hidden: boolean;
   onClose: () => void;
   onResend: () => void;
   onStatus: (status: "active" | "suspended" | "deactivated") => void;
@@ -859,10 +819,12 @@ function PersonDrawer(props: {
     props.onSessionsRevoked();
     pushToast({ kind: "success", title: "Devices signed out", message: `${props.person.name} will need to sign in again.` });
   }
-  return createPortal(
+  return (
     <>
+      {/* Only one dialog traps focus at a time, so the drawer steps aside while a modal is open. */}
       <InlinePersonDrawer
         {...props}
+        open={!props.hidden && !editing}
         onEditAccess={() => setEditing(true)}
         onRevokeSessions={revokeSessions}
       />
@@ -875,14 +837,21 @@ function PersonDrawer(props: {
           onSave={saveAccess}
         />
       )}
-    </>,
-    document.body,
+    </>
   );
 }
+
+type DrawerTab = "Overview" | "Access" | "Activity";
+const drawerTabs: Array<{ value: DrawerTab; label: string }> = [
+  { value: "Overview", label: "Overview" },
+  { value: "Access", label: "Access" },
+  { value: "Activity", label: "Activity" },
+];
 
 function InlinePersonDrawer({
   person,
   busy,
+  open,
   onClose,
   onResend,
   onStatus,
@@ -891,13 +860,14 @@ function InlinePersonDrawer({
 }: {
   person: Person;
   busy: boolean;
+  open: boolean;
   onClose: () => void;
   onResend: () => void;
   onStatus: (status: "active" | "suspended" | "deactivated") => void;
   onEditAccess: () => void;
   onRevokeSessions: (reason: string) => Promise<void>;
 }) {
-  const [tab, setTab] = useState("Overview");
+  const [tab, setTab] = useState<DrawerTab>("Overview");
   const [sessionReason, setSessionReason] = useState("");
   const [sessionBusy, setSessionBusy] = useState(false);
   const [sessionMessage, setSessionMessage] = useState("");
@@ -906,13 +876,6 @@ function InlinePersonDrawer({
     queryFn: () => getPersonActivity(person.id),
     enabled: tab === "Activity",
   });
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
   const canResend =
     person.can_reissue_invitation ?? person.status === "invited";
   const canActivate =
@@ -925,276 +888,45 @@ function InlinePersonDrawer({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const roleLabel = roleLabels[person.role] ?? person.role;
+  const scope = person.scope ?? scopeBasis(person.role);
+  const addedOn = new Date(person.created_at).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const pendingInvitation = person.status === "invited" || person.can_reissue_invitation;
+  const hasActions = canResend || canSuspend || canActivate || person.status !== "deactivated";
   return (
-    <div
-      className="fixed inset-0 z-40 bg-navy/35"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="person-drawer-title"
-        className="people-person-drawer ml-auto flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl"
-      >
-        <header className="border-b border-border px-6 pb-5 pt-7 sm:px-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-lilac font-body text-lg font-bold text-navy">
-                {initials}
-              </span>
-              <div className="min-w-0">
-                <h2
-                  id="person-drawer-title"
-                  className="truncate font-display text-2xl font-bold text-navy"
-                >
-                  {person.name}
-                </h2>
-                <p className="mt-1 truncate font-body text-sm text-navy-muted">
-                  {person.email}
-                </p>
-              </div>
+    <Drawer
+      open={open}
+      onClose={onClose}
+      closeLabel="Close person details"
+      title={person.name}
+      header={
+        <div className="po-person">
+          <span className="po-avatar" aria-hidden="true">
+            {initials}
+          </span>
+          <div className="po-person__text">
+            <p className="po-person__name">{person.name}</p>
+            <p className="po-person__email">{person.email}</p>
+            <div className="po-person__meta">
+              <PersonStatus status={person.status} />
+              <span>Added {addedOn}</span>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full p-2 text-navy-muted transition hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
-              aria-label="Close person details"
-            >
-              <X size={19} />
-            </button>
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex rounded-full px-3 py-1 font-body text-xs font-semibold ${person.status === "active" ? "bg-teal-light text-teal" : person.status === "invited" ? "bg-warning/15 text-warning" : "bg-mist text-navy-muted"}`}
-            >
-              {statusLabels[person.status] ?? person.status}
-            </span>
-            <span className="font-body text-xs text-navy-muted">
-              Added{" "}
-              {new Date(person.created_at).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </header>
-        <nav
-          className="flex gap-6 border-b border-border px-6 sm:px-8"
-          role="tablist"
-          aria-label="Person details sections"
-        >
-          {["Overview", "Access", "Activity"].map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="tab"
-              aria-selected={tab === item}
-              onClick={() => setTab(item)}
-              className={`min-h-12 border-b-2 font-body text-sm font-semibold ${tab === item ? "border-teal text-teal" : "border-transparent text-navy-muted"}`}
-            >
-              {item}
-            </button>
-          ))}
-        </nav>
-        <div className="flex-1 px-6 py-7 sm:px-8">
-          {tab === "Overview" && (
-            <div className="space-y-7">
-              <section>
-                <h3 className="font-display text-lg font-bold text-navy">
-                  Basic information
-                </h3>
-                <div className="mt-5 space-y-5">
-                  <Detail
-                    icon={<Users size={17} />}
-                    label="Full name"
-                    value={person.name}
-                  />
-                  <Detail
-                    icon={<Mail size={17} />}
-                    label="Email"
-                    value={person.email}
-                  />
-                  <Detail
-                    icon={<Phone size={17} />}
-                    label="Phone"
-                    value={person.phone || "Not provided"}
-                  />
-                  <Detail
-                    icon={<UserCheck size={17} />}
-                    label="Role"
-                    value={roleLabels[person.role] ?? person.role}
-                  />
-                </div>
-              </section>
-              <section className="border-t border-border pt-6">
-                <h3 className="font-display text-lg font-bold text-navy">
-                  Programme context
-                </h3>
-                <div className="mt-5 space-y-5">
-                  <Detail
-                    icon={<ShieldCheck size={17} />}
-                    label="Scope"
-                    value={person.scope ?? scopeBasis(person.role)}
-                  />
-                  <Detail
-                    icon={<BriefcaseBusiness size={17} />}
-                    label="Access basis"
-                    value={`${scopeBasis(person.role)} (${roleLabels[person.role] ?? person.role} role)`}
-                  />
-                  <Detail
-                    icon={<Users size={17} />}
-                    label="Status"
-                    value={statusLabels[person.status] ?? person.status}
-                  />
-                </div>
-              </section>
-            </div>
-          )}
-          {tab === "Access" && (
-            <section className="space-y-5">
-              <h3 className="font-display text-lg font-bold text-navy">
-                Access controls
-              </h3>
-              <p className="font-body text-sm leading-6 text-navy-muted">
-                Access is governed by the assigned role and programme scope.
-              </p>
-              <Detail
-                icon={<ShieldCheck size={17} />}
-                label="Current role"
-                value={roleLabels[person.role] ?? person.role}
-              />
-              <Detail
-                icon={<BriefcaseBusiness size={17} />}
-                label="Scope"
-                value={person.scope ?? scopeBasis(person.role)}
-              />
-              {person.status !== "invited" &&
-                !person.can_reissue_invitation && (
-                  <Button onClick={onEditAccess} className="mt-2 w-full">
-                    Edit access
-                  </Button>
-                )}
-              {(person.status === "invited" ||
-                person.can_reissue_invitation) && (
-                <p className="rounded-xl bg-mist/50 p-3 text-sm text-navy-muted">
-                  To change a pending invitation, reissue it with the correct
-                  role and scope. The recipient will get a fresh link.
-                </p>
-              )}
-              {person.status === "active" && (
-                <section className="mt-6 border-t border-border pt-5">
-                  <h4 className="font-semibold text-navy">Signed-in devices</h4>
-                  <p className="mt-1 text-sm text-navy-muted">
-                    Sign this person out on all devices. They’ll need to sign in
-                    again.
-                  </p>
-                  <label className="mt-3 block text-sm font-semibold">
-                    Reason
-                    <textarea
-                      value={sessionReason}
-                      onChange={(event) => setSessionReason(event.target.value)}
-                      minLength={5}
-                      rows={2}
-                      className="mt-1 w-full rounded border border-border p-2 font-normal"
-                      placeholder="Why are you signing them out?"
-                    />
-                  </label>
-                  <Button
-                    className="mt-2"
-                    variant="tertiary"
-                    disabled={
-                      sessionBusy ||
-                      sessionReason.trim().length < 5 ||
-                      person.id === ""
-                    }
-                    onClick={() => {
-                      setSessionBusy(true);
-                      void onRevokeSessions(sessionReason.trim())
-                        .then(() =>
-                          setSessionMessage(
-                            "Their signed-in devices have been signed out.",
-                          ),
-                        )
-                        .catch((cause) =>
-                          setSessionMessage(
-                            cause instanceof Error
-                              ? cause.message
-                              : "Could not sign out their devices.",
-                          ),
-                        )
-                        .finally(() => setSessionBusy(false));
-                    }}
-                  >
-                    {sessionBusy ? "Signing out…" : "Sign out all devices"}
-                  </Button>
-                  {sessionMessage && (
-                    <p role="status" className="mt-2 text-sm text-navy-muted">
-                      {sessionMessage}
-                    </p>
-                  )}
-                </section>
-              )}
-            </section>
-          )}
-          {tab === "Activity" && (
-            <section>
-              <h3 className="font-display text-lg font-bold text-navy">
-                Recent account activity
-              </h3>
-              {activity.isPending ? (
-                <p className="mt-4 text-sm text-navy-muted">
-                  Loading activity…
-                </p>
-              ) : activity.isError ? (
-                <div className="mt-4">
-                  <p role="alert" className="text-sm text-error">
-                    Activity could not be loaded.
-                  </p>
-                  <Button
-                    className="mt-2"
-                    variant="tertiary"
-                    size="sm"
-                    onClick={() => void activity.refetch()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              ) : activity.data.length === 0 ? (
-                <p className="mt-4 rounded-xl bg-mist/40 p-4 text-sm text-navy-muted">
-                  No account activity has been recorded yet.
-                </p>
-              ) : (
-                <ol className="mt-4 divide-y divide-border">
-                  {activity.data.map((entry) => (
-                    <li key={entry.id} className="py-3">
-                      <p className="font-semibold text-navy">
-                        {entry.action.replaceAll(".", " ").replaceAll("_", " ")}
-                      </p>
-                      <p className="mt-1 text-sm text-navy-muted">
-                        By {entry.actor_name} ·{" "}
-                        {new Date(entry.occurred_at).toLocaleString()}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-          )}
         </div>
-        <footer className="border-t border-border px-6 py-5 sm:px-8">
-          <div className="flex flex-wrap gap-2">
+      }
+      tabs={<AdminTabs tabs={drawerTabs} value={tab} onChange={setTab} label="Person details sections" />}
+      footer={
+        hasActions ? (
+          <>
             {canResend && (
               <ActionButton
                 disabled={busy}
                 onClick={onResend}
-                label={
-                  person.status === "deactivated"
-                    ? "Reissue invitation"
-                    : "Resend invitation"
-                }
+                label={person.status === "deactivated" ? "Reissue invitation" : "Resend invitation"}
                 icon={<RefreshCw size={14} />}
               />
             )}
@@ -1216,18 +948,157 @@ function InlinePersonDrawer({
             )}
             {person.status !== "deactivated" && (
               <ActionButton
+                danger
                 disabled={busy}
                 onClick={() => onStatus("deactivated")}
                 label="Remove from programme"
                 icon={<UserX size={14} />}
               />
             )}
-          </div>
-        </footer>
-      </aside>
-    </div>
+          </>
+        ) : undefined
+      }
+    >
+      {tab === "Overview" && (
+        <>
+          <DetailSection title="Basic information">
+            <DetailList
+              items={[
+                { label: "Full name", value: person.name, icon: <Users /> },
+                { label: "Email", value: person.email, icon: <Mail /> },
+                { label: "Phone", value: person.phone || "Not provided", icon: <Phone /> },
+                { label: "Role", value: roleLabel, icon: <UserCheck /> },
+              ]}
+            />
+          </DetailSection>
+          <DetailSection title="Programme context">
+            <DetailList
+              items={[
+                { label: "Scope", value: scope, icon: <ShieldCheck /> },
+                {
+                  label: "Access basis",
+                  value: `${scopeBasis(person.role)} (${roleLabel} role)`,
+                  icon: <BriefcaseBusiness />,
+                },
+                { label: "Status", value: statusLabels[person.status] ?? person.status, icon: <Users /> },
+              ]}
+            />
+          </DetailSection>
+        </>
+      )}
+      {tab === "Access" && (
+        <>
+          <DetailSection title="Access controls">
+            <p className="po-lead" style={{ marginBottom: "0.85rem" }}>
+              Access is governed by the assigned role and programme scope.
+            </p>
+            <DetailList
+              items={[
+                { label: "Current role", value: roleLabel, icon: <ShieldCheck /> },
+                { label: "Scope", value: scope, icon: <BriefcaseBusiness /> },
+              ]}
+            />
+            {!pendingInvitation && (
+              <div style={{ marginTop: "0.85rem" }}>
+                <AdminButton variant="secondary" size="sm" icon={<KeyRound />} onClick={onEditAccess}>
+                  Edit access
+                </AdminButton>
+              </div>
+            )}
+            {pendingInvitation && (
+              <p className="po-note" style={{ marginTop: "0.85rem" }}>
+                To change a pending invitation, reissue it with the correct role and scope. The recipient will get a
+                fresh link.
+              </p>
+            )}
+          </DetailSection>
+          {person.status === "active" && (
+            <DetailSection title="Signed-in devices">
+              <p className="po-lead" style={{ marginBottom: "0.85rem" }}>
+                Sign this person out on all devices. They’ll need to sign in again.
+              </p>
+              <Field label="Reason" required hint="Saved to the audit record. At least 5 characters.">
+                <TextArea
+                  value={sessionReason}
+                  onChange={(event) => setSessionReason(event.target.value)}
+                  minLength={5}
+                  rows={2}
+                  className="po-textarea-sm"
+                  placeholder="Why are you signing them out?"
+                />
+              </Field>
+              <div style={{ marginTop: "0.75rem" }}>
+                <AdminButton
+                  variant="secondary"
+                  size="sm"
+                  className="po-danger"
+                  disabled={sessionBusy || sessionReason.trim().length < 5 || person.id === ""}
+                  onClick={() => {
+                    setSessionBusy(true);
+                    void onRevokeSessions(sessionReason.trim())
+                      .then(() => setSessionMessage("Their signed-in devices have been signed out."))
+                      .catch((cause) =>
+                        setSessionMessage(
+                          cause instanceof Error ? cause.message : "Could not sign out their devices.",
+                        ),
+                      )
+                      .finally(() => setSessionBusy(false));
+                  }}
+                >
+                  {sessionBusy ? "Signing out…" : "Sign out all devices"}
+                </AdminButton>
+              </div>
+              {sessionMessage && (
+                <p role="status" className="po-note" style={{ marginTop: "0.75rem" }}>
+                  {sessionMessage}
+                </p>
+              )}
+            </DetailSection>
+          )}
+        </>
+      )}
+      {tab === "Activity" && (
+        <DetailSection title="Recent account activity">
+          {activity.isPending ? (
+            <p className="po-lead">Loading activity…</p>
+          ) : activity.isError ? (
+            <div>
+              <p role="alert" className="po-note po-note--error">
+                Activity could not be loaded.
+              </p>
+              <div style={{ marginTop: "0.65rem" }}>
+                <AdminButton variant="secondary" size="sm" onClick={() => void activity.refetch()}>
+                  Try again
+                </AdminButton>
+              </div>
+            </div>
+          ) : activity.data.length === 0 ? (
+            <p className="po-note">No account activity has been recorded yet.</p>
+          ) : (
+            <ol className="po-timeline">
+              {activity.data.map((entry) => (
+                <li key={entry.id}>
+                  <strong>{entry.action.replaceAll(".", " ").replaceAll("_", " ")}</strong>
+                  <span>
+                    By {entry.actor_name} · {new Date(entry.occurred_at).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </DetailSection>
+      )}
+    </Drawer>
   );
 }
+
+const accessRoleHints: Record<string, string> = {
+  student: "Completes the programme; needs an institution and a registration number.",
+  mentor: "Supervises students on the ward; tied to one facility.",
+  nurse_manager: "Oversees mentors and placements at one facility.",
+  coordinator: "Manages students and placements for one institution.",
+  program_admin: "Programme-wide access to every institution and facility.",
+};
 
 function EditAccessModal({
   person,
@@ -1300,197 +1171,124 @@ function EditAccessModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-navy/45 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose();
-      }}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-access-title"
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-              Access management
-            </p>
-            <h2
-              id="edit-access-title"
-              className="mt-2 font-display text-2xl font-bold text-navy"
-            >
-              Edit access
-            </h2>
-            <p className="mt-2 font-body text-sm text-navy-muted">
-              Update {person.name}&apos;s role and programme scope. Their
-              account and email stay unchanged.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="rounded-full p-2 text-navy-muted hover:bg-mist"
-            aria-label="Close edit access"
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!saving}
+      size="md"
+      closeLabel="Close edit access"
+      icon={<ShieldCheck />}
+      title="Edit access"
+      description={`Update ${person.name}’s role and programme scope. Their account and email stay unchanged.`}
+      footer={
+        <>
+          <AdminButton type="button" variant="secondary" size="sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </AdminButton>
+          <AdminButton
+            type="submit"
+            form="edit-access-form"
+            size="sm"
+            disabled={saving || reason.trim().length < 5 || (role === "student" && !person.registration_number)}
           >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={submit} className="mt-7 space-y-5">
-          <label className="block">
-            <span className="font-body text-xs font-bold uppercase tracking-[0.12em] text-navy-muted">
-              Role
-            </span>
-            <select
-              value={role}
-              onChange={(event) => {
-                const next = event.target.value;
-                setRole(next);
-                if (next !== "student" && next !== "coordinator")
-                  setInstitutionId("");
-                if (next !== "mentor" && next !== "nurse_manager")
-                  setFacilityId("");
-              }}
-              className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 font-body text-sm text-navy outline-none focus:border-teal focus:ring-2 focus:ring-teal/20"
+            {saving ? "Saving…" : "Save access"}
+          </AdminButton>
+        </>
+      }
+    >
+      <form id="edit-access-form" onSubmit={submit} className="space-y-4">
+        <Field label="Role" hint={accessRoleHints[role]}>
+          <SelectInput
+            value={role}
+            onChange={(event) => {
+              const next = event.target.value;
+              setRole(next);
+              if (next !== "student" && next !== "coordinator") setInstitutionId("");
+              if (next !== "mentor" && next !== "nurse_manager") setFacilityId("");
+            }}
+          >
+            <option value="student">Student</option>
+            <option value="mentor">Clinical Mentor</option>
+            <option value="nurse_manager">Nurse Manager</option>
+            <option value="coordinator">University Coordinator</option>
+            <option value="program_admin">Programme Administrator</option>
+          </SelectInput>
+        </Field>
+        {usesInstitution && (
+          <Field label="Institution" required>
+            <SelectInput
+              value={institutionId}
+              onChange={(event) => setInstitutionId(event.target.value)}
+              disabled={institutions.isPending}
             >
-              <option value="student">Student</option>
-              <option value="mentor">Clinical Mentor</option>
-              <option value="nurse_manager">Nurse Manager</option>
-              <option value="coordinator">University Coordinator</option>
-              <option value="program_admin">Programme Administrator</option>
-            </select>
-          </label>
-          {usesInstitution && (
-            <label className="block">
-              <span className="font-body text-xs font-bold uppercase tracking-[0.12em] text-navy-muted">
-                Institution
-              </span>
-              <select
-                value={institutionId}
-                onChange={(event) => setInstitutionId(event.target.value)}
-                disabled={institutions.isPending}
-                className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 font-body text-sm text-navy outline-none focus:border-teal focus:ring-2 focus:ring-teal/20"
-              >
-                <option value="">Select institution</option>
-                {(institutions.data ?? []).map((institution: Institution) => (
-                  <option key={institution.id} value={institution.id}>
-                    {institution.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {usesFacility && (
-            <label className="block">
-              <span className="font-body text-xs font-bold uppercase tracking-[0.12em] text-navy-muted">
-                Facility
-              </span>
-              <select
-                value={facilityId}
-                onChange={(event) => setFacilityId(event.target.value)}
-                disabled={facilities.isPending}
-                className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 font-body text-sm text-navy outline-none focus:border-teal focus:ring-2 focus:ring-teal/20"
-              >
-                <option value="">Select facility</option>
-                {(facilities.data ?? []).map((facility: Facility) => (
-                  <option key={facility.id} value={facility.id}>
-                    {facility.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {role === "student" && !person.registration_number && (
-            <p className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 font-body text-sm leading-6 text-warning">
-              This account has no registration number, so it cannot be changed
-              to Student until that identifier is added.
-            </p>
-          )}
-          <label className="block">
-            <span className="font-body text-sm font-semibold text-navy">
-              Reason for this change
-            </span>
-            <textarea
-              value={reason}
-              onChange={(event) => onReasonChange(event.target.value)}
-              minLength={5}
-              maxLength={500}
-              rows={3}
-              className="mt-2 w-full rounded-xl border border-border p-3 font-body text-sm"
-              placeholder="Explain why this person’s access is changing"
-            />
-          </label>
-          {error && (
-            <p
-              role="alert"
-              className="rounded-xl border border-error/30 bg-error/5 px-4 py-3 font-body text-sm leading-6 text-error"
+              <option value="">Select institution</option>
+              {(institutions.data ?? []).map((institution: Institution) => (
+                <option key={institution.id} value={institution.id}>
+                  {institution.name}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
+        )}
+        {usesFacility && (
+          <Field label="Facility" required>
+            <SelectInput
+              value={facilityId}
+              onChange={(event) => setFacilityId(event.target.value)}
+              disabled={facilities.isPending}
             >
-              {error}
-            </p>
-          )}
-          <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="tertiary"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                saving ||
-                reason.trim().length < 5 ||
-                (role === "student" && !person.registration_number)
-              }
-            >
-              {saving ? "Saving…" : "Save access"}
-            </Button>
-          </div>
-        </form>
-      </section>
-    </div>
+              <option value="">Select facility</option>
+              {(facilities.data ?? []).map((facility: Facility) => (
+                <option key={facility.id} value={facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
+        )}
+        {role === "student" && !person.registration_number && (
+          <p className="po-note po-note--warning">
+            This account has no registration number, so it cannot be changed to Student until that identifier is
+            added.
+          </p>
+        )}
+        <Field label="Reason for this change" required hint="Saved to the audit record. At least 5 characters.">
+          <TextArea
+            value={reason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            minLength={5}
+            maxLength={500}
+            rows={3}
+            placeholder="Explain why this person’s access is changing"
+          />
+        </Field>
+        {error && (
+          <p role="alert" className="po-note po-note--error">
+            {error}
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }
-function Detail({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function EmptyPeople({
+  onInvite,
+  filtered,
+}: Pick<Props, "onInvite"> & { filtered: boolean }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 text-teal">{icon}</span>
-      <div>
-        <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-navy-muted">
-          {label}
-        </p>
-        <p className="mt-2 font-body text-sm text-navy">{value}</p>
-      </div>
-    </div>
-  );
-}
-function EmptyPeople({ onInvite }: Pick<Props, "onInvite">) {
-  return (
-    <div className="py-12 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-light text-teal">
-        <Users size={25} />
-      </div>
-      <h3 className="mt-5 font-display text-2xl font-bold text-navy">
-        No team members yet
-      </h3>
-      <p className="mx-auto mt-2 max-w-md font-body text-sm leading-6 text-navy-muted">
-        Invite your first programme team member to get started.
-      </p>
-      <Button className="mt-6" onClick={onInvite}>
-        Invite a team member
-      </Button>
-    </div>
+    <EmptyState
+      icon={<Users size={24} />}
+      title={filtered ? "No people match these filters" : "No team members yet"}
+      text={
+        filtered
+          ? "Try a different search or clear the filters."
+          : "Invite your first programme team member to get started."
+      }
+      action={
+        filtered ? undefined : (
+          <AdminButton onClick={onInvite}>Invite a team member</AdminButton>
+        )
+      }
+    />
   );
 }

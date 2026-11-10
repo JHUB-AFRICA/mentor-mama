@@ -8,6 +8,8 @@
 4. Create `.env.production` from `.env.production.example`, replace all examples, keep database/Redis passwords hexadecimal so URI parsing is unambiguous, and set file mode `0600`. Generate `SECRET_KEY` and passwords with `openssl rand -hex 32`.
 5. Set an off-host backup destination and retention policy. The included backup script writes local backup files; copy completed checksummed pairs to encrypted off-host storage.
 
+AI is disabled by default. For the MVP it uses the OpenAI API: set `AI_ENABLED=true` and `AI_API_KEY` in `.env.production` (`AI_API_BASE_URL` and `AI_MODEL` default to OpenAI and `gpt-4o-mini`), recreate the API service, then run `docker compose exec api python manage.py ai_smoke_test` to confirm the key. The key is passed only to the API container. Never place it in portal build variables or commit the VPS env file. Set a monthly spend limit on the OpenAI project. See `docs/architecture/ai-integration-plan.md` for scope, the later self-hosted switch, and rollback.
+
 ## Build and first deployment
 
 ```sh

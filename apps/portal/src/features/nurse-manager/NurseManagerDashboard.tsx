@@ -21,6 +21,7 @@ import {
   type Placement,
 } from "../../services/api";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
+import { greetingFor } from "../../lib/greeting";
 import { InterruptionReport } from "../workspaces/InterruptionReport";
 import { SafeguardingReviewPanel } from "../safeguarding/SafeguardingReviewPanel";
 import { useNavigate } from "react-router-dom";
@@ -146,14 +147,14 @@ export function NurseManagerDashboard({
           <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
             <div className="max-w-2xl">
               <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal-bright">
-                Good morning, {user.name.split(" ")[0]}
+                Facility overview
               </p>
               <h2 className="mt-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                Your facility at a glance.
+                {greetingFor(user.name)}.
               </h2>
               <p className="mt-3 max-w-xl font-body text-sm leading-6 text-slate-300 sm:text-base">
-                See what needs a decision, check capacity, and keep each student
-                moving through placement.
+                Here is your facility at a glance: what needs a decision, how much
+                capacity is left, and who is moving through placement.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button

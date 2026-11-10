@@ -1,0 +1,87 @@
+/* Page-specific additions for Authenticator recovery and Programme activity.
+   Everything else comes from ui/admin-kit.css. */
+.pa .pa-review {
+  max-width: 44rem;
+  border: 1px solid var(--pa-line-soft);
+  border-radius: var(--pa-radius);
+  background: var(--pa-subtle);
+  padding: 1rem;
+  color: var(--pa-ink-2);
+  font: 400 0.8rem/1.55 "Inter", sans-serif;
+}
+.pa .pa-review > p { margin: 0 0 0.75rem; }
+.pa .pa-review label { display: grid; gap: 0.35rem; color: var(--pa-ink); font-weight: 600; }
+.pa .pa-review textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-radius);
+  background: var(--pa-surface);
+  padding: 0.65rem 0.8rem;
+  color: var(--pa-ink);
+  font: 400 0.8rem/1.4 "Inter", sans-serif;
+}
+.pa .pa-review textarea:focus { border-color: var(--pa-teal); outline: 0; box-shadow: 0 0 0 3px rgba(29, 140, 140, 0.12); }
+.pa .pa-review__error { margin-top: 0.5rem; color: #b83e3e; }
+.pa .pa-review__actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+.pa .pa-row-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.pa .pa-wrap-cell { max-width: 20rem; white-space: normal; }
+
+.pa .pa-activity-group {
+  padding: 0.6rem 1.15rem;
+  border-bottom: 1px solid var(--pa-line-soft);
+  background: var(--pa-subtle);
+  color: var(--pa-muted);
+  font: 700 0.64rem/1.2 "Inter", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.pa .pa-activity-row { align-items: center; flex-wrap: wrap; }
+.pa .pa-activity-row__time {
+  flex: 0 0 auto;
+  color: var(--pa-muted);
+  font: 400 0.74rem/1.35 "Inter", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.pa .pa-activity-row .pa-row__title,
+.pa .pa-activity-row .pa-row__meta { white-space: normal; }
+.pa .pa-changes {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0 3.05rem;
+  border-radius: var(--pa-radius);
+  background: var(--pa-subtle);
+  padding: 0.7rem 0.9rem;
+  font: 400 0.76rem/1.4 "Inter", sans-serif;
+}
+.pa .pa-changes div { display: flex; gap: 0.75rem; }
+.pa .pa-changes dt { min-width: 8rem; color: var(--pa-muted); text-transform: capitalize; }
+.pa .pa-changes dd { margin: 0; color: var(--pa-ink); overflow-wrap: anywhere; }
+.pa .pa-dates { display: flex; flex-wrap: wrap; align-items: end; gap: 0.8rem; }
+.pa .pa-dates label { display: grid; gap: 0.3rem; color: var(--pa-muted); font: 600 0.72rem/1.2 "Inter", sans-serif; }
+.pa .pa-dates input {
+  height: var(--pa-control);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-radius);
+  padding: 0 0.8rem;
+  color: var(--pa-ink);
+  font: 400 0.8rem/1.2 "Inter", sans-serif;
+}
+.pa .pa-pager { display: flex; align-items: center; gap: 0.35rem; }
+.pa .pa-pager .pa-btn[aria-current="page"] { border-color: var(--pa-teal); background: var(--pa-teal-soft); color: var(--pa-teal-ink); }
+@media (max-width: 760px) {
+  .pa .pa-changes { margin-left: 0; }
+  .pa .pa-changes div { flex-direction: column; gap: 0.1rem; }
+  .pa .pa-table-footer { flex-direction: column; align-items: flex-start; }
+}
+.pa .pa-row .pa-cell-title { min-width: 0; flex: 1; }
+.pa .pa-row > .flex > .pa-pill { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .pa .pa-table-footer .flex { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .pa .pa-activity-row .pa-row__body { flex: 1 1 calc(100% - 4rem); }
+  .pa .pa-activity-row .pa-activity-row__time { margin-left: 3.05rem; }
+  .pa .pa-activity-row .pa-btn { margin-left: auto; }
+}

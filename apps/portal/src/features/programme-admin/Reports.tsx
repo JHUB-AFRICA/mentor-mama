@@ -1,23 +1,28 @@
 import {
   Activity,
+  BedDouble,
   BriefcaseBusiness,
+  Building2,
+  ClipboardList,
   CheckCircle2,
   Download,
   FileText,
   HeartPulse,
+  Info,
   ShieldCheck,
   TriangleAlert,
   Users,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Skeleton } from "@mentormama/ui";
+import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -42,9 +47,27 @@ import {
   type InterruptionReportRow,
   type ReportOverview,
 } from "../../services/api";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminPageHeader,
+  AdminTabs,
+  EmptyState,
+  ListRow,
+  Notice,
+  SelectField,
+  StatCard,
+  StatGrid,
+  StatusPill,
+  type PillTone,
+  type Tone,
+} from "./ui/AdminKit";
 import "./reports.css";
+import "./programme-overlays.css";
+import { Field, Modal, SelectInput } from "../../components/kit";
 
-const chartColors = ["#9aa8b8", "#7190b5", "#e6aa38", "#b48a36", "#8b79d9", "#0b9696", "#d96a5f", "#42a77b", "#506176", "#945d5d"];
+const chartColors = ["#1d8c8c", "#7653d4", "#236bd4", "#b26b00", "#4b5f7c", "#5fb3b3", "#a58de3", "#6b9be3", "#e0a64a", "#94a3b8"];
 const reportTabs = [
   "Overview",
   "Placements",
@@ -242,24 +265,23 @@ export function Reports({
       setDownloadingId(null);
     }
   }
+
+  const periodOptions = periods.map((value) => ({ value, label: periodLabel(value) }));
+  const loadingOverview = report.isPending;
+
   return (
-    <div className="programme-reports-page">
-      <section className="programme-reports-header">
-        <div>
-          <p className="programme-reports-eyebrow">Programme intelligence</p>
-          <h1>Reports</h1>
-          <p>
-            Track progress, understand continuity, and make decisions from the
-            programme record.
-          </p>
-        </div>
-        <div className="programme-reports-header-actions">
-          <label className="programme-reports-period">
-            <span className="sr-only">Reporting period</span>
-            <select
+    <AdminPage className="programme-reports-page">
+      <AdminPageHeader
+        eyebrow="Programme intelligence"
+        title="Reports"
+        description="Track progress, understand continuity, and make decisions from the programme record."
+        actions={
+          <>
+            <SelectField
+              label="Reporting period"
               value={period}
-              onChange={(event) => {
-                const nextPeriod = event.target.value;
+              options={periodOptions}
+              onChange={(nextPeriod) => {
                 setSearchParams(
                   (current) => {
                     const params = new URLSearchParams(current);
@@ -270,40 +292,25 @@ export function Reports({
                 );
                 periodSelectionPending.current = true;
               }}
-            >
-              {periods.map((value) => (
-                <option key={value} value={value}>{periodLabel(value)}</option>
-              ))}
-            </select>
-          </label>
-          {user.capabilities.export_reports && (
-            <Button onClick={() => setShowExportDialog(true)} disabled={busy}>
-              <Download size={16} />
-              {busy ? "Preparing…" : "Export report"}
-            </Button>
-          )}
-        </div>
-      </section>
-      <nav
-        className="programme-reports-tabs"
-        role="tablist"
-        aria-label="Report sections"
-      >
-        {reportTabs.map((item) => (
-          <button
-            key={item}
-            id={`report-tab-${item.toLowerCase().replaceAll(" ", "-")}`}
-            role="tab"
-            aria-selected={tab === item}
-            tabIndex={tab === item ? 0 : -1}
-            type="button"
-            className={tab === item ? "active" : ""}
-            onClick={() => selectTab(item)}
-          >
-            {item}
-          </button>
-        ))}
-      </nav>
+            />
+            {user.capabilities.export_reports && (
+              <AdminButton
+                onClick={() => setShowExportDialog(true)}
+                disabled={busy}
+                icon={<Download aria-hidden="true" />}
+              >
+                {busy ? "Preparing…" : "Export report"}
+              </AdminButton>
+            )}
+          </>
+        }
+      />
+      <AdminTabs
+        label="Report sections"
+        tabs={reportTabs.map((item) => ({ value: item, label: item }))}
+        value={tab}
+        onChange={selectTab}
+      />
       {reportError ? (
         <ReportError onRetry={() => void refreshReport()} />
       ) : tab !== "Overview" ? (
@@ -320,45 +327,48 @@ export function Reports({
         />
       ) : (
         <>
-          <section className="programme-report-kpis">
-            <ReportKpi
-              icon={<Users />}
-              label="Active students"
-              value={activeStudents.isPending ? "—" : activeStudents.data?.pagination.total_count ?? 0}
-              detail="In the programme workspace"
+          <StatGrid>
+            <StatCard
               tone="teal"
-            />
-            <ReportKpi
-              icon={<BriefcaseBusiness />}
-              label="Active placements"
-              value={indicators.isPending ? "—" : values.placements_active ?? 0}
-              detail={`${values.placements_total ?? 0} total placements`}
-              tone="amber"
-            />
-            <ReportKpi
               icon={<Users />}
-              label="Active mentors"
-              value={activeMentors.isPending ? "—" : activeMentors.data?.pagination.total_count ?? 0}
-              detail="Active mentor accounts"
+              value={activeStudents.data?.pagination.total_count ?? 0}
+              loading={activeStudents.isPending}
+              label="Active students"
+              hint="In the programme workspace"
+            />
+            <StatCard
+              tone="amber"
+              icon={<BriefcaseBusiness />}
+              value={values.placements_active ?? 0}
+              loading={indicators.isPending}
+              label="Active placements"
+              hint={`${values.placements_total ?? 0} total placements`}
+            />
+            <StatCard
               tone="blue"
+              icon={<Users />}
+              value={activeMentors.data?.pagination.total_count ?? 0}
+              loading={activeMentors.isPending}
+              label="Active mentors"
+              hint="Active mentor accounts"
             />
-            <ReportKpi
-              icon={<CheckCircle2 />}
-              label="Placements completed"
-              value={indicators.isPending ? "—" : values.placements_completed ?? 0}
-              detail={indicators.isPending ? "Loading placement totals…" : `${values.placements_completed ?? 0} of ${values.placements_total ?? 0} placements across all lifecycle states`}
+            <StatCard
               tone="violet"
+              icon={<CheckCircle2 />}
+              value={values.placements_completed ?? 0}
+              loading={indicators.isPending}
+              label="Placements completed"
+              hint={`Of ${values.placements_total ?? 0} placements in all states`}
             />
-          </section>
-          <section className="programme-report-period-card programme-report-card">
-            <ReportCardHeading
-              title="Period activity"
-              detail={`${range.label} compared with the previous period`}
-            />
-            {report.isPending ? (
+          </StatGrid>
+          <AdminCard
+            title="Period activity"
+            description={`${range.label} compared with the previous period`}
+          >
+            {loadingOverview ? (
               <Skeleton className="h-20" />
             ) : (
-              <div className="programme-report-period-grid">
+              <div className="rp-metrics">
                 <PeriodMetric
                   label="New placements"
                   value={report.data?.summary.placements_created ?? 0}
@@ -381,16 +391,16 @@ export function Reports({
                 />
               </div>
             )}
-          </section>
-          <section className="programme-report-chart-grid">
-            <article className="programme-report-card programme-report-status-card">
-              <ReportCardHeading
-                title="Placements by status"
-                detail="Current lifecycle distribution"
-              />
-              <div className="programme-report-donut-layout">
-                {statusData.length ? (
-                  <div className="programme-report-donut">
+          </AdminCard>
+          <div className="pa-grid-2 rp-grid">
+            <AdminCard
+              className="rp-chart-card"
+              title="Placements by status"
+              description="Current lifecycle distribution"
+            >
+              {statusData.length ? (
+                <div className="rp-donut-layout">
+                  <div className="rp-donut">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -419,84 +429,73 @@ export function Reports({
                       <span>placements</span>
                     </strong>
                   </div>
-                ) : (
-                  <EmptyReport
-                    title="No placement data yet"
-                    detail="Lifecycle distribution will appear after placements are recorded."
-                  />
-                )}
-                {statusData.length > 0 && (
-                  <div className="programme-report-legend">
+                  <ul className="rp-legend" aria-label="Placement status legend">
                     {statusData.map((item, index) => (
-                      <div key={item.name}>
-                        <span
+                      <li key={item.name}>
+                        <i
+                          aria-hidden="true"
                           style={{
                             background: chartColors[index % chartColors.length],
                           }}
                         />
-                        {item.name}
+                        <span>{item.name}</span>
                         <strong>{item.value}</strong>
-                      </div>
+                      </li>
                     ))}
-                  </div>
-                )}
-              </div>
-            </article>
-            <article className="programme-report-card">
-              <ReportCardHeading
-                title="Daily programme activity"
-                detail={`Recorded activity during ${range.label}`}
-              />
-              {report.isPending ? (
+                  </ul>
+                </div>
+              ) : (
+                <EmptyReport
+                  title="No placement data yet"
+                  detail="Lifecycle distribution will appear after placements are recorded."
+                />
+              )}
+            </AdminCard>
+            <AdminCard
+              className="rp-chart-card"
+              title="Daily programme activity"
+              description={`Recorded activity during ${range.label}`}
+            >
+              {loadingOverview ? (
                 <Skeleton className="h-52" />
               ) : report.data?.trend.some((point) => point.placements_created || point.sessions_logged || point.placements_completed) ? (
                 <ReportTrend data={report.data} />
               ) : (
-                <div className="programme-report-chart-empty">
-                  <span className="programme-report-empty-line" />
-                  <strong>No activity recorded for this period</strong>
-                  <p>
-                    Daily placement and mentorship activity will appear here when recorded.
-                  </p>
-                </div>
+                <EmptyReport
+                  title="No activity recorded for this period"
+                  detail="Daily placement and mentorship activity will appear here when recorded."
+                />
               )}
-            </article>
-          </section>
-          <section className="programme-report-lower-grid">
-            <article className="programme-report-card">
-              <ReportCardHeading
-                title="Recent reports"
-                action="Refresh"
-                onAction={() =>
-                  void queryClient.invalidateQueries({ queryKey: ["exports"] })
-                }
-              />
+            </AdminCard>
+          </div>
+          <div className="pa-grid-2 rp-grid">
+            <AdminCard
+              title="Recent reports"
+              description="Latest exports requested for this programme"
+              flush
+              action={
+                <AdminButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    void queryClient.invalidateQueries({ queryKey: ["exports"] })
+                  }
+                >
+                  Refresh
+                </AdminButton>
+              }
+            >
               {exportsQuery.isPending ? (
-                <Skeleton className="h-24" />
+                <div className="p-4"><Skeleton className="h-24" /></div>
               ) : exportsQuery.data?.length ? (
-                <div className="programme-report-list">
+                <div className="pa-list">
                   {exportsQuery.data.slice(0, 4).map((item) => (
-                    <div key={item.id}>
-                      <FileText size={16} />
-                      <span>
-                        <strong>{item.export_type} report</strong>
-                        <small>
-                          {item.status} ·{" "}
-                          {new Date(item.created_at).toLocaleDateString(
-                            "en-GB",
-                          )}
-                        </small>
-                      </span>
-                      {item.download_url && (
-                        <button
-                          type="button"
-                          disabled={downloadingId === item.id}
-                          onClick={() => void download(item)}
-                        >
-                          {downloadingId === item.id ? "…" : "Download"}
-                        </button>
-                      )}
-                    </div>
+                    <ExportRow
+                      key={item.id}
+                      item={item}
+                      downloading={downloadingId === item.id}
+                      onDownload={() => void download(item)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -505,48 +504,69 @@ export function Reports({
                   detail="Request an export when you need a safe programme snapshot."
                 />
               )}
-            </article>
-            <article className="programme-report-card">
-              <ReportCardHeading
-                title="Programme signals"
-                action="Refresh"
-                onAction={() => void refreshReport()}
-              />
+            </AdminCard>
+            <AdminCard
+              title="Programme signals"
+              description="Setup and readiness across the programme"
+              flush
+              action={
+                <AdminButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void refreshReport()}
+                >
+                  Refresh
+                </AdminButton>
+              }
+            >
               {indicators.isPending || summary.isPending ? (
-                <Skeleton className="h-24" />
+                <div className="p-4"><Skeleton className="h-24" /></div>
               ) : (
-                <div className="programme-report-signal-list">
+                <div className="pa-list">
                   <Signal
+                    icon={<Building2 />}
+                    tone="teal"
                     label="Facilities"
                     value={summary.data?.readiness.facilities ?? 0}
                   />
                   <Signal
+                    icon={<BedDouble />}
+                    tone="blue"
                     label="Wards"
                     value={summary.data?.readiness.wards ?? 0}
                   />
                   <Signal
+                    icon={<ClipboardList />}
+                    tone="amber"
                     label="Pending setup"
-                    value={
-                      summary.data?.readiness.placements_missing_setup ?? 0
-                    }
+                    value={summary.data?.readiness.placements_missing_setup ?? 0}
                   />
                   <Signal
+                    icon={<Users />}
+                    tone="violet"
                     label="Unassigned placements"
                     value={summary.data?.readiness.unassigned_placements ?? 0}
                   />
                 </div>
               )}
-            </article>
-          </section>
-          <section className="programme-report-card programme-report-interruptions">
-            <ReportCardHeading
-              title="Continuity needs attention"
-              detail="Pause patterns in your programme scope"
-              action="View safeguarding"
-              onAction={() => selectTab("Safeguarding")}
-            />
+            </AdminCard>
+          </div>
+          <AdminCard
+            title="Continuity needs attention"
+            description="Pause patterns in your programme scope"
+            flush
+            action={
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                onClick={() => selectTab("Safeguarding")}
+              >
+                View safeguarding
+              </AdminButton>
+            }
+          >
             {interruptions.isPending ? (
-              <Skeleton className="h-24" />
+              <div className="p-4"><Skeleton className="h-24" /></div>
             ) : interruptions.data?.length ? (
               <ReportTable rows={interruptions.data} />
             ) : (
@@ -555,7 +575,7 @@ export function Reports({
                 detail="The programme has no continuity interruptions to review."
               />
             )}
-          </section>
+          </AdminCard>
         </>
       )}
       {showExportDialog && (
@@ -567,7 +587,7 @@ export function Reports({
           onExport={() => void createExport()}
         />
       )}
-    </div>
+    </AdminPage>
   );
 }
 
@@ -584,86 +604,66 @@ function ExportDialog({
   onClose: () => void;
   onExport: () => void;
 }) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose]);
   return (
-    <div
-      className="programme-report-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) onClose();
-      }}
-    >
-      <section
-        className="programme-report-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="export-dialog-title"
-      >
-        <div className="programme-report-modal-header">
-          <div>
-            <p className="programme-reports-eyebrow">Export report</p>
-            <h2 id="export-dialog-title">Create a placement report</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Close export dialog"
-          >
-            ×
-          </button>
-        </div>
-        <p className="programme-report-section-intro">
-          Choose the format that fits your next step. The export remains scoped
-          to your programme permissions.
-        </p>
-        <label className="programme-report-format-label">
-          File format
-          <select
-            value={format}
-            onChange={(event) =>
-              onFormatChange(event.target.value as ExportFormat)
-            }
-          >
-            <option value="xlsx">Excel workbook (.xlsx)</option>
-            <option value="pdf">Printable PDF (.pdf)</option>
-            <option value="csv">Spreadsheet data (.csv)</option>
-            <option value="json">Structured data (.json)</option>
-          </select>
-        </label>
-        <div className="programme-report-format-help">
-          <strong>
-            {format === "pdf"
-              ? "Best for sharing and printing"
-              : format === "xlsx"
-                ? "Best for analysis in Excel"
-                : format === "json"
-                  ? "Best for system-to-system use"
-                  : "Best for lightweight spreadsheet imports"}
-          </strong>
-          <p>
-            Generation runs in the background and the completed file will be
-            available in Recent reports.
-          </p>
-        </div>
-        <div className="programme-report-modal-actions">
-          <button type="button" onClick={onClose} disabled={busy}>
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!busy}
+      size="sm"
+      closeLabel="Close export dialog"
+      icon={<Download />}
+      title="Create a placement report"
+      description="Choose the format that fits your next step. The export remains scoped to your programme permissions."
+      footer={
+        <>
+          <AdminButton variant="secondary" size="sm" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <Button onClick={onExport} disabled={busy}>
+          </AdminButton>
+          <AdminButton size="sm" onClick={onExport} disabled={busy}>
             {busy ? "Preparing…" : "Create export"}
-          </Button>
-        </div>
-      </section>
-    </div>
+          </AdminButton>
+        </>
+      }
+    >
+      <Field label="File format">
+        <SelectInput value={format} onChange={(event) => onFormatChange(event.target.value as ExportFormat)} disabled={busy}>
+          <option value="xlsx">Excel workbook (.xlsx)</option>
+          <option value="pdf">Printable PDF (.pdf)</option>
+          <option value="csv">Spreadsheet data (.csv)</option>
+          <option value="json">Structured data (.json)</option>
+        </SelectInput>
+      </Field>
+      <div className="po-note">
+        <strong style={{ display: "block", color: "#10223b" }}>
+          {format === "pdf"
+            ? "Best for sharing and printing"
+            : format === "xlsx"
+              ? "Best for analysis in Excel"
+              : format === "json"
+                ? "Best for system-to-system use"
+                : "Best for lightweight spreadsheet imports"}
+        </strong>
+        Generation runs in the background and the completed file will be available in Recent reports.
+      </div>
+    </Modal>
   );
 }
+
+type SectionSummary = {
+  people_total: number;
+  active_people: number;
+  invited_people: number;
+  suspended_people: number;
+  activity_events: number;
+  readiness: {
+    active_coordinators: number;
+    active_nurse_managers: number;
+    facilities: number;
+    wards: number;
+    unassigned_placements: number;
+    placements_missing_setup: number;
+  };
+};
 
 function ReportSection({
   tab,
@@ -676,21 +676,7 @@ function ReportSection({
 }: {
   tab: string;
   values: Record<string, number>;
-  summary?: {
-    people_total: number;
-    active_people: number;
-    invited_people: number;
-    suspended_people: number;
-    activity_events: number;
-    readiness: {
-      active_coordinators: number;
-      active_nurse_managers: number;
-      facilities: number;
-      wards: number;
-      unassigned_placements: number;
-      placements_missing_setup: number;
-    };
-  };
+  summary?: SectionSummary;
   interruptions: InterruptionReportRow[];
   exports: ExportRecord[];
   loading: boolean;
@@ -698,277 +684,171 @@ function ReportSection({
 }) {
   if (loading)
     return (
-      <section className="programme-report-card programme-report-section">
+      <AdminCard>
         <Skeleton className="h-28" />
-      </section>
+      </AdminCard>
     );
   if (tab === "Placements")
     return (
       <ReportSectionShell
-        eyebrow={tab}
         title="Placements reporting"
         intro="Lifecycle distribution and continuity signals for placements in your programme scope."
-      >
-        <ReportMetricGrid
-          items={[
-            {
-              icon: <BriefcaseBusiness />,
-              label: "Total placements",
-              value: values.placements_total ?? 0,
-              tone: "teal",
-            },
-            {
-              icon: <Activity />,
-              label: "Active",
-              value: values.placements_active ?? 0,
-              tone: "blue",
-            },
-            {
-              icon: <Users />,
-              label: "Awaiting student",
-              value: values.placements_awaiting_student ?? 0,
-              tone: "amber",
-            },
-            {
-              icon: <CheckCircle2 />,
-              label: "Completed",
-              value: values.placements_completed ?? 0,
-              tone: "violet",
-            },
-          ]}
-        />
-        <ReportStageList values={values} />
-        {interruptions.length ? (
-          <ReportTable rows={interruptions} showCohort />
-        ) : (
-          <EmptyReport
-            title="No continuity interruptions"
-            detail="There are no placement interruption records in this reporting scope."
-          />
-        )}
-      </ReportSectionShell>
+        metrics={[
+          { icon: <BriefcaseBusiness />, label: "Total placements", value: values.placements_total ?? 0, tone: "teal" },
+          { icon: <Activity />, label: "Active", value: values.placements_active ?? 0, tone: "blue" },
+          { icon: <Users />, label: "Awaiting student", value: values.placements_awaiting_student ?? 0, tone: "amber" },
+          { icon: <CheckCircle2 />, label: "Completed", value: values.placements_completed ?? 0, tone: "violet" },
+        ]}
+        after={
+          <>
+            <AdminCard title="Lifecycle stages" description="Share of all placements in each stage">
+              <ReportStageList values={values} />
+            </AdminCard>
+            <AdminCard
+              title="Continuity interruptions"
+              description="Pause patterns by facility and cohort"
+              flush
+            >
+              {interruptions.length ? (
+                <ReportTable rows={interruptions} showCohort />
+              ) : (
+                <EmptyReport
+                  title="No continuity interruptions"
+                  detail="There are no placement interruption records in this reporting scope."
+                />
+              )}
+            </AdminCard>
+          </>
+        }
+      />
     );
   if (tab === "People")
     return (
       <ReportSectionShell
-        eyebrow={tab}
         title="People reporting"
         intro="Current participation and operational staffing across the programme workspace."
-      >
-        <ReportMetricGrid
-          items={[
-            {
-              icon: <Users />,
-              label: "People in programme",
-              value: summary?.people_total ?? values.people_total ?? 0,
-              tone: "teal",
-            },
-            {
-              icon: <CheckCircle2 />,
-              label: "Active people",
-              value: summary?.active_people ?? 0,
-              tone: "blue",
-            },
-            {
-              icon: <Activity />,
-              label: "Invitations pending",
-              value: summary?.invited_people ?? 0,
-              tone: "amber",
-            },
-            {
-              icon: <ShieldCheck />,
-              label: "Suspended",
-              value: summary?.suspended_people ?? 0,
-              tone: "violet",
-            },
-          ]}
-        />
-        <div className="programme-report-detail-grid">
-          <Signal
-            label="Active coordinators"
-            value={summary?.readiness.active_coordinators ?? 0}
-          />
-          <Signal
-            label="Active nurse managers"
-            value={summary?.readiness.active_nurse_managers ?? 0}
-          />
-          <Signal
-            label="Activity events"
-            value={summary?.activity_events ?? 0}
-          />
-        </div>
-      </ReportSectionShell>
+        metrics={[
+          { icon: <Users />, label: "People in programme", value: summary?.people_total ?? values.people_total ?? 0, tone: "teal" },
+          { icon: <CheckCircle2 />, label: "Active people", value: summary?.active_people ?? 0, tone: "blue" },
+          { icon: <Activity />, label: "Invitations pending", value: summary?.invited_people ?? 0, tone: "amber" },
+          { icon: <ShieldCheck />, label: "Suspended", value: summary?.suspended_people ?? 0, tone: "violet" },
+        ]}
+        after={
+          <AdminCard title="Operational staffing" description="Roles supporting the programme" flush>
+            <div className="pa-list">
+              <Signal icon={<Users />} tone="teal" label="Active coordinators" value={summary?.readiness.active_coordinators ?? 0} />
+              <Signal icon={<Users />} tone="blue" label="Active nurse managers" value={summary?.readiness.active_nurse_managers ?? 0} />
+              <Signal icon={<Activity />} tone="violet" label="Activity events" value={summary?.activity_events ?? 0} />
+            </div>
+          </AdminCard>
+        }
+      />
     );
   if (tab === "Mentorship")
     return (
       <ReportSectionShell
-        eyebrow={tab}
         title="Mentorship reporting"
         intro="Mentorship activity recorded against placements in your programme scope."
-      >
-        <ReportMetricGrid
-          items={[
-            {
-              icon: <HeartPulse />,
-              label: "Sessions logged",
-              value: values.sessions_total ?? 0,
-              tone: "teal",
-            },
-            {
-              icon: <Activity />,
-              label: "Sessions this week",
-              value: values.sessions_this_week ?? 0,
-              tone: "blue",
-            },
-            {
-              icon: <BriefcaseBusiness />,
-              label: "Active placements",
-              value: values.placements_active ?? 0,
-              tone: "violet",
-            },
-          ]}
-        />
-        <EmptyReport
-          title={
-            values.sessions_total
-              ? "Session activity is available"
-              : "No mentorship sessions yet"
-          }
-          detail={
-            values.sessions_total
-              ? "Session totals are sourced from the mentorship activity record."
-              : "Mentorship insights will appear after mentors log sessions."
-          }
-        />
-      </ReportSectionShell>
+        metrics={[
+          { icon: <HeartPulse />, label: "Sessions logged", value: values.sessions_total ?? 0, tone: "teal" },
+          { icon: <Activity />, label: "Sessions this week", value: values.sessions_this_week ?? 0, tone: "blue" },
+          { icon: <BriefcaseBusiness />, label: "Active placements", value: values.placements_active ?? 0, tone: "violet" },
+        ]}
+        after={
+          <AdminCard>
+            <EmptyReport
+              title={values.sessions_total ? "Session activity is available" : "No mentorship sessions yet"}
+              detail={
+                values.sessions_total
+                  ? "Session totals are sourced from the mentorship activity record."
+                  : "Mentorship insights will appear after mentors log sessions."
+              }
+            />
+          </AdminCard>
+        }
+      />
     );
   if (tab === "Safeguarding")
     return (
       <ReportSectionShell
-        eyebrow={tab}
         title="Safeguarding reporting"
         intro="Operational safeguarding counts are shown without exposing restricted concern narratives."
-      >
-        <ReportMetricGrid
-          items={[
-            {
-              icon: <ShieldCheck />,
-              label: "Open concerns",
-              value: values.open_concerns ?? 0,
-              tone: "teal",
-            },
-            {
-              icon: <TriangleAlert />,
-              label: "High priority",
-              value: values.high_concerns ?? 0,
-              tone: "amber",
-            },
-            {
-              icon: <Activity />,
-              label: "Medium priority",
-              value: values.medium_concerns ?? 0,
-              tone: "blue",
-            },
-            {
-              icon: <CheckCircle2 />,
-              label: "Low priority",
-              value: values.low_concerns ?? 0,
-              tone: "violet",
-            },
-          ]}
-        />
-        <EmptyReport
-          title="Safeguarding case details stay protected"
-          detail="This report shows aggregate counts only. Use the safeguarding workspace for authorised case follow-up. Placement interruption records are listed under Placements."
-        />
-      </ReportSectionShell>
+        metrics={[
+          { icon: <ShieldCheck />, label: "Open concerns", value: values.open_concerns ?? 0, tone: "teal" },
+          { icon: <TriangleAlert />, label: "High priority", value: values.high_concerns ?? 0, tone: "amber" },
+          { icon: <Activity />, label: "Medium priority", value: values.medium_concerns ?? 0, tone: "blue" },
+          { icon: <CheckCircle2 />, label: "Low priority", value: values.low_concerns ?? 0, tone: "violet" },
+        ]}
+        after={
+          <AdminCard>
+            <EmptyReport
+              title="Safeguarding case details stay protected"
+              detail="This report shows aggregate counts only. Use the safeguarding workspace for authorised case follow-up. Placement interruption records are listed under Placements."
+            />
+          </AdminCard>
+        }
+      />
     );
   if (tab === "Engagement")
     return (
       <ReportSectionShell
-        eyebrow={tab}
         title="Engagement reporting"
         intro="Operational engagement signals from recorded programme activity and mentorship sessions."
-      >
-        <ReportMetricGrid
-          items={[
-            {
-              icon: <Activity />,
-              label: "Activity events",
-              value: summary?.activity_events ?? 0,
-              tone: "teal",
-            },
-            {
-              icon: <HeartPulse />,
-              label: "Sessions logged",
-              value: values.sessions_total ?? 0,
-              tone: "blue",
-            },
-            {
-              icon: <Users />,
-              label: "Active people",
-              value: summary?.active_people ?? 0,
-              tone: "violet",
-            },
-          ]}
-        />
-        <EmptyReport
-          title="Operational engagement is available"
-          detail="These counters are live programme signals. Historical engagement trends require a time-series analytics projection."
-        />
-      </ReportSectionShell>
+        metrics={[
+          { icon: <Activity />, label: "Activity events", value: summary?.activity_events ?? 0, tone: "teal" },
+          { icon: <HeartPulse />, label: "Sessions logged", value: values.sessions_total ?? 0, tone: "blue" },
+          { icon: <Users />, label: "Active people", value: summary?.active_people ?? 0, tone: "violet" },
+        ]}
+        after={
+          <AdminCard>
+            <EmptyReport
+              title="Operational engagement is available"
+              detail="These counters are live programme signals. Historical engagement trends require a time-series analytics projection."
+            />
+          </AdminCard>
+        }
+      />
     );
   if (tab === "Custom reports")
     return (
-      <ReportSectionShell
-        eyebrow={tab}
-        title="Custom reports"
-        intro="Generate a scoped placement snapshot or review exports already requested for this programme."
-      >
-        <div className="programme-report-custom-action">
-          <div>
-            <strong>Placement snapshot</strong>
-            <p>Export the programme-scoped placement record as CSV, XLSX, JSON, or PDF.</p>
+      <>
+        <AdminCard
+          title="Custom reports"
+          description="Generate a scoped placement snapshot or review exports already requested for this programme."
+        >
+          <div className="rp-custom-action">
+            <div>
+              <strong>Placement snapshot</strong>
+              <p>Export the programme-scoped placement record as CSV, XLSX, JSON, or PDF.</p>
+            </div>
+            <AdminButton onClick={onExport} icon={<Download aria-hidden="true" />}>
+              Create export
+            </AdminButton>
           </div>
-          <Button onClick={onExport}>
-            <Download size={16} />
-            Create export
-          </Button>
-        </div>
-        {exports.length ? (
-          <div className="programme-report-list">
-            {exports.slice(0, 5).map((item) => (
-              <div key={item.id}>
-                <FileText size={16} />
-                <span>
-                  <strong>{item.export_type} report</strong>
-                  <small>
-                    {item.status} ·{" "}
-                    {new Date(item.created_at).toLocaleDateString("en-GB")}
-                  </small>
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyReport
-            title="No custom exports yet"
-            detail="Create a placement snapshot when you need a portable programme report."
-          />
-        )}
-      </ReportSectionShell>
+        </AdminCard>
+        <AdminCard title="Requested exports" description="Most recent exports for this programme" flush>
+          {exports.length ? (
+            <div className="pa-list">
+              {exports.slice(0, 5).map((item) => (
+                <ExportRow key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <EmptyReport
+              title="No custom exports yet"
+              detail="Create a placement snapshot when you need a portable programme report."
+            />
+          )}
+        </AdminCard>
+      </>
     );
   return (
-    <ReportSectionShell
-      eyebrow={tab}
-      title={`${tab} reporting`}
-      intro="This view is scoped to the programme data currently available to your role."
-    >
+    <AdminCard title={`${tab} reporting`} description="This view is scoped to the programme data currently available to your role.">
       <EmptyReport
         title={`${tab} reporting is ready for expansion`}
         detail="The current programme read model does not expose this report yet. No placeholder metrics are shown."
       />
-    </ReportSectionShell>
+    </AdminCard>
   );
 }
 function ReportError({ onRetry }: { onRetry: () => void }) {
@@ -996,6 +876,57 @@ function periodLabel(period: string) {
   const [year, month] = period.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
+function exportLabel(type: string) {
+  const text = type.replaceAll("_", " ").trim();
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)} report`;
+}
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+const exportStatus: Record<ExportRecord["status"], { tone: PillTone; label: string }> = {
+  queued: { tone: "neutral", label: "Queued" },
+  running: { tone: "info", label: "In progress" },
+  completed: { tone: "success", label: "Completed" },
+  failed: { tone: "danger", label: "Failed" },
+};
+function ExportRow({
+  item,
+  downloading,
+  onDownload,
+}: {
+  item: ExportRecord;
+  downloading?: boolean;
+  onDownload?: () => void;
+}) {
+  const status = exportStatus[item.status] ?? { tone: "neutral" as PillTone, label: item.status };
+  return (
+    <ListRow
+      icon={<FileText />}
+      tone="teal"
+      title={exportLabel(item.export_type)}
+      meta={`${item.format.toUpperCase()} · ${formatDate(item.created_at)}`}
+      trailing={
+        <>
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
+          {onDownload && item.download_url && (
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              disabled={downloading}
+              onClick={onDownload}
+              aria-label={`Download ${exportLabel(item.export_type)}`}
+            >
+              {downloading ? "…" : "Download"}
+            </AdminButton>
+          )}
+        </>
+      }
+    />
+  );
+}
 function PeriodMetric({
   label,
   value,
@@ -1006,13 +937,13 @@ function PeriodMetric({
   change: number | null;
 }) {
   return (
-    <div className="programme-report-period-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="rp-metric">
+      <span className="rp-metric__label">{label}</span>
+      <strong className="rp-metric__value">{value}</strong>
       {change === null ? (
-        <small>{value === 0 ? "No activity in the previous period" : "No previous activity to compare"}</small>
+        <small className="rp-metric__hint">{value === 0 ? "No activity in the previous period" : "No previous activity to compare"}</small>
       ) : (
-        <small className={change >= 0 ? "positive" : "negative"}>
+        <small className={`rp-metric__hint ${change >= 0 ? "positive" : "negative"}`}>
           {change >= 0 ? "↑" : "↓"} {Math.abs(change)}% vs previous
         </small>
       )}
@@ -1022,113 +953,100 @@ function PeriodMetric({
 function ReportTrend({ data }: { data: ReportOverview }) {
   return (
     <div
-      className="programme-report-trend"
+      className="rp-trend"
       role="img"
       aria-label="Daily report trend for new placements, mentorship sessions, and completed placements"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data.trend}>
-          <CartesianGrid stroke="#e5ebf1" vertical={false} />
+        <LineChart data={data.trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="#e6edf2" vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={(date) => date.slice(8)}
-            tick={{ fontSize: 10, fill: "#607392" }}
+            tick={{ fontSize: 12, fill: "#607392" }}
+            tickLine={false}
+            axisLine={{ stroke: "#dbe4ed" }}
           />
           <YAxis
             allowDecimals={false}
-            width={24}
-            tick={{ fontSize: 10, fill: "#607392" }}
+            width={28}
+            tick={{ fontSize: 12, fill: "#607392" }}
+            tickLine={false}
+            axisLine={false}
           />
           <Tooltip labelFormatter={(date) => String(date)} />
-          <Line
-            type="monotone"
-            dataKey="placements_created"
-            name="New placements"
-            stroke="#0b9696"
-            strokeWidth={2}
-            dot={false}
+          <Legend
+            verticalAlign="bottom"
+            height={28}
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 12, color: "#607392" }}
           />
-          <Line
-            type="monotone"
-            dataKey="sessions_logged"
-            name="Sessions"
-            stroke="#3479ca"
-            strokeWidth={2}
-            dot={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="placements_completed"
-            name="Completed"
-            stroke="#7958c9"
-            strokeWidth={2}
-            dot={false}
-          />
+          <Line type="monotone" dataKey="placements_created" name="New placements" stroke="#1d8c8c" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="sessions_logged" name="Sessions" stroke="#236bd4" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="placements_completed" name="Completed" stroke="#7653d4" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 function ReportSectionShell({
-  eyebrow,
   title,
   intro,
-  children,
+  metrics,
+  after,
 }: {
-  eyebrow: string;
   title: string;
   intro: string;
-  children: ReactNode;
+  metrics: { icon: ReactNode; label: string; value: number; tone: Tone }[];
+  after: ReactNode;
 }) {
+  const columns = metrics.length === 3 ? 3 : 4;
   return (
-    <section className="programme-report-card programme-report-section">
-      <p className="programme-reports-eyebrow">{eyebrow}</p>
-      <h2>{title}</h2>
-      <p className="programme-report-section-intro">{intro}</p>
-      {children}
-    </section>
-  );
-}
-function ReportMetricGrid({
-  items,
-}: {
-  items: { icon: ReactNode; label: string; value: number; tone: string }[];
-}) {
-  return (
-    <div className="programme-report-section-metrics">
-      {items.map((item) => (
-        <ReportKpi key={item.label} {...item} detail="Programme scope" />
-      ))}
-    </div>
+    <>
+      <Notice icon={<Info aria-hidden="true" />}>
+        <strong>{title}.</strong> {intro}
+      </Notice>
+      <StatGrid columns={columns}>
+        {metrics.map((item) => (
+          <StatCard
+            key={item.label}
+            icon={item.icon}
+            tone={item.tone}
+            value={item.value}
+            label={item.label}
+            hint="Programme scope"
+          />
+        ))}
+      </StatGrid>
+      {after}
+    </>
   );
 }
 function ReportStageList({ values }: { values: Record<string, number> }) {
   const stages = [
     { label: "Scheduled", value: values.placements_scheduled ?? 0 },
     { label: "Orientation", value: values.placements_induction ?? 0 },
-    {
-      label: "Awaiting student",
-      value: values.placements_awaiting_student ?? 0,
-    },
+    { label: "Awaiting student", value: values.placements_awaiting_student ?? 0 },
     { label: "Active", value: values.placements_active ?? 0 },
     { label: "Completed", value: values.placements_completed ?? 0 },
   ];
   return (
-    <div className="programme-report-stage-list">
+    <ul className="rp-stages">
       {stages.map((stage) => (
-        <div key={stage.label}>
+        <li key={stage.label}>
           <span>{stage.label}</span>
           <strong>{stage.value}</strong>
-          <div>
+          <div className="rp-stages__bar">
             <i
               style={{
                 width: `${Math.min(100, stage.value ? Math.max(8, (stage.value / Math.max(values.placements_total ?? 1, 1)) * 100) : 0)}%`,
               }}
             />
           </div>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 function ReportTable({
@@ -1139,26 +1057,26 @@ function ReportTable({
   showCohort?: boolean;
 }) {
   return (
-    <div className="programme-report-table-wrap">
-      <table>
+    <div className="pa-table-scroll">
+      <table className="pa-table">
         <caption className="sr-only">Programme interruption report</caption>
         <thead>
           <tr>
-            <Th>Facility</Th>
-            {showCohort && <Th>Cohort</Th>}
-            <Th>Reason</Th>
-            <Th>Interruptions</Th>
-            <Th>Days</Th>
+            <th scope="col">Facility</th>
+            {showCohort && <th scope="col">Cohort</th>}
+            <th scope="col">Reason</th>
+            <th scope="col">Interruptions</th>
+            <th scope="col">Days</th>
           </tr>
         </thead>
         <tbody>
           {rows.slice(0, 12).map((row) => (
             <tr key={`${row.facility_id}-${row.cohort_id}-${row.reason}`}>
-              <Td>{row.facility_name}</Td>
-              {showCohort && <Td>{row.cohort_name}</Td>}
-              <Td>{row.reason.replaceAll("_", " ")}</Td>
-              <Td>{row.interruptions}</Td>
-              <Td>{row.days_interrupted}</Td>
+              <td><strong className="rp-cell-strong">{row.facility_name}</strong></td>
+              {showCohort && <td>{row.cohort_name}</td>}
+              <td className="rp-capitalize">{row.reason.replaceAll("_", " ")}</td>
+              <td>{row.interruptions}</td>
+              <td>{row.days_interrupted}</td>
             </tr>
           ))}
         </tbody>
@@ -1166,80 +1084,19 @@ function ReportTable({
     </div>
   );
 }
-function ReportKpi({
+function Signal({
   icon,
+  tone,
   label,
   value,
-  suffix,
-  detail,
-  tone,
 }: {
   icon: ReactNode;
+  tone: Tone;
   label: string;
-  value: number | string;
-  suffix?: string;
-  detail: string;
-  tone: string;
+  value: number;
 }) {
-  return (
-    <div className={`programme-report-kpi programme-report-kpi--${tone}`}>
-      <span className="programme-report-kpi-icon">{icon}</span>
-      <div>
-        <p>{label}</p>
-        <strong>
-          {value}
-          {suffix}
-        </strong>
-        <small>{detail}</small>
-      </div>
-    </div>
-  );
-}
-function ReportCardHeading({
-  title,
-  detail,
-  action,
-  onAction,
-}: {
-  title: string;
-  detail?: string;
-  action?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="programme-report-card-heading">
-      <div>
-        <h2>{title}</h2>
-        {detail && <p>{detail}</p>}
-      </div>
-      {action && (
-        <button type="button" onClick={onAction}>
-          {action} <span>→</span>
-        </button>
-      )}
-    </div>
-  );
-}
-function Signal({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
+  return <ListRow icon={icon} tone={tone} title={label} value={value} />;
 }
 function EmptyReport({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="programme-report-empty">
-      <TriangleAlert size={18} />
-      <strong>{title}</strong>
-      <p>{detail}</p>
-    </div>
-  );
-}
-function Th({ children }: { children: ReactNode }) {
-  return <th>{children}</th>;
-}
-function Td({ children }: { children: ReactNode }) {
-  return <td>{children}</td>;
+  return <EmptyState icon={<FileText size={22} />} title={title} text={detail} />;
 }

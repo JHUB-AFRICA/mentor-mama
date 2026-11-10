@@ -13,13 +13,13 @@ expanding into broad dashboards, exports, notifications, or advanced analytics.
 
 ## 2. Users and capabilities
 
-| User | MVP responsibility |
-| --- | --- |
-| Student | Confirm placement, complete orientation, submit feedback or a concern |
-| Clinical mentor | Complete induction, log sessions, resolve unsynced submissions |
-| Nurse manager / ward in-charge | Assign mentors, operate placements, review authorised concerns |
-| University coordinator | Create placements, monitor institution-scoped progress, read approved feedback |
-| Programme administrator | Programme-wide administration and controlled fallback actions |
+| User                           | MVP responsibility                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| Student                        | Confirm placement, complete orientation, submit feedback or a concern          |
+| Clinical mentor                | Complete induction, log sessions, resolve unsynced submissions                 |
+| Nurse manager / ward in-charge | Assign mentors, operate placements, review authorised concerns                 |
+| University coordinator         | Create placements, monitor institution-scoped progress, read approved feedback |
+| Programme administrator        | Programme-wide administration and controlled fallback actions                  |
 
 ## 3. Functional requirements
 
@@ -105,7 +105,7 @@ expanding into broad dashboards, exports, notifications, or advanced analytics.
 - Broad reporting and advanced analytics
 - In-app capacity negotiation
 - Co-mentorship
-- AI features
+- Free-form or cross-system AI features. The approved AI slices are ephemeral lesson explanations and the Menta buddy (ADR 0027), which answers only from approved, role-scoped content and platform guides; see `docs/architecture/ai-integration-plan.md`.
 
 ## 5a. Programme setup governance
 

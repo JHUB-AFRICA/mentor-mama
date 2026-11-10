@@ -26,6 +26,7 @@ const StudentWorkspace = lazy(() =>
   })),
 );
 import { Navigate, useLocation } from "react-router-dom";
+import { MentaBuddy } from "../features/assistant/MentaBuddy";
 import {
   PortalWorkspaceSkeleton,
   type PortalWorkspaceRole,
@@ -137,16 +138,19 @@ export function AuthenticatedRouter({
   })();
   const skeletonRole = workspaceRoleFor(user.role);
   return (
-    <Suspense
-      fallback={
-        <PortalWorkspaceSkeleton
-          role={skeletonRole}
-          pathname={location.pathname}
-        />
-      }
-    >
-      {workspace}
-    </Suspense>
+    <>
+      <Suspense
+        fallback={
+          <PortalWorkspaceSkeleton
+            role={skeletonRole}
+            pathname={location.pathname}
+          />
+        }
+      >
+        {workspace}
+      </Suspense>
+      <MentaBuddy user={user} />
+    </>
   );
 }
 

@@ -154,6 +154,17 @@ DEFAULT_CHARSET = "utf-8"
 MAILTRAP_API_TOKEN = env("MAILTRAP_API_TOKEN", default="")
 MAILTRAP_SANDBOX_ID = env("MAILTRAP_SANDBOX_ID", default="")
 MAILTRAP_WEBHOOK_SECRET = env("MAILTRAP_WEBHOOK_SECRET", default="")
+AI_ENABLED = env.bool("AI_ENABLED", default=False)
+# OpenAI for the MVP. Any OpenAI-compatible server (vLLM, Ollama) works by changing
+# the base URL, model, and key; see docs/architecture/ai-integration-plan.md.
+AI_API_BASE_URL = env("AI_API_BASE_URL", default="https://api.openai.com/v1")
+AI_API_KEY = env("AI_API_KEY", default="")
+AI_MODEL = env("AI_MODEL", default="gpt-4o-mini")
+AI_TIMEOUT_SECONDS = env.int("AI_TIMEOUT_SECONDS", default=20)
+AI_MAX_OUTPUT_TOKENS = env.int("AI_MAX_OUTPUT_TOKENS", default=500)
+# Leave empty for reasoning models (gpt-5*, o-series) that reject temperature.
+_ai_temperature = env("AI_TEMPERATURE", default="0.2").strip()
+AI_TEMPERATURE = float(_ai_temperature) if _ai_temperature else None
 USE_MAILTRAP = env("USE_MAILTRAP", default=False)
 EMAIL_BACKEND = (
     "anymail.backends.mailtrap.EmailBackend"
