@@ -93,10 +93,15 @@ def require_scope(user, *, institution_id=None, facility_id=None) -> None:
     capabilities.require_scope(user, institution_id=institution_id, facility_id=facility_id)
 
 
+# A mentor's workload is the placements still open, not every assignment ever made.
+_CLOSED_PLACEMENT_STATES = ("completed", "archived", "withdrawn")
+_OPEN_ASSIGNMENT = Q(mentor_assignments__ended_at=None) & ~Q(mentor_assignments__placement__state__in=_CLOSED_PLACEMENT_STATES)
+
+
 def active_mentors(*, program_id: UUID, facility_id: UUID | None = None):
     """Read-only mentor projection for placement assignment screens."""
     queryset = User.objects.filter(program_id=program_id, role=Role.MENTOR, status=Status.ACTIVE).annotate(
-        active_placement_count=Count("mentor_assignments__placement", filter=Q(mentor_assignments__ended_at=None)),
+        active_placement_count=Count("mentor_assignments__placement", filter=_OPEN_ASSIGNMENT),
     )
     if facility_id is not None:
         queryset = queryset.filter(facility_id=facility_id)
@@ -110,7 +115,7 @@ def mentor_assignment_policy(*, mentor_id: UUID, facility_id: UUID) -> dict:
     ).annotate(
         active_assignment_count=Count(
             "mentor_assignments",
-            filter=Q(mentor_assignments__ended_at=None),
+            filter=_OPEN_ASSIGNMENT,
         )
     ).first()
     if mentor is None:

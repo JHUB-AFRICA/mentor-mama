@@ -589,3 +589,28 @@ def test_coordinator_splits_a_batch_across_facilities_by_declared_capacity(progr
     applied = client.post("/api/v1/placements/facility-requests", body, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
     assert applied.status_code == 201, applied.content
     assert Placement.objects.filter(id__in=ids, requested_facility__isnull=False).count() == 4
+
+
+def test_ward_can_be_changed_within_the_facility_without_a_second_open_assignment(draft_placement, ward, facility, nurse_manager):
+    from apps.facilities.models import Ward
+    from apps.placements import services
+    from apps.placements.models import WardAssignment
+
+    other = Ward.objects.create(facility=facility, name="Second Ward", max_students=2)
+    services.allocate_ward(draft_placement.id, ward.id, actor=nurse_manager)
+    services.allocate_ward(draft_placement.id, other.id, actor=nurse_manager)
+    open_rows = WardAssignment.objects.filter(placement=draft_placement, ended_at=None)
+    assert [row.ward_id for row in open_rows] == [other.id]
+    assert WardAssignment.objects.filter(placement=draft_placement).count() == 2
+    services.allocate_ward(draft_placement.id, other.id, actor=nurse_manager)  # same ward: no-op
+    assert WardAssignment.objects.filter(placement=draft_placement).count() == 2
+
+
+def test_finished_placements_do_not_count_against_mentor_capacity(active_placement, mentor, nurse_manager):
+    from apps.identity import api as identity
+    from apps.placements.models import Placement
+
+    assert identity.active_mentors(program_id=mentor.program_id).get(id=mentor.id).active_placement_count == 1
+    from django.utils import timezone
+    Placement.objects.filter(id=active_placement.id).update(state="completed", completed_at=timezone.now())
+    assert identity.active_mentors(program_id=mentor.program_id).get(id=mentor.id).active_placement_count == 0

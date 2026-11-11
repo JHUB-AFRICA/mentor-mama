@@ -271,12 +271,22 @@ def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor) -> Placement:
         if occupied >= ward.max_students:
             raise errors.WardCapacityExceeded(occupied=occupied, capacity=ward.max_students)
 
+        current = WardAssignment.objects.filter(placement=placement, ended_at=None).first()
+        if current and current.ward_id == ward_id:
+            return placement  # already there: nothing to change
+        new_facility_id = facilities.facility_id_of_ward(ward_id)
+        if current and placement.facility_id and new_facility_id != placement.facility_id:
+            # Moving to another facility is a coordinator decision, not a ward change.
+            raise errors.InvalidTransition("A ward in another facility cannot be chosen here. Ask the coordinator to change the facility.")
+        if current:
+            current.ended_at = timezone.now()
+            current.save(update_fields=["ended_at"])
         WardAssignment.objects.create(placement=placement, ward_id=ward_id, created_by=actor)
-        placement.facility_id = facilities.facility_id_of_ward(ward_id)   # derived (INV-17)
+        placement.facility_id = new_facility_id   # derived (INV-17)
         placement.save(update_fields=["facility_id", "updated_at"])
 
-        audit.record(actor=actor, action="placement.allocate_ward", entity_table=TABLE, entity_id=placement.id,
-                     scope=_facility_scope(placement))
+        audit.record(actor=actor, action="placement.change_ward" if current else "placement.allocate_ward",
+                     entity_table=TABLE, entity_id=placement.id, scope=_facility_scope(placement))
         outbox.publish(events.WardAllocated(placement_id=placement.id, ward_id=ward_id))
         _maybe_schedule(placement, actor=actor)
     placement.refresh_from_db()
