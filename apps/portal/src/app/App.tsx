@@ -25,6 +25,7 @@ export function App() {
   const activationRoute = path === "/activate";
   const resetRoute = path === "/reset-password";
   const statusRoute = path === "/account-status";
+  const platformRoute = path === "/platform" || path.startsWith("/platform/");
   const params = new URLSearchParams(search);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -140,6 +141,7 @@ export function App() {
   if (error && !user && !authChallenge)
     return (
       <SignInFlow
+        variant={platformRoute ? "platform" : "workspace"}
         message={error}
         onAuthenticated={handleAuthenticated}
         onChallenge={setAuthChallenge}
@@ -161,6 +163,7 @@ export function App() {
   if (!user)
     return (
       <SignInFlow
+        variant={platformRoute ? "platform" : "workspace"}
         onAuthenticated={handleAuthenticated}
         onChallenge={setAuthChallenge}
       />

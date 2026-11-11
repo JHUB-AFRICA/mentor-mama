@@ -17,6 +17,7 @@
 #   SECRET_KEY               openssl rand -hex 32
 #   RESEND_API_KEY           Resend > API keys (sending access, domain sinapstechnology.tech)
 #   RESEND_SIGNING_SECRET    add after step 1 below (the endpoint's signing secret, whsec_...)
+#   PLATFORM_ADMIN_INITIAL_PASSWORD  initial password of the platform admin (at least 12 characters); change it at first sign-in
 #   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   for the private export bucket (any S3-compatible store)
 #   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION
@@ -27,8 +28,8 @@
 #      Paste its signing secret into `mentormama-secrets` as RESEND_SIGNING_SECRET (the API redeploys).
 #   2. Custom domains: add them in each service (or under `domains:` below). Set PORTAL_DOMAIN to the portal's
 #      domain, and update the rewrite destination below if you give the API its own domain.
-#   3. Create the first programme admin once: Render shell on mentormama-api ->
-#      python manage.py bootstrap_program_admin   (see docs/operations)
+#   3. Sign in at https://<portal>/platform as PLATFORM_ADMIN_EMAIL with PLATFORM_ADMIN_INITIAL_PASSWORD, set up an
+#      authenticator app, change the password, then create programmes and invite their administrators there.
 #
 # Sender: every message — sign-in codes, invitations, reminders, digests — goes out as
 # "MentorMAMA <mentormama@sinapstechnology.tech>" through Resend (Forge enabled on that domain).
@@ -70,6 +71,11 @@ envVarGroups:
         value: INFO
       - key: AI_ENABLED
         value: "false"
+      # The platform administrator account, created at deploy time without an invitation email (see
+      # apps/platform/management/commands/ensure_platform_admin.py). Its initial password is the secret
+      # PLATFORM_ADMIN_INITIAL_PASSWORD in `mentormama-secrets`; it must be changed at the first sign-in (/platform).
+      - key: PLATFORM_ADMIN_EMAIL
+        value: admin@mentamama.com
 
 services:
   # ---------------------------------------------------------------- public website
@@ -143,7 +149,8 @@ services:
     dockerContext: .
     healthCheckPath: /health/live
     # Runs after the build and before the new version takes traffic.
-    preDeployCommand: python manage.py migrate --noinput
+    # Migrations, then the initial platform admin (created once from PLATFORM_ADMIN_* settings, never modified after).
+    preDeployCommand: python manage.py predeploy
     # Uploaded documents, covers and lesson images live on this disk (the worker does not need them).
     disk:
       name: mentormama-data

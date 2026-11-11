@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # Layer 5 — read side and leaves
     "apps.analytics",
     "apps.notifications",
+    "apps.platform",
 ]
 
 MIDDLEWARE = [

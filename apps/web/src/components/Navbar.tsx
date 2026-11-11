@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { portalUrl } from "../lib/portal";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import Logo from "./Logo";
@@ -11,11 +12,6 @@ const navLinks = [
   { label: "Contact", href: "/contact" },
 ];
 
-// "Portal sign in" goes to the signed-in app. Set VITE_PORTAL_URL when building (render.yaml does); the local
-// address is only the fallback for `pnpm dev`, so a production build can never point visitors at localhost.
-const portalUrl =
-  import.meta.env.VITE_PORTAL_URL ||
-  (import.meta.env.DEV ? "http://localhost:5174" : "https://mentormama-portal.onrender.com");
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);

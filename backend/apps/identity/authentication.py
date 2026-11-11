@@ -33,11 +33,21 @@ from apps.identity.models import Program, Role, Status, User, UserSession
 INVITATION_MAX_AGE = timedelta(hours=48)
 EMAIL_VERIFICATION_MAX_AGE = timedelta(minutes=15)
 MFA_REQUIRED_ROLES = frozenset({
+    Role.PLATFORM_ADMIN,
     Role.PROGRAM_ADMIN,
     Role.COORDINATOR,
     Role.NURSE_MANAGER,
 })
 MFA_VERIFIED_SESSION_KEY = "identity.mfa.verified"
+
+
+def audit_scope(user) -> dict:
+    """Audit scope for an account: its programme, or the platform for platform administrators."""
+    return {"program_id": str(user.program_id)} if user.program_id else {"platform": True}
+
+
+def is_platform_admin(user) -> bool:
+    return bool(user and user.is_authenticated and user.status == Status.ACTIVE and user.role == Role.PLATFORM_ADMIN)
 
 
 def _device_label(user_agent: str) -> str:
@@ -116,13 +126,15 @@ def revoke_account_sessions(*, actor: User, target: User, reason: str) -> int | 
     target = User.objects.select_for_update().filter(pk=target.pk).first()
     if target is None:
         return None
-    if (actor.status != Status.ACTIVE or actor.role != Role.PROGRAM_ADMIN
-            or actor.id == target.id or actor.program_id != target.program_id
+    platform = actor.status == Status.ACTIVE and actor.role == Role.PLATFORM_ADMIN
+    programme = (actor.status == Status.ACTIVE and actor.role == Role.PROGRAM_ADMIN
+                 and actor.program_id == target.program_id and target.role != Role.PLATFORM_ADMIN)
+    if (not (platform or programme) or actor.id == target.id
             or target.status != Status.ACTIVE or not reason.strip()):
         return None
     count = UserSession.objects.filter(user=target, revoked_at=None).update(revoked_at=timezone.now())
     audit.record(actor=actor, action="account.sessions_revoked", entity_table="identity_user",
-                 entity_id=target.id, scope={"program_id": str(target.program_id)},
+                 entity_id=target.id, scope=audit_scope(target),
                  changes={"revoked_count": count}, override_reason=reason.strip())
     if count:
         outbox.publish(SecurityNotificationRequested(user_id=target.id, action="account_sessions_revoked"))
@@ -132,7 +144,9 @@ def revoke_account_sessions(*, actor: User, target: User, reason: str) -> int | 
 def _can_change_status(*, actor: User, target: User, status: str) -> bool:
     if actor.status != Status.ACTIVE or actor.id == target.id:
         return False
-    if actor.program_id != target.program_id:
+    if actor.role == Role.PLATFORM_ADMIN:
+        return True
+    if target.role == Role.PLATFORM_ADMIN or actor.program_id != target.program_id:
         return False
     if actor.role == Role.PROGRAM_ADMIN:
         return True
@@ -170,7 +184,7 @@ def change_status(*, actor: User, target: User, status: str, reason: str) -> Use
     if status != Status.ACTIVE:
         UserSession.objects.filter(user=target, revoked_at=None).update(revoked_at=timezone.now())
     audit.record(actor=actor, action="account.status_changed", entity_table="identity_user",
-                 entity_id=target.id, scope={"program_id": str(target.program_id)},
+                 entity_id=target.id, scope=audit_scope(target),
                  changes={"from": previous, "to": status}, override_reason=reason.strip())
     outbox.publish(SecurityNotificationRequested(user_id=target.id, action=f"account_{status}"))
     from apps.identity import ports
@@ -228,7 +242,7 @@ def regenerate_recovery_codes(*, user: User) -> list[str]:
     audit.record(
         actor=user, action="account.backup_codes_regenerated",
         entity_table="identity_user", entity_id=user.id,
-        scope={"program_id": str(user.program_id)},
+        scope=audit_scope(user),
     )
     outbox.publish(SecurityNotificationRequested(user_id=user.id, action="backup_codes_regenerated"))
     return codes
@@ -304,6 +318,11 @@ class SecurityNotificationRequested:
 def _can_invite(actor, role, *, institution_id=None, facility_id=None) -> bool:
     if actor.status != Status.ACTIVE:
         return False
+    if actor.role == Role.PLATFORM_ADMIN:
+        # The platform level sets up programmes and their administrators; programme admins invite everyone else.
+        return role in {Role.PROGRAM_ADMIN, Role.PLATFORM_ADMIN}
+    if role == Role.PLATFORM_ADMIN:
+        return False
     if actor.role == Role.PROGRAM_ADMIN:
         return True
     if actor.role == Role.COORDINATOR:
@@ -326,7 +345,7 @@ def invite_user(*, actor, email, first_name, last_name, role, program_id,
         raise UnauthorizedFacilityAccess()
     if not _can_invite(actor, role, institution_id=institution_id, facility_id=facility_id):
         raise UnauthorizedFacilityAccess()
-    if actor.program_id != program_id:
+    if actor.role != Role.PLATFORM_ADMIN and actor.program_id != program_id:
         raise UnauthorizedFacilityAccess()
     registration_number = registration_number.strip().upper()
     if role == Role.STUDENT and not registration_number:
@@ -367,7 +386,7 @@ def invite_user(*, actor, email, first_name, last_name, role, program_id,
     user.invitation_sent_at = timezone.now()
     user.save()
     audit.record(actor=actor, action="account.invited", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(program_id)},
+                 entity_id=user.id, scope=audit_scope(user),
                  changes={"role": role, "status": Status.INVITED})
     outbox.publish(IdentityInvitationRequested(user_id=user.id))
     return user
@@ -375,8 +394,11 @@ def invite_user(*, actor, email, first_name, last_name, role, program_id,
 
 def _valid_invitation_scope(role, *, program_id, institution_id=None, facility_id=None) -> bool:
     """Enforce the one-role/one-scope contract before writing a user."""
+    if role == Role.PLATFORM_ADMIN:
+        return program_id is None and institution_id is None and facility_id is None
     if role == Role.PROGRAM_ADMIN:
-        return institution_id is None and facility_id is None
+        return (institution_id is None and facility_id is None and program_id is not None
+                and Program.objects.filter(id=program_id).exists())
     if role in {Role.STUDENT, Role.COORDINATOR}:
         return (
             institution_id is not None
@@ -497,11 +519,12 @@ def bulk_invite_mentors(*, actor: User, rows: list[dict], dry_run: bool = True) 
 @transaction.atomic
 def resend_invitation(*, actor: User, target: User) -> bool:
     """Rotate and re-queue an invitation without changing account details."""
-    if actor.status != Status.ACTIVE or actor.role != Role.PROGRAM_ADMIN:
+    if actor.status != Status.ACTIVE or actor.role not in {Role.PROGRAM_ADMIN, Role.PLATFORM_ADMIN}:
         return False
-    target = User.objects.select_for_update().filter(
-        id=target.id, program_id=actor.program_id,
-    ).first()
+    targets = User.objects.select_for_update().filter(id=target.id)
+    if actor.role == Role.PROGRAM_ADMIN:
+        targets = targets.filter(program_id=actor.program_id).exclude(role=Role.PLATFORM_ADMIN)
+    target = targets.first()
     if target is None or not (target.status == Status.INVITED or (
         target.status == Status.DEACTIVATED and not target.has_usable_password()
     )):
@@ -520,8 +543,10 @@ def resend_invitation(*, actor: User, target: User) -> bool:
     target.set_unusable_password()
     target.save(update_fields=["invitation_nonce", "invitation_sent_at", "status", "password", "updated_at"])
     audit.record(actor=actor, action="account.invitation_resent", entity_table="identity_user",
-                 entity_id=target.id, scope={"program_id": str(actor.program_id)},
-                 changes={"status": Status.INVITED}, override_reason="Invitation reissued by Programme Admin")
+                 entity_id=target.id, scope=audit_scope(target),
+                 changes={"status": Status.INVITED},
+                 override_reason="Invitation reissued by Platform Admin" if actor.role == Role.PLATFORM_ADMIN
+                 else "Invitation reissued by Programme Admin")
     outbox.publish(IdentityInvitationRequested(user_id=target.id))
     return True
 
@@ -543,7 +568,7 @@ def activate_user(*, user: User, token: str, password: str) -> User | None:
     user.invitation_sent_at = None
     user.save(update_fields=["password", "status", "invitation_nonce", "invitation_sent_at", "updated_at"])
     audit.record(actor=user, action="account.activated", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     return user
 
 
@@ -574,7 +599,7 @@ def verify_email_code(*, user: User, code: str) -> bool:
     user.email_verification_code_hash = ""
     user.email_verification_sent_at = None
     user.save(update_fields=["email_verified_at", "email_verification_code_hash", "email_verification_sent_at", "updated_at"])
-    audit.record(actor=user, action="account.email_verified", entity_table="identity_user", entity_id=user.id, scope={"program_id": str(user.program_id)})
+    audit.record(actor=user, action="account.email_verified", entity_table="identity_user", entity_id=user.id, scope=audit_scope(user))
     return True
 
 
@@ -595,7 +620,7 @@ def update_profile(*, user: User, first_name: str, last_name: str, phone: str = 
     user.phone = phone.strip()
     user.save(update_fields=["first_name", "last_name", "phone", "updated_at"])
     audit.record(actor=user, action="account.profile_updated", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     return user
 
 
@@ -682,7 +707,7 @@ def create_mfa_recovery_request(*, user: User, reason: str):
         return existing
     request_record = MFARecoveryRequest.objects.create(user=user, reason=reason.strip())
     audit.record(actor=user, action="account.mfa_recovery_requested", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     return request_record
 
 
@@ -691,7 +716,7 @@ def review_mfa_recovery_request(*, actor: User, request_id, decision: str, reaso
     from apps.identity.models import MFARecoveryRequest
     request_record = MFARecoveryRequest.objects.select_for_update().select_related("user").filter(
         pk=request_id, status=MFARecoveryRequest.Status.PENDING,
-        user__program_id=actor.program_id,
+        user__program_id=actor.program_id, user__program_id__isnull=False,
     ).first()
     if (request_record is None or actor.status != Status.ACTIVE or actor.role != Role.PROGRAM_ADMIN
             or actor.id == request_record.user_id or not reason.strip()
@@ -720,7 +745,8 @@ def review_platform_mfa_recovery_request(*, actor: User, request_id, decision: s
     request_record = MFARecoveryRequest.objects.select_for_update().select_related("user").filter(
         pk=request_id, status=MFARecoveryRequest.Status.PENDING,
     ).first()
-    if (request_record is None or actor.status != Status.ACTIVE or not actor.is_superuser
+    if (request_record is None or actor.status != Status.ACTIVE
+            or not (actor.is_superuser or actor.role == Role.PLATFORM_ADMIN)
             or actor.id == request_record.user_id or not reason.strip()
             or decision not in {"recover", "close"}):
         return False
@@ -731,7 +757,7 @@ def review_platform_mfa_recovery_request(*, actor: User, request_id, decision: s
         Authenticator.objects.filter(user=target).delete()
         UserSession.objects.filter(user=target, revoked_at=None).update(revoked_at=timezone.now())
         audit.record(actor=actor, action="account.mfa_recovery_override", entity_table="identity_user",
-                     entity_id=target.id, scope={"program_id": str(target.program_id)},
+                     entity_id=target.id, scope=audit_scope(target),
                      override_reason=reason.strip())
         outbox.publish(SecurityNotificationRequested(user_id=target.id, action="mfa_recovery"))
     elif target.status == Status.ACTIVE:
@@ -740,7 +766,7 @@ def review_platform_mfa_recovery_request(*, actor: User, request_id, decision: s
     request_record.save(update_fields=["status", "updated_at"])
     audit.record(actor=actor, action="account.mfa_recovery_request_reviewed",
                  entity_table="identity_user", entity_id=target.id,
-                 scope={"program_id": str(target.program_id)},
+                 scope=audit_scope(target),
                  changes={"decision": decision, "request_id": str(request_record.id), "reviewed_by_platform": True},
                  override_reason=reason.strip())
     return True
@@ -751,10 +777,11 @@ def reset_password(*, user: User, token: str, password: str) -> bool:
         return False
     user.set_password(password)
     user.password_reset_nonce = uuid.uuid4()
-    user.save(update_fields=["password", "password_reset_nonce", "updated_at"])
+    user.must_change_password = False
+    user.save(update_fields=["password", "password_reset_nonce", "must_change_password", "updated_at"])
     UserSession.objects.filter(user=user, revoked_at=None).update(revoked_at=timezone.now())
     audit.record(actor=user, action="account.password_reset", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     outbox.publish(SecurityNotificationRequested(user_id=user.id, action="password_reset"))
     return True
 
@@ -806,7 +833,7 @@ def enable_email_mfa(*, user: User) -> EmailDevice:
         action="account.email_mfa_enabled",
         entity_table="identity_user",
         entity_id=user.id,
-        scope={"program_id": str(user.program_id)},
+        scope=audit_scope(user),
         changes={"device_id": str(device.id)},
     )
     return device
@@ -821,7 +848,7 @@ def disable_email_mfa(*, user: User) -> bool:
             action="account.email_mfa_disabled",
             entity_table="identity_user",
             entity_id=user.id,
-            scope={"program_id": str(user.program_id)},
+            scope=audit_scope(user),
         )
     return bool(deleted)
 
@@ -846,7 +873,7 @@ def request_email_mfa_challenge(*, user: User) -> EmailDevice:
         action="account.email_mfa_challenge_requested",
         entity_table="identity_user",
         entity_id=user.id,
-        scope={"program_id": str(user.program_id)},
+        scope=audit_scope(user),
         changes={"device_id": str(device.id)},
     )
     return device
@@ -876,7 +903,7 @@ def verify_email_mfa(*, request, user: User, code: str) -> bool:
                 action="account.email_mfa_failed",
                 entity_table="identity_user",
                 entity_id=user.id,
-                scope={"program_id": str(user.program_id)},
+                scope=audit_scope(user),
                 changes={"device_id": str(device.id)},
             )
         return False
@@ -886,7 +913,7 @@ def verify_email_mfa(*, request, user: User, code: str) -> bool:
         action="account.email_mfa_verified",
         entity_table="identity_user",
         entity_id=user.id,
-        scope={"program_id": str(user.program_id)},
+        scope=audit_scope(user),
         changes={"device_id": str(device.id)},
     )
     return True
@@ -928,7 +955,7 @@ def complete_mfa_setup(*, request, user: User, code: str) -> list[str] | None:
         audit.record(
             actor=user, action="account.mfa_setup_failed",
             entity_table="identity_user", entity_id=user.id,
-            scope={"program_id": str(user.program_id)},
+            scope=audit_scope(user),
         )
         return None
     if mfa_is_enabled(user):
@@ -941,7 +968,7 @@ def complete_mfa_setup(*, request, user: User, code: str) -> list[str] | None:
     cache.delete(_setup_cache_key(user))
     _mark_mfa_verified(request=request, user=user)
     audit.record(actor=user, action="account.mfa_enabled", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     outbox.publish(SecurityNotificationRequested(user_id=user.id, action="mfa_enabled"))
     return codes
 
@@ -964,7 +991,7 @@ def verify_mfa(*, request, user: User, code: str) -> bool:
     audit.record(
         actor=user, action="account.mfa_failed",
         entity_table="identity_user", entity_id=user.id,
-        scope={"program_id": str(user.program_id)},
+        scope=audit_scope(user),
     )
     return False
 
@@ -997,9 +1024,10 @@ def change_password(*, user: User, current_password: str, new_password: str,
         return False
     user.set_password(new_password)
     user.password_reset_nonce = uuid.uuid4()
-    user.save(update_fields=["password", "password_reset_nonce", "updated_at"])
+    user.must_change_password = False
+    user.save(update_fields=["password", "password_reset_nonce", "must_change_password", "updated_at"])
     revoke_other_sessions(user=user, current_session_key=current_session_key)
     audit.record(actor=user, action="account.password_changed", entity_table="identity_user",
-                 entity_id=user.id, scope={"program_id": str(user.program_id)})
+                 entity_id=user.id, scope=audit_scope(user))
     outbox.publish(SecurityNotificationRequested(user_id=user.id, action="password_changed"))
     return True

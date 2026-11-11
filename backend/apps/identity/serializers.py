@@ -9,6 +9,9 @@ from apps.identity.models import Role, Status
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(trim_whitespace=False, write_only=True)
+    # Which sign-in page was used. Platform administrators sign in only at /platform, everyone else only at the
+    # workspace sign-in, so a stolen workspace password page can never be used against the operator account.
+    portal = serializers.ChoiceField(choices=["workspace", "platform"], default="workspace", required=False)
 
 
 class InviteSerializer(serializers.Serializer):

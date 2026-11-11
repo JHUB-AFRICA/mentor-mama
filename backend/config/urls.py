@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from apps.identity import urls as identity_urls
+from apps.platform import urls as platform_urls
 from apps.core.views import AIStatusView, CommandDetailView, live_health, ready_health
 from apps.mentorship import urls as mentorship_urls
 from apps.institutions import urls as institution_urls
@@ -38,6 +39,7 @@ api_v1 = [
     *learning_urls.urlpatterns,
     *content_urls.urlpatterns,
     *assistant_urls.urlpatterns,
+    *platform_urls.urlpatterns,
 ]
 
 urlpatterns = [

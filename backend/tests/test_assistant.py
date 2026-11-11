@@ -153,8 +153,22 @@ def test_requires_authentication():
     assert APIClient().post(URL, {"message": "hi"}, format="json").status_code in (401, 403)
 
 
+PROGRAMME_ROLES = {r.value for r in Role} - {Role.PLATFORM_ADMIN}
+
+
 def test_every_role_has_a_guide():
-    assert set(knowledge.ROLE_GUIDES) == {r.value for r in Role}
+    # Every role inside a programme; the platform role has no programme for Menta to draw on.
+    assert set(knowledge.ROLE_GUIDES) == PROGRAMME_ROLES
+
+
+def test_menta_is_closed_to_platform_admins(db):
+    from apps.identity.models import User
+
+    admin = User.objects.create_superuser("ops-menta@example.test", "Mentor-Platform-2026!", first_name="O", last_name="P")
+    with override_settings(**AI_ON):
+        response = client_for(admin).post("/api/v1/assistant/chat", {"message": "hello", "page": "/platform"}, format="json")
+    assert response.status_code == 403
+    assert client_for(admin).get("/api/v1/assistant/navigation").data["data"] == []
 
 
 def test_status_advertises_assistant(mentor):
@@ -168,7 +182,7 @@ from apps.assistant import context, navigation  # noqa: E402
 
 
 def test_registry_covers_every_role_with_unique_ids_and_relative_hrefs():
-    assert set(navigation.REGISTRY) == {r.value for r in Role}
+    assert set(navigation.REGISTRY) == PROGRAMME_ROLES
     for role, destinations in navigation.REGISTRY.items():
         ids = [d.id for d in destinations]
         assert len(ids) == len(set(ids)), role

@@ -5,6 +5,11 @@ const ProgrammeAdminWorkspace = lazy(() =>
     (module) => ({ default: module.ProgrammeAdminWorkspace }),
   ),
 );
+const PlatformWorkspace = lazy(() =>
+  import("../features/platform/PlatformWorkspace").then((module) => ({
+    default: module.PlatformWorkspace,
+  })),
+);
 const CoordinatorWorkspace = lazy(() =>
   import("../features/coordinator/CoordinatorWorkspace").then((module) => ({
     default: module.CoordinatorWorkspace,
@@ -56,6 +61,7 @@ export function AuthenticatedRouter({
 }: AuthenticatedRouterProps) {
   const location = useLocation();
   const canonicalRoots: Record<string, string> = {
+    platform_admin: "/platform",
     program_admin: "/admin",
     coordinator: "/coordinator",
     nurse_manager: "/facility",
@@ -63,6 +69,7 @@ export function AuthenticatedRouter({
     student: "/student",
   };
   const allowedPrefixes: Record<string, string[]> = {
+    platform_admin: ["/platform"],
     program_admin: ["/admin", "/placements"],
     coordinator: ["/coordinator"],
     nurse_manager: ["/facility", "/placements"],
@@ -80,6 +87,15 @@ export function AuthenticatedRouter({
     return <Navigate to={root} replace />;
   const workspace = (() => {
     switch (user.role) {
+      case "platform_admin":
+        return (
+          <PlatformWorkspace
+            user={user}
+            onSignedOut={onSignedOut}
+            onError={onError}
+            onUserUpdated={onUserUpdated}
+          />
+        );
       case "program_admin":
         return (
           <ProgrammeAdminWorkspace
@@ -150,13 +166,15 @@ export function AuthenticatedRouter({
       >
         {workspace}
       </Suspense>
-      <MentaBuddy user={user} />
-      <ConsentGate user={user} onUserUpdated={onUserUpdated} />
+      {/* Menta guides programme work; the platform workspace has no programme for it to draw on. */}
+      {user.role !== "platform_admin" && <MentaBuddy user={user} />}
+      {user.role !== "platform_admin" && <ConsentGate user={user} onUserUpdated={onUserUpdated} />}
     </>
   );
 }
 
 function workspaceRoleFor(role: string): PortalWorkspaceRole {
+  if (role === "platform_admin") return "program_admin";
   if (
     role === "program_admin" ||
     role === "coordinator" ||

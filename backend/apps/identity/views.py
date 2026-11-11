@@ -54,6 +54,7 @@ def _user_payload(user):
             "registration_number": user.registration_number,
             "role": user.role, "email_verified": bool(user.email_verified_at), "scope": scope.as_dict(),
             "capabilities": identity.capabilities_for(user),
+            "must_change_password": user.must_change_password,
             "consent_required": consent_service.is_required(user)}
 
 
@@ -68,11 +69,18 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        portal = serializer.validated_data.pop("portal", "workspace")
         user = authentication.authenticate_user(
             **serializer.validated_data,
         )
         if not user:
             return Response({"error": {"code": "InvalidCredentials", "message": "Invalid email or password."}}, status=401)
+        # Checked only after the password is proven, so it reveals nothing about unknown emails.
+        is_platform = user.role == Role.PLATFORM_ADMIN
+        if portal == "platform" and not is_platform:
+            return Response({"error": {"code": "NotPlatformAccount", "message": "This sign-in is for platform administrators. Use the workspace sign-in instead."}}, status=403)
+        if portal != "platform" and is_platform:
+            return Response({"error": {"code": "UsePlatformSignIn", "message": "Platform administrators sign in at the platform administration page."}}, status=403)
         if user.status != Status.ACTIVE:
             if user.status == Status.SUSPENDED:
                 code = "AccountSuspended"
@@ -90,7 +98,9 @@ class LoginView(APIView):
         if authentication.mfa_required(user):
             request.session[authentication.MFA_VERIFIED_SESSION_KEY] = False
             recovery_contact = "programme_admin"
-            if user.role == Role.PROGRAM_ADMIN:
+            if user.role == Role.PLATFORM_ADMIN:
+                recovery_contact = "support"
+            elif user.role == Role.PROGRAM_ADMIN:
                 has_peer_admin = User.objects.filter(
                     program_id=user.program_id, role=Role.PROGRAM_ADMIN, status=Status.ACTIVE,
                 ).exclude(pk=user.pk).exists()

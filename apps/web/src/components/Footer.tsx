@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Twitter, Instagram, Linkedin, Mail, MapPin } from "lucide-react";
 import Logo from "./Logo";
+import { platformSignInUrl, portalUrl } from "../lib/portal";
 
 const socialLinks = [
   { icon: Twitter, href: "#", label: "Twitter" },
@@ -58,6 +59,16 @@ export default function Footer() {
                 <Link to="/resources" className="text-[13px] text-white/50 hover:text-white transition-colors duration-200">
                   Resources Library
                 </Link>
+              </li>
+              <li>
+                <a href={portalUrl} className="text-[13px] text-white/50 hover:text-white transition-colors duration-200">
+                  Portal sign in
+                </a>
+              </li>
+              <li>
+                <a href={platformSignInUrl} className="text-[13px] text-white/50 hover:text-white transition-colors duration-200">
+                  Platform administration
+                </a>
               </li>
             </ul>
           </div>

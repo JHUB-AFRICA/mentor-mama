@@ -134,6 +134,10 @@ def deliver_outbox_event(event) -> None:
     elif event.event_type == "IdentityInvitationRequested" and user and user.status == identity.STATUSES.INVITED:
         link = _activation_link(user)
         role_copy = {
+            "platform_admin": (
+                "Platform administration", "You have been invited to help operate the MentorMAMA platform.",
+                "Set up your account, enable the required authenticator protection, then sign in at the platform administration page.",
+            ),
             "program_admin": (
                 "Programme administrator workspace", "You have been invited to help oversee this programme.",
                 "Set up your account, enable the required authenticator protection, and review your programme workspace.",

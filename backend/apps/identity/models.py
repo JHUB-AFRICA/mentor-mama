@@ -34,7 +34,7 @@ class Program(BaseModel):
 class BootstrapEvent(BaseModel):
     """Auditable infrastructure bootstrap action before a human actor exists."""
 
-    program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="bootstrap_events")
+    program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="bootstrap_events", null=True, blank=True)
     email = models.EmailField()
     action = models.CharField(max_length=64)
     details = models.JSONField(default=dict)
@@ -49,6 +49,8 @@ class Role(models.TextChoices):
     NURSE_MANAGER = "nurse_manager", "Nurse Manager"
     COORDINATOR = "coordinator", "University Coordinator"
     PROGRAM_ADMIN = "program_admin", "Programme Administrator"
+    # Operates the whole deployment: creates programmes, invites their admins, handles support. Belongs to no programme.
+    PLATFORM_ADMIN = "platform_admin", "Platform Administrator"
 
 
 class Status(models.TextChoices):
@@ -68,7 +70,8 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra):
-        extra.setdefault("role", Role.PROGRAM_ADMIN)
+        # `manage.py createsuperuser` creates a platform operator, who belongs to no programme.
+        extra.setdefault("role", Role.PLATFORM_ADMIN)
         extra.setdefault("status", Status.ACTIVE)
         extra.setdefault("is_staff", True)
         extra.setdefault("is_superuser", True)
@@ -105,7 +108,9 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     email_verification_sent_at = models.DateTimeField(null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
 
-    program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="users")
+    # Every account belongs to one programme, except platform administrators, who operate across all of them
+    # (enforced by the `user_programme_unless_platform` constraint below).
+    program = models.ForeignKey(Program, on_delete=models.PROTECT, related_name="users", null=True, blank=True)
 
     # Bare identifiers, not foreign keys — deliberately (MA-12).
     #
@@ -121,6 +126,8 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     facility_id = models.UUIDField(null=True, blank=True)
 
     is_staff = models.BooleanField(default=False)
+    # Set for accounts created with an initial password (the deploy-time platform admin); cleared on the first change.
+    must_change_password = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
@@ -135,7 +142,7 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
             # it being an assumption the scope resolver rests on.
             models.CheckConstraint(
                 check=(
-                    models.Q(role="program_admin", institution_id=None, facility_id=None)
+                    models.Q(role__in=["program_admin", "platform_admin"], institution_id=None, facility_id=None)
                     | models.Q(
                         role__in=["student", "coordinator"],
                         facility_id=None, institution_id__isnull=False,
@@ -146,6 +153,13 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
                     )
                 ),
                 name="user_one_organisation",
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(role="platform_admin", program__isnull=True)
+                    | (~models.Q(role="platform_admin") & models.Q(program__isnull=False))
+                ),
+                name="user_programme_unless_platform",
             ),
             models.UniqueConstraint(
                 fields=["institution_id", "registration_number"],

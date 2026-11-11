@@ -12,6 +12,9 @@ from django.utils import timezone
 @shared_task(bind=True, max_retries=5, default_retry_delay=30)
 def dispatch_outbox_task(self):
     """Reconcile durable outbox rows; the command remains useful locally."""
+    from apps.platform.status import record_dispatch_heartbeat
+
+    record_dispatch_heartbeat()  # lets the platform dashboard tell that the scheduler and worker are running
     try:
         call_command("dispatch_outbox", limit=50)
     except Exception as exc:

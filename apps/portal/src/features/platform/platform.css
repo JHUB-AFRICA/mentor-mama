@@ -1,0 +1,57 @@
+/* Platform administration pages. Built on the programme-admin kit; only layout specific to these pages lives here. */
+
+.pf-meta { font-size: 0.8125rem; color: #52616f; }
+.pf-muted { color: #52616f; }
+.pf-problem { margin: 0; color: #8a5a00; font-size: 0.875rem; }
+.pf-narrow { max-width: 34rem; }
+.pf-form { display: grid; gap: 14px; }
+.pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+@media (max-width: 40rem) { .pf-grid { grid-template-columns: minmax(0, 1fr); } }
+.pf-check-row { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+
+.pf-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 64rem) { .pf-columns { grid-template-columns: minmax(0, 1fr); } }
+
+.pf-checks { list-style: none; margin: 0; padding: 0; }
+.pf-check { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 20px; border-top: 1px solid #e4e8ee; }
+.pf-check:first-child { border-top: 0; }
+.pf-check__icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #ecfdf5; color: #047857; }
+.pf-check__icon svg { width: 18px; height: 18px; }
+.pf-check--warning .pf-check__icon { background: #fffbeb; color: #b45309; }
+.pf-check--down .pf-check__icon { background: #fef2f2; color: #b91c1c; }
+.pf-check--off .pf-check__icon { background: #f1f5f9; color: #64748b; }
+.pf-check__body { display: grid; gap: 2px; min-width: 0; }
+.pf-check__body span { color: #52616f; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.pf-roles { display: grid; gap: 4px; }
+
+.pf-cell-stack { display: grid; gap: 2px; }
+.pf-cell-stack small { color: #52616f; }
+.pf-table-wrap { position: relative; overflow-x: auto; } /* positioned so hidden labels inside stay in the scroll area */
+.pf-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.pf-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #52616f; padding: 12px 16px; border-bottom: 1px solid #e4e8ee; white-space: nowrap; }
+.pf-table td { padding: 12px 16px; border-bottom: 1px solid #eef1f5; vertical-align: middle; }
+.pf-table tbody tr:hover { background: #f8fafb; }
+.pf-table tbody[aria-busy="true"] { opacity: 0.6; }
+.pf-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.pf-requests .pf-actions { justify-content: flex-start; margin-top: 12px; }
+.pf-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; color: #52616f; font-size: 0.8125rem; }
+.pf-pager span { margin-right: auto; }
+
+.pf-requests { display: grid; gap: 12px; }
+.pf-request { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.pf-request__who { display: grid; gap: 2px; }
+.pf-request__who small, .pf-request__tags small { color: #52616f; }
+.pf-request__tags { display: grid; justify-items: end; gap: 4px; }
+.pf-request__reason { margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid #cbd5e1; background: #f8fafb; border-radius: 0 8px 8px 0; white-space: pre-wrap; }
+
+.pf-timeline { list-style: none; margin: 0; padding: 8px 20px; }
+.pf-timeline li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid #eef1f5; }
+.pf-timeline li:first-child { border-top: 0; }
+.pf-timeline p { margin: 0; }
+.pf-timeline time { font-size: 0.75rem; color: #52616f; }
+.pf-timeline__dot { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: #1d8c8c; }
+
+/* Grid children default to min-width: auto, so a long tab row or table would widen the whole page on phones.
+   Let every block shrink to the screen; wide content scrolls inside its own container instead. */
+.pa > * { min-width: 0; max-width: 100%; }
+.pf-grid > * { margin: 0 !important; } /* the kit spaces stacked fields with a top margin; the grid gap does that here */

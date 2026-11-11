@@ -46,6 +46,7 @@ ROLE_LABELS = {
     Role.NURSE_MANAGER: "Nurse Manager",
     Role.COORDINATOR: "University Coordinator",
     Role.PROGRAM_ADMIN: "Programme Administrator",
+    Role.PLATFORM_ADMIN: "Platform Administrator",
 }
 
 
@@ -55,11 +56,14 @@ def policy_summary() -> list[dict]:
         {
             "role": role,
             "label": ROLE_LABELS[role],
-            "mfa_required": role in {Role.PROGRAM_ADMIN, Role.COORDINATOR, Role.NURSE_MANAGER},
-            "scope": "programme" if role == Role.PROGRAM_ADMIN else "institution" if role in {Role.STUDENT, Role.COORDINATOR} else "facility",
+            "mfa_required": role in {Role.PLATFORM_ADMIN, Role.PROGRAM_ADMIN, Role.COORDINATOR, Role.NURSE_MANAGER},
+            "scope": ("platform" if role == Role.PLATFORM_ADMIN else "programme" if role == Role.PROGRAM_ADMIN
+                      else "institution" if role in {Role.STUDENT, Role.COORDINATOR} else "facility"),
             "capabilities": sorted(capability for capability, roles in CAPABILITY_ROLES.items() if role in roles),
         }
+        # Programme admins review the roles inside their programme; the platform role is managed at the platform level.
         for role in Role
+        if role != Role.PLATFORM_ADMIN
     ]
 
 

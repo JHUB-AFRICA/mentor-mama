@@ -22,6 +22,8 @@ export interface CurrentUser {
   email_verified?: boolean;
   /** True when a published consent wording is waiting for this student or mentor to accept. */
   consent_required?: boolean;
+  /** Set for accounts created with an initial password; they must choose their own before doing anything else. */
+  must_change_password?: boolean;
 }
 
 export interface Person {
@@ -1952,6 +1954,8 @@ export async function updateAccountAccess(
 export async function login(
   email: string,
   password: string,
+  /** Which sign-in page is being used. Platform administrators can only sign in at /platform. */
+  portal: "workspace" | "platform" = "workspace",
 ): Promise<LoginResult> {
   const response = await request<{
     data?: {
@@ -1962,7 +1966,7 @@ export async function login(
     } & CurrentUser;
   }>("/api/v1/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, portal }),
   });
   if (response.data?.mfa_required) {
     return {
@@ -3210,4 +3214,156 @@ export async function saveToQuestionBank(question: Omit<QuizPayloadQuestion, "id
 
 export async function archiveBankQuestion(id: string): Promise<void> {
   await request<void>(`/api/v1/training/question-bank/${id}`, { method: "DELETE" });
+}
+
+/* ------------------------------------------------------------------ platform administration */
+
+export type SystemCheck = { name: string; state: "ok" | "warning" | "down" | "off"; detail: string; ms: number };
+export type SystemStatus = {
+  overall: "ok" | "warning" | "down";
+  checks: SystemCheck[];
+  release: string;
+  environment: string;
+  checked_at: string;
+};
+export type PlatformOverview = {
+  programmes: number;
+  accounts: {
+    active: number;
+    invited: number;
+    invitations_expired: number;
+    suspended: number;
+    deactivated: number;
+    by_role: Array<{ role: string; label: string; active: number }>;
+  };
+  support_pending: number;
+  programmes_without_admin: number;
+  signins_last_7_days: number;
+  system: SystemStatus;
+};
+export type PlatformProgramme = {
+  id: string;
+  name: string;
+  short_name: string;
+  academic_year: string;
+  description: string;
+  active_people: number;
+  invited_people: number;
+  active_admins: number;
+  invited_admins: number;
+  created_at: string;
+};
+export type PlatformAccount = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  role_label: string;
+  status: "invited" | "active" | "suspended" | "deactivated";
+  programme_id: string | null;
+  programme: string;
+  invitation: "pending" | "expired" | "not_sent" | null;
+  invitation_sent_at: string | null;
+  last_login: string | null;
+  created_at: string;
+  must_change_password: boolean;
+};
+export type PlatformSupportRequest = {
+  id: string;
+  status: "pending" | "reviewed";
+  reason: string;
+  created_at: string;
+  updated_at: string;
+  handled_by: "platform" | "programme";
+  account: PlatformAccount;
+};
+export type PlatformActivity = {
+  id: string;
+  title: string;
+  actor: string;
+  actor_role: string;
+  subject: string;
+  reason: string;
+  occurred_at: string;
+};
+export type PersonInput = { email: string; first_name: string; last_name: string; phone?: string };
+
+export async function getPlatformOverview(): Promise<PlatformOverview> {
+  return (await request<{ data: PlatformOverview }>("/api/v1/platform/overview")).data;
+}
+
+export async function getPlatformStatus(): Promise<SystemStatus> {
+  return (await request<{ data: SystemStatus }>("/api/v1/platform/status")).data;
+}
+
+export async function getPlatformProgrammes(): Promise<PlatformProgramme[]> {
+  return (await request<{ data: PlatformProgramme[] }>("/api/v1/platform/programmes")).data;
+}
+
+export async function createPlatformProgramme(input: {
+  name: string;
+  short_name?: string;
+  academic_year?: string;
+  description?: string;
+  admin?: PersonInput | null;
+}) {
+  return (await request<{ data: { id: string; name: string; admin_invited: string | null } }>("/api/v1/platform/programmes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })).data;
+}
+
+export async function inviteProgrammeAdmin(programmeId: string, person: PersonInput) {
+  return (await request<{ data: { id: string; email: string } }>(`/api/v1/platform/programmes/${programmeId}/admins`, {
+    method: "POST",
+    body: JSON.stringify(person),
+  })).data;
+}
+
+export async function invitePlatformAdmin(person: PersonInput) {
+  return (await request<{ data: { id: string; email: string } }>("/api/v1/platform/platform-admins", {
+    method: "POST",
+    body: JSON.stringify(person),
+  })).data;
+}
+
+export async function getPlatformAccounts(params: Record<string, string | number>) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== "").map(([key, value]) => [key, String(value)]));
+  return (await request<{ data: { results: PlatformAccount[]; pagination: { page: number; pages: number; total: number } } }>(
+    `/api/v1/platform/accounts?${query.toString()}`,
+  )).data;
+}
+
+export async function setPlatformAccountStatus(id: string, status: "active" | "suspended" | "deactivated", reason: string) {
+  return (await request<{ data: { id: string; status: string } }>(`/api/v1/platform/accounts/${id}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status, reason }),
+  })).data;
+}
+
+export async function revokePlatformAccountSessions(id: string, reason: string) {
+  return (await request<{ data: { revoked_count: number } }>(`/api/v1/platform/accounts/${id}/sessions/revoke`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  })).data;
+}
+
+export async function resendPlatformInvitation(id: string) {
+  return (await request<{ data: { id: string } }>(`/api/v1/platform/accounts/${id}/invitation/resend`, { method: "POST", body: "{}" })).data;
+}
+
+export async function getPlatformSupportRequests(): Promise<PlatformSupportRequest[]> {
+  return (await request<{ data: PlatformSupportRequest[] }>("/api/v1/platform/support-requests")).data;
+}
+
+export async function resolvePlatformSupportRequest(id: string, decision: "recover" | "close", reason: string) {
+  return (await request<{ data: { reviewed: boolean } }>(`/api/v1/platform/support-requests/${id}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ decision, reason }),
+  })).data;
+}
+
+export async function getPlatformActivity(): Promise<PlatformActivity[]> {
+  return (await request<{ data: PlatformActivity[] }>("/api/v1/platform/activity")).data;
 }

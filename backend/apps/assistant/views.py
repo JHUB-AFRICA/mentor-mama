@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from apps.assistant import navigation, service
 from apps.assistant.serializers import ChatSerializer
 from apps.core.ai import is_configured
+from apps.identity.models import Role
 
 
 class MentaThrottle(SimpleRateThrottle):
@@ -28,6 +29,9 @@ class MentaChatView(APIView):
     throttle_classes = [MentaThrottle]
 
     def post(self, request):
+        if request.user.role == Role.PLATFORM_ADMIN:
+            # Menta answers from programme guides and content; the platform level belongs to no programme.
+            return _error("not_available", "Menta is not available in platform administration.", status.HTTP_403_FORBIDDEN)
         if not is_configured():
             return _error("ai_unavailable", "Menta is not available right now.", status.HTTP_503_SERVICE_UNAVAILABLE)
         payload = ChatSerializer(data=request.data)

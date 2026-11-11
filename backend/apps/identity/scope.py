@@ -14,7 +14,7 @@ from uuid import UUID
 class Scope:
     user_id: UUID
     role: str
-    program_id: UUID
+    program_id: UUID | None
     institution_id: UUID | None = None
     facility_id: UUID | None = None
     ward_ids: tuple[UUID, ...] = field(default_factory=tuple)
@@ -27,7 +27,7 @@ class Scope:
         return {
             "user_id": str(self.user_id),
             "role": self.role,
-            "program_id": str(self.program_id),
+            "program_id": str(self.program_id) if self.program_id else None,
             "institution_id": str(self.institution_id) if self.institution_id else None,
             "facility_id": str(self.facility_id) if self.facility_id else None,
         }
