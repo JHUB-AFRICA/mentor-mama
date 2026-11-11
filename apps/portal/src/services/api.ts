@@ -2261,6 +2261,7 @@ export type ArrangeRow = {
 };
 export type ArrangePlan = {
   seed: string;
+  plan_hash: string;
   strategy: "balanced" | "fill";
   assignments: ArrangeRow[];
   unplaced: ArrangeRow[];
@@ -2274,6 +2275,7 @@ export type ArrangePlan = {
   };
 };
 export type ArrangeResult = {
+  run_id?: string;
   seed: string;
   arranged: ArrangeRow[];
   unplaced: ArrangeRow[];
@@ -2284,6 +2286,7 @@ export type ArrangeInput = {
   assign_mentors: boolean;
   seed?: string;
   placement_ids?: string[];
+  expected_plan_hash?: string;
 };
 
 /** Draft placements that coordinators have requested of this facility. */

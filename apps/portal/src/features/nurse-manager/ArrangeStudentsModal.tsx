@@ -37,7 +37,7 @@ export function ArrangeStudentsModal({ open, onClose, incomingCount }: { open: b
     gcTime: 0,
   });
   const apply = useMutation({
-    mutationFn: () => applyAutoArrange(input),
+    mutationFn: () => applyAutoArrange({ ...input, expected_plan_hash: plan?.plan_hash }),
     onSuccess: (data) => {
       setResult(data);
       pushToast({ kind: "success", title: "Students arranged", message: `${data.summary.arranged} placed. Mentors and the coordinator have been notified.` });

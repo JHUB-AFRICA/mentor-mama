@@ -536,12 +536,17 @@ class AutoArrangeView(APIView):
         data["seed"] = data.get("seed") or None
         data["facility_id"] = data.get("facility_id")
         if preview:
+            data.pop("expected_plan_hash", None)
             return Response({"data": allocation.plan_auto_arrange(actor=request.user, **data)})
+        data["expected_plan_hash"] = data.get("expected_plan_hash") or None
         with IdempotentCommand(request, "auto_arrange_placements") as command:
             if command.replayed:
-                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+                from apps.placements.models import AllocationRun
+
+                stored = AllocationRun.objects.filter(id=command.result_ref, actor=request.user).first()
+                return Response({"data": stored.result if stored else {"replayed": True}, "meta": {"idempotency_replayed": True}})
             result = allocation.apply_auto_arrange(actor=request.user, **data)
-            command.record(UUID(int=0))
+            command.record(UUID(result["run_id"]))
         return Response({"data": result}, status=status.HTTP_201_CREATED)
 
 

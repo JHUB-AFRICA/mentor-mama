@@ -293,6 +293,10 @@ class AllocationRun(BaseModel):
     strategy = models.CharField(max_length=24)
     seed = models.CharField(max_length=40)
     summary = models.JSONField(default=dict)
+    # The run is recorded before any student is touched, so a crash leaves an explainable trail.
+    status = models.CharField(max_length=16, default="completed")  # running | completed | partial | failed
+    plan_hash = models.CharField(max_length=64, blank=True, default="")
+    result = models.JSONField(default=dict, blank=True)  # stored so an idempotent replay can return the real outcome
 
     class Meta:
         db_table = "placements_allocation_run"

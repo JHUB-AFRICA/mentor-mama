@@ -652,3 +652,33 @@ def test_safety_and_security_emails_ignore_notification_opt_outs(student):
     for mandatory in ("EscalationRaised", "EscalationStatusChanged", "PasswordResetRequested", "SecurityNotificationRequested"):
         assert _optional_email_enabled(user_id=student.id, event_type=mandatory) is True
     assert _optional_email_enabled(user_id=student.id, event_type="PlacementPaused") is False
+
+
+def test_auto_arrange_applies_only_the_reviewed_plan_and_keeps_a_replayable_run(program, institution, cohort, coordinator, nurse_manager, facility, ward, mentor):
+    import uuid
+
+    from rest_framework.test import APIClient
+
+    from apps.placements.models import AllocationRun
+
+    ids = _requested_drafts(program, institution, cohort, coordinator, facility, 2)
+    manager = APIClient()
+    manager.force_authenticate(nurse_manager)
+    body = {"seed": "seed1234", "strategy": "balanced", "assign_mentors": True}
+    plan = manager.post("/api/v1/placements/auto-arrange", {**body, "preview": True}, format="json").json()["data"]
+    assert len(plan["plan_hash"]) == 64 and plan["summary"]["arranged"] == 2
+
+    stale = manager.post("/api/v1/placements/auto-arrange", {**body, "expected_plan_hash": "0" * 64}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert stale.status_code in {400, 409, 422}
+    assert not AllocationRun.objects.exists()  # nothing happened, nothing recorded
+
+    key = str(uuid.uuid4())
+    applied = manager.post("/api/v1/placements/auto-arrange", {**body, "expected_plan_hash": plan["plan_hash"]}, format="json", HTTP_IDEMPOTENCY_KEY=key)
+    assert applied.status_code == 201, applied.content
+    run = AllocationRun.objects.get()
+    assert run.status in {"completed", "partial"} and run.plan_hash == plan["plan_hash"]
+    assert run.result["summary"]["arranged"] == applied.json()["data"]["summary"]["arranged"]
+
+    replay = manager.post("/api/v1/placements/auto-arrange", {**body, "expected_plan_hash": plan["plan_hash"]}, format="json", HTTP_IDEMPOTENCY_KEY=key)
+    assert replay.json()["data"]["run_id"] == str(run.id)  # the real outcome, not an empty acknowledgement
+    del ids

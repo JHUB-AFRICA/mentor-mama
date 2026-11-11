@@ -20,6 +20,7 @@ result that was reviewed. The seed is stored with the run for repeatability.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import random
 import secrets
 from collections import defaultdict
@@ -34,10 +35,6 @@ from apps.learning import api as learning
 from apps.placements import events, services
 from apps.placements.models import AllocationRun, MentorAssignment, Placement, State, StudentAssignment, WardAssignment  # noqa: F401
 
-#: Placements that hold, or will hold, a ward place during their window.
-PIPELINE_STATES = [
-    State.SCHEDULED, State.AWAITING_STUDENT, State.ORIENTATION, State.INDUCTION, State.ACTIVE, State.PAUSED, State.DRAFT,
-]
 STRATEGIES = {"balanced", "fill"}
 
 
@@ -52,11 +49,7 @@ def _student_name(placement_id) -> str:
 
 
 def _ward_load(ward_id, start: dt.date, end: dt.date) -> int:
-    """Students already holding a place on this ward at any point in the window."""
-    return WardAssignment.objects.filter(
-        ward_id=ward_id, ended_at=None, placement__state__in=PIPELINE_STATES,
-        placement__planned_start__lte=end, placement__planned_end__gte=start,
-    ).count()
+    return services.ward_load(ward_id, start, end)
 
 
 def facility_free_capacity(facility_id, start: dt.date, end: dt.date, program_id) -> int:
@@ -185,6 +178,12 @@ def incoming(*, actor, facility_id=None):
     return Placement.objects.filter(state=State.DRAFT, facility_id=None, requested_facility_id=facility).select_related("cohort").order_by("planned_start", "created_at")
 
 
+def _plan_hash(rows) -> str:
+    """Fingerprint of exactly who goes where, so apply can refuse a plan the manager did not review."""
+    parts = sorted(f"{r['placement_id']}:{r['ward']['id']}:{r['mentor']['id'] if r['mentor'] else '-'}" for r in rows)
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
 def plan_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy: str = "balanced", seed: str | None = None, assign_mentors: bool = True) -> dict:
     identity.require_capability(actor, "arrange_placements")
     if strategy not in STRATEGIES:
@@ -250,6 +249,7 @@ def plan_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy: 
 
     return {
         "seed": seed, "strategy": strategy, "facility_id": str(facility),
+        "plan_hash": _plan_hash(placed),
         "assignments": placed, "unplaced": unplaced,
         "summary": {
             "incoming": len(candidates), "arranged": len(placed), "unplaced": len(unplaced),
@@ -263,9 +263,16 @@ def plan_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy: 
     }
 
 
-def apply_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy: str = "balanced", seed: str | None = None, assign_mentors: bool = True) -> dict:
+def apply_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy: str = "balanced", seed: str | None = None, assign_mentors: bool = True, expected_plan_hash: str | None = None) -> dict:
     plan = plan_auto_arrange(actor=actor, facility_id=facility_id, placement_ids=placement_ids, strategy=strategy, seed=seed, assign_mentors=assign_mentors)
+    if expected_plan_hash and expected_plan_hash != plan["plan_hash"]:
+        raise errors.InvalidTransition("Things changed since you reviewed this arrangement. Please review it again before confirming.")
     facility = UUID(plan["facility_id"])
+    # Record the run first, in its own transaction, so a crash part-way leaves a trail.
+    run = AllocationRun.objects.create(
+        mode=AllocationRun.Mode.AUTO_ARRANGE, facility_id=facility, actor=actor, strategy=plan["strategy"], seed=plan["seed"],
+        plan_hash=plan["plan_hash"], status="running", summary={"planned": len(plan["assignments"])},
+    )
     done, failed = [], []
     per_mentor = defaultdict(int)
     institutions = set()
@@ -294,17 +301,18 @@ def apply_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy:
                 identity.users(role=identity.ROLES.COORDINATOR, status=identity.STATUSES.ACTIVE, institution_id=institution_id).values_list("id", flat=True)
             )
             outbox.publish(events.PlacementsArranged(facility_id=facility, arranged=len(done), unplaced=len(unplaced), recipient_user_ids=coordinators))
-        AllocationRun.objects.create(
-            mode=AllocationRun.Mode.AUTO_ARRANGE, facility_id=facility, actor=actor, strategy=plan["strategy"], seed=plan["seed"],
-            summary={"arranged": len(done), "unplaced": len(unplaced), "mentors_notified": len(per_mentor)},
-        )
         if done:
             audit.record(
                 actor=actor, action="placement.auto_arrange", entity_table="placements_placement", entity_id=UUID(done[0]["placement_id"]),
                 scope={"program_id": str(actor.program_id), "facility_id": str(facility)},
                 changes={"arranged": len(done), "unplaced": len(unplaced), "strategy": plan["strategy"], "seed": plan["seed"]},
             )
-    return {
-        "seed": plan["seed"], "strategy": plan["strategy"], "arranged": done, "unplaced": unplaced,
+    result = {
+        "run_id": str(run.id), "seed": plan["seed"], "strategy": plan["strategy"], "arranged": done, "unplaced": unplaced,
         "summary": {"arranged": len(done), "unplaced": len(unplaced), "mentors_notified": len(per_mentor)},
     }
+    run.status = "completed" if not unplaced else ("partial" if done else "failed")
+    run.summary = {**result["summary"], "planned": len(plan["assignments"])}
+    run.result = result
+    run.save(update_fields=["status", "summary", "result", "updated_at"])
+    return result

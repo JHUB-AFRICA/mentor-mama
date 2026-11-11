@@ -271,6 +271,27 @@ def _announce_override(placement, *, what: str, actor, reason: str) -> None:
         outbox.publish(events.ArrangementOverridden(placement_id=placement.id, what=what, recipient_user_ids=managers))
 
 
+#: Placements that hold, or will hold, a ward place during their window.
+WARD_PIPELINE_STATES = [
+    State.DRAFT, State.SCHEDULED, State.AWAITING_STUDENT, State.ORIENTATION, State.INDUCTION, State.ACTIVE, State.PAUSED,
+]
+
+
+def ward_load(ward_id, start, end, *, exclude_placement_id=None) -> int:
+    """Students holding a place on this ward at any point in the window.
+
+    The one capacity rule used by both the automatic plan and manual allocation, so a
+    reviewed preview and the real action can never disagree.
+    """
+    rows = WardAssignment.objects.filter(
+        ward_id=ward_id, ended_at=None, placement__state__in=WARD_PIPELINE_STATES,
+        placement__planned_start__lte=end, placement__planned_end__gte=start,
+    )
+    if exclude_placement_id:
+        rows = rows.exclude(placement_id=exclude_placement_id)
+    return rows.count()
+
+
 def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor, override_reason: str | None = None) -> Placement:
     override_reason = _override_reason(override_reason)
     identity.require_capability(actor, "allocate_ward" if override_reason is None else "override_arrangement")
@@ -285,9 +306,7 @@ def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor, override_reason: 
         # the ward they are admitting into; the placement facility is derived
         # only after this check succeeds (INV-17).
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=ward.facility_id)
-        occupied = WardAssignment.objects.filter(
-            ward_id=ward_id, ended_at=None, placement__state__in=OCCUPYING_STATES
-        ).count()
+        occupied = ward_load(ward_id, placement.planned_start, placement.planned_end, exclude_placement_id=placement.id)
         if occupied >= ward.max_students:
             raise errors.WardCapacityExceeded(occupied=occupied, capacity=ward.max_students)
 

@@ -169,6 +169,7 @@ class AutoArrangeSerializer(serializers.Serializer):
     strategy = serializers.ChoiceField(choices=["balanced", "fill"], default="balanced")
     seed = serializers.RegexField(r"^[a-zA-Z0-9]{4,40}$", required=False, allow_blank=True)
     assign_mentors = serializers.BooleanField(required=False, default=True)
+    expected_plan_hash = serializers.RegexField(r"^[a-f0-9]{64}$", required=False, allow_blank=True)
     preview = serializers.BooleanField(required=False, default=False)
 
 
