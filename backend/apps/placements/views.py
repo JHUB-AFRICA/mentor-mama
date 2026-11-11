@@ -190,12 +190,13 @@ class PlacementActivityView(APIView):
         entries = selectors.activity(scope, placement_id)
         if entries is None:
             raise UnauthorizedFacilityAccess()
+        from apps.core import activity_feed
+        items = activity_feed.describe_many(entries, request.user, scope_view=True)
         return Response({"data": [{
-            "id": str(entry.id), "action": entry.action,
-            "actor": entry.actor.full_name, "actor_role": entry.actor_role,
-            "occurred_at": entry.occurred_at.isoformat(),
-            "changes": entry.changes or {}, "override_reason": entry.override_reason,
-        } for entry in entries]})
+            "id": item["id"], "action": item["title"], "title": item["title"], "summary": item["summary"],
+            "actor": item["actor"], "actor_role": item["actor_role"], "occurred_at": item["occurred_at"].isoformat(),
+            "details": item["details"], "changes": {}, "override_reason": None,
+        } for item in items]})
 
 
 class PlacementNotesView(APIView):

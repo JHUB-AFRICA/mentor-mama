@@ -35,12 +35,16 @@ class EscalationDetailView(APIView):
 
     def get(self, request, escalation_id):
         row = Escalation.objects.select_related("placement__cohort__institution", "submitted_by", "reviewer").filter(id=escalation_id).first()
+        if row and not services.can_read_detail(request.user, row) and services.can_review(request.user, row):
+            # In scope but not the assigned reviewer: show the queue metadata only. The narrative is
+            # released when the person takes the concern, which is audited (docs/decisions/0029).
+            return Response({"data": {**_list_shape(row), "access": "summary", "can_claim": row.reviewer_id is None and row.state == "open"}})
         if not row or not services.can_read_detail(request.user, row):
             from apps.core.errors import EscalationAccessDenied
             raise EscalationAccessDenied()
         from apps.core import audit
         audit.record(actor=request.user, action="escalation.read_sensitive", entity_table="safeguarding_escalation", entity_id=row.id)
-        return Response({"data": {**_list_shape(row), "description": row.description, "finding": row.finding,
+        return Response({"data": {**_list_shape(row), "access": "full", "can_claim": False, "description": row.description, "finding": row.finding,
                                    "action_taken": row.action_taken, "resolution_outcome": row.resolution_outcome,
                                    "referral_note": row.referral_note, "closure_date": row.closure_date.isoformat() if row.closure_date else None,
                                    "submitted_by": row.submitted_by.full_name, "reviewer_id": str(row.reviewer_id) if row.reviewer_id else None}})

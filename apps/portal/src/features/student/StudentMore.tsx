@@ -58,6 +58,10 @@ export function StudentMore({
           </p>
         </div>
 
+        <Link to="/student?view=activity" className="student-more-action" style={{ marginBottom: 16, display: "inline-flex" }}>
+          View your activity <ArrowRight size={16} />
+        </Link>
+
         {placements.length > 1 && (
           <label className="student-more-placement-picker">
             <span>Placement</span>

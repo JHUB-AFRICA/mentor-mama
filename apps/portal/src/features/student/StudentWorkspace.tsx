@@ -10,6 +10,7 @@ import { StudentMore } from "./StudentMore";
 import { getStudentProfile, type StudentProfile } from "../../services/api";
 import { Button, Skeleton } from "@mentormama/ui";
 import { ContentLibrary } from "../content/ContentLibrary";
+import { MyActivity } from "../activity/MyActivity";
 import { ContentDetailScreen } from "../content/ContentDetailScreen";
 
 type Props = WorkspaceProps & {
@@ -257,6 +258,14 @@ export function StudentWorkspace(props: Props) {
       >
         <div className="student-page-container">
           <ContentLibrary user={props.user} onError={props.onError} />
+        </div>
+      </StudentWorkspaceFrame>
+    );
+  if (params.get("view") === "activity")
+    return (
+      <StudentWorkspaceFrame user={props.user} title="Activity" active="more">
+        <div className="student-page-container">
+          <MyActivity eyebrow="Student workspace" />
         </div>
       </StudentWorkspaceFrame>
     );

@@ -81,7 +81,7 @@ def raise_concern(cmd: RaiseConcern, *, actor):
     return row
 
 
-def _can_review(actor, row) -> bool:
+def can_review(actor, row) -> bool:
     if actor.status != Status.ACTIVE or actor.role not in {Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}:
         return False
     if actor.role == Role.PROGRAM_ADMIN:
@@ -101,8 +101,8 @@ def can_read_detail(actor, row) -> bool:
     if actor.id == row.submitted_by_id:
         return True
     if actor.role == Role.PROGRAM_ADMIN:
-        return _can_review(actor, row)
-    return row.reviewer_id == actor.id and _can_review(actor, row)
+        return can_review(actor, row)
+    return row.reviewer_id == actor.id and can_review(actor, row)
 
 
 def list_for(actor):
@@ -126,7 +126,10 @@ def list_for(actor):
 def assign_reviewer(row_id: UUID, reviewer_id: UUID, *, actor):
     row = Escalation.objects.select_for_update(of=("self",)).select_related("placement__cohort__institution").filter(id=row_id).first()
     reviewer = User.objects.filter(id=reviewer_id, status=Status.ACTIVE).first()
-    if not row or not reviewer or not _can_review(actor, row) or reviewer.id == row.submitted_by_id:
+    if not row or not reviewer or not can_review(actor, row) or reviewer.id == row.submitted_by_id:
+        raise errors.EscalationAccessDenied()
+    # A concern held by one reviewer is not silently taken over; only a programme admin may reassign it.
+    if row.reviewer_id and row.reviewer_id != actor.id and actor.role != Role.PROGRAM_ADMIN:
         raise errors.EscalationAccessDenied()
     if reviewer.role not in {Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN} or reviewer.program_id != actor.program_id:
         raise errors.EscalationAccessDenied()
@@ -144,7 +147,7 @@ def assign_reviewer(row_id: UUID, reviewer_id: UUID, *, actor):
 
 def _reviewer_row(row_id, actor):
     row = Escalation.objects.select_for_update(of=("self",)).select_related("placement__cohort__institution").filter(id=row_id).first()
-    if not row or row.reviewer_id != actor.id or not _can_review(actor, row):
+    if not row or row.reviewer_id != actor.id or not can_review(actor, row):
         raise errors.EscalationAccessDenied()
     return row
 
@@ -180,7 +183,7 @@ def record_action(row_id: UUID, action_taken: str, *, actor, resolution_outcome=
 @transaction.atomic
 def close(row_id: UUID, closure_date, *, actor):
     row = Escalation.objects.select_for_update(of=("self",)).select_related("placement__cohort__institution").filter(id=row_id).first()
-    if not row or row.state != EscalationState.RESOLVED or not row.action_taken or not _can_review(actor, row):
+    if not row or row.state != EscalationState.RESOLVED or not row.action_taken or not can_review(actor, row):
         raise errors.InvalidEscalationTransition()
     if row.reviewer_id not in {actor.id, None} and actor.role not in {Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}:
         raise errors.EscalationAccessDenied()

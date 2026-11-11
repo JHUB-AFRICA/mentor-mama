@@ -188,10 +188,27 @@ function ConcernDrawer({ id, user, onClose, onError }: { id: string | null; user
         <PortalErrorState onRetry={() => void detail.refetch()} />
       ) : (
         <div className="cq-detail">
-          <section>
-            <h3>What was reported</h3>
-            <p>{item.description}</p>
-          </section>
+          {item.access === "summary" ? (
+            <>
+              <Notice icon={<ShieldCheck />}>
+                {item.can_claim
+                  ? "This concern is waiting for a reviewer. Take it to read the report and record your next step. Opening the report is recorded in the audit trail."
+                  : item.reviewer
+                    ? `${item.reviewer} is reviewing this concern. Only the assigned reviewer can read the report.`
+                    : "Only the assigned reviewer can read the report."}
+              </Notice>
+              {item.can_claim && (
+                <AdminButton icon={<UserCheck />} disabled={run.isPending} onClick={() => run.mutate(() => assignEscalationReviewer(item.id, user.id))}>
+                  Take this concern
+                </AdminButton>
+              )}
+            </>
+          ) : (
+            <section>
+              <h3>What was reported</h3>
+              <p>{item.description}</p>
+            </section>
+          )}
           {item.finding && (
             <section>
               <h3>Finding</h3>
@@ -208,7 +225,7 @@ function ConcernDrawer({ id, user, onClose, onError }: { id: string | null; user
             </section>
           )}
 
-          {item.state === "open" && (
+          {item.access === "full" && item.state === "open" && (
             <AdminButton icon={<UserCheck />} disabled={run.isPending} onClick={() => run.mutate(() => assignEscalationReviewer(item.id, user.id))}>
               Assign to me
             </AdminButton>
@@ -240,12 +257,12 @@ function ConcernDrawer({ id, user, onClose, onError }: { id: string | null; user
               </AdminButton>
             </>
           )}
-          {item.state === "resolved" && (
+          {item.access === "full" && item.state === "resolved" && (
             <AdminButton disabled={run.isPending} onClick={() => run.mutate(() => closeEscalation(item.id))}>
               Close concern
             </AdminButton>
           )}
-          {(item.state === "under_review" || item.state === "action_required") && !mine && (
+          {item.access === "full" && (item.state === "under_review" || item.state === "action_required") && !mine && (
             <Notice icon={<ShieldCheck />}>This concern is assigned to another reviewer. Only they can record the next step.</Notice>
           )}
         </div>

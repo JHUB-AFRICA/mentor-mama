@@ -299,7 +299,11 @@ def test_escalation_list_omits_narrative_and_detail_is_reviewer_scoped(active_pl
     listed = client_for(nurse_manager).get("/api/v1/escalations", **HEADERS)
     assert listed.status_code == 200
     assert "description" not in listed.json()["data"][0]
-    assert client_for(coordinator).get(f"/api/v1/escalations/{escalation_id}", **HEADERS).status_code == 404
+    # In scope but not the reviewer: queue metadata and the option to take it, never the narrative.
+    summary = client_for(coordinator).get(f"/api/v1/escalations/{escalation_id}", **HEADERS)
+    assert summary.status_code == 200
+    assert summary.json()["data"]["access"] == "summary" and summary.json()["data"]["can_claim"] is True
+    assert "description" not in summary.json()["data"]
     assigned = client_for(nurse_manager).post(
         f"/api/v1/escalations/{escalation_id}/assign-reviewer", {"reviewer_id": str(nurse_manager.id)},
         format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
@@ -308,6 +312,14 @@ def test_escalation_list_omits_narrative_and_detail_is_reviewer_scoped(active_pl
     detail = client_for(nurse_manager).get(f"/api/v1/escalations/{escalation_id}", **HEADERS)
     assert detail.status_code == 200
     assert detail.json()["data"]["description"] == "A private concern requiring authorised review."
+    # Once held by the nurse manager, the coordinator can no longer claim it or read it.
+    held = client_for(coordinator).get(f"/api/v1/escalations/{escalation_id}", **HEADERS).json()["data"]
+    assert held["access"] == "summary" and held["can_claim"] is False and "description" not in held
+    takeover = client_for(coordinator).post(
+        f"/api/v1/escalations/{escalation_id}/assign-reviewer", {"reviewer_id": str(coordinator.id)},
+        format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
+    )
+    assert takeover.status_code == 404
 
 
 # --- idempotency (ADR 0012, T-03) -----------------------------------------
@@ -1010,3 +1022,26 @@ def test_every_mapped_constraint_exists_in_the_database():
         if name not in names and name not in not_yet_built
     }
     assert not missing, f"mapped but absent from the database: {sorted(missing)}"
+
+
+# --- activity is personal and plain-language ---------------------------------
+def test_activity_shows_only_the_signed_in_persons_related_activity(active_placement, student, nurse_manager, coordinator):
+    from apps.core import audit
+
+    audit.record(actor=coordinator, action="cohort.created", entity_table="cohorts_cohort", entity_id=uuid.uuid4(),
+                 scope={"program_id": str(coordinator.program_id), "institution_id": str(coordinator.institution_id)}, changes={"name": "Secret cohort"})
+    audit.record(actor=nurse_manager, action="placement.allocate_ward", entity_table="placements_placement", entity_id=active_placement.id,
+                 scope={"program_id": str(nurse_manager.program_id), "facility_id": str(nurse_manager.facility_id)}, changes={"ward_id": str(uuid.uuid4())})
+    audit.record(actor=nurse_manager, action="escalation.raise", entity_table="safeguarding_escalation", entity_id=uuid.uuid4(), scope={})
+
+    nm_feed = client_for(nurse_manager).get("/api/v1/activity", **HEADERS).json()["data"]["results"]
+    titles = [row["title"] for row in nm_feed]
+    assert "You allocated a ward" in titles
+    assert "Cohort created" not in titles and "You created a cohort" not in titles  # someone else's work
+    assert all(set(row) >= {"title", "summary", "actor", "occurred_at"} for row in nm_feed)
+    assert "action" not in nm_feed[0] and "changes" not in nm_feed[0] and "entity_id" not in nm_feed[0]
+
+    student_feed = client_for(student).get("/api/v1/activity", **HEADERS).json()["data"]["results"]
+    assert any(row["title"] == "Ward allocated" for row in student_feed)  # done to the student's placement
+    assert not any("concern" in row["title"].lower() for row in student_feed)  # safeguarding never leaks
+    assert "Secret cohort" not in str(student_feed)

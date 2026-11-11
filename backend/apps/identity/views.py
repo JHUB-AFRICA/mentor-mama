@@ -651,9 +651,10 @@ class PersonActivityView(APIView):
         from apps.core.models import AuditEntry
         rows = AuditEntry.objects.filter(entity_table="identity_user", entity_id=target.id,
             scope__program_id=str(request.user.program_id)).select_related("actor").order_by("-occurred_at")[:30]
-        return Response({"data": [{"id": str(row.id), "action": row.action,
-            "actor_name": row.actor.full_name, "actor_role": row.actor_role,
-            "occurred_at": row.occurred_at} for row in rows]})
+        from apps.core import activity_feed
+        return Response({"data": [{"id": item["id"], "action": item["title"],
+            "actor_name": item["actor"], "actor_role": item["actor_role"],
+            "occurred_at": item["occurred_at"]} for item in activity_feed.describe_many(rows, request.user, scope_view=True)]})
 
 
 class SessionListView(APIView):

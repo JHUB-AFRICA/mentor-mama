@@ -93,6 +93,7 @@ class ActivityQuerySerializer(serializers.Serializer):
     cohort_id = serializers.UUIDField(required=False)
     placement_id = serializers.UUIDField(required=False)
     action = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    category = serializers.CharField(max_length=32, required=False, allow_blank=True)
     date_from = serializers.DateField(required=False)
     date_to = serializers.DateField(required=False)
 

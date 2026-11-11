@@ -53,12 +53,16 @@ export interface PeoplePage {
 
 export interface ActivityEntry {
   id: string;
-  action: string;
+  /** Plain-language headline, e.g. "Mentor assigned" or "You logged a session". */
+  title: string;
+  /** Who or what it concerned, e.g. "Student: Jane Doe · Kenyatta". */
+  summary: string;
   actor: string;
   actor_role: string;
+  by_me: boolean;
+  category: string;
   occurred_at: string;
-  changes: Record<string, unknown>;
-  entity_id: string;
+  details: Array<{ label: string; value: string }>;
 }
 
 export interface ActivityPage {
@@ -877,14 +881,17 @@ export interface EscalationSummary {
   reviewer: string | null;
 }
 export interface EscalationDetail extends EscalationSummary {
-  description: string;
-  finding: string | null;
-  action_taken: string | null;
-  resolution_outcome: string | null;
-  referral_note: string | null;
-  closure_date: string | null;
-  submitted_by: string;
-  reviewer_id: string | null;
+  /** "summary" = in scope but not the assigned reviewer: no narrative until the concern is taken. */
+  access: "full" | "summary";
+  can_claim: boolean;
+  description?: string;
+  finding?: string | null;
+  action_taken?: string | null;
+  resolution_outcome?: string | null;
+  referral_note?: string | null;
+  closure_date?: string | null;
+  submitted_by?: string;
+  reviewer_id?: string | null;
 }
 
 export async function getEscalations(): Promise<EscalationSummary[]> {
@@ -1174,6 +1181,7 @@ export async function getActivity(
     cohort_id?: string;
     placement_id?: string;
     action?: string;
+    category?: string;
     date_from?: string;
     date_to?: string;
   } = {},

@@ -10,6 +10,7 @@ import { AccountSettings } from "../auth/AccountSettings";
 import { MentorWorkspaceFrame } from "./MentorWorkspaceFrame";
 import { TrainingWorkspace } from "../training/TrainingWorkspace";
 import { ContentLibrary } from "../content/ContentLibrary";
+import { MyActivity } from "../activity/MyActivity";
 import { ContentDetailScreen } from "../content/ContentDetailScreen";
 
 export function MentorWorkspace(props: WorkspaceProps & { onSignedOut: () => void; onUserUpdated: (user: WorkspaceProps["user"]) => void }) {
@@ -35,6 +36,7 @@ export function MentorWorkspace(props: WorkspaceProps & { onSignedOut: () => voi
   }
   const view = params.get("view");
   if (view === "training") return <MentorWorkspaceFrame user={props.user} title="Training" active="training"><div className="mx-auto w-full max-w-[74rem] px-5 py-8 sm:px-8 lg:px-12"><TrainingWorkspace onError={props.onError} /></div></MentorWorkspaceFrame>;
+  if (view === "activity") return <MentorWorkspaceFrame user={props.user} title="Activity" active="more"><div className="mx-auto w-full max-w-[74rem] px-5 py-8 sm:px-8 lg:px-12"><MyActivity eyebrow="Clinical practice" /></div></MentorWorkspaceFrame>;
   if (view === "library") return <MentorWorkspaceFrame user={props.user} title="Library" active="library"><div className="mx-auto w-full max-w-[74rem] px-5 py-8 sm:px-8 lg:px-12"><ContentLibrary user={props.user} onError={props.onError} /></div></MentorWorkspaceFrame>;
   if (!view || view === "today") {
     return <MentorToday user={props.user} placements={props.placements} error={props.error} onClearError={props.onClearError} />;

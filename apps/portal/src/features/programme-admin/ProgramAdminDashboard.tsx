@@ -1100,28 +1100,11 @@ function displayCount(isPending: boolean, isError: boolean, count: number) {
 }
 
 function RecentActivity({ entry }: { entry: ActivityEntry }) {
-  const labels: Record<string, string> = {
-    "account.invited": "invited a team member",
-    "account.invitation_resent": "resent an invitation",
-    "account.status_changed": "changed account access",
-    "account.activated": "activated an account",
-    "account.mfa_enabled": "enabled multi-factor authentication",
-    "account.profile_updated": "updated account details",
-    "account.mfa_recovery_override": "completed MFA recovery",
-    "content.published": "published programme content",
-  };
   return (
     <ListRow
       icon={<Activity />}
-      title={
-        <>
-          {entry.actor}{" "}
-          <span className="font-normal text-navy-muted">
-            {labels[entry.action] ?? formatActivityLabel(entry.action)}
-          </span>
-        </>
-      }
-      meta={`${entry.actor_role.replaceAll("_", " ")} · ${relativeTime(entry.occurred_at)}`}
+      title={entry.title}
+      meta={`${entry.by_me ? "You" : entry.actor}${entry.summary ? ` · ${entry.summary}` : ""} · ${relativeTime(entry.occurred_at)}`}
     />
   );
 }
@@ -1142,9 +1125,6 @@ function ActivitySkeleton() {
   );
 }
 
-function formatActivityLabel(action: string) {
-  return action.replaceAll(".", " · ").replaceAll("_", " ");
-}
 function relativeTime(value: string) {
   const minutes = Math.max(
     1,
