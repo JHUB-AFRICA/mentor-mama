@@ -10,12 +10,14 @@
 #   mentormama-cache     Key Value (cache, may evict)
 #   mentormama-broker    Key Value (Celery queue, never evicts)
 #
-# BEFORE THE FIRST DEPLOY — create the secrets group once (Dashboard > Env Groups > New), named exactly
-# `mentormama-secrets`. Blueprints cannot hold secrets in a group, and the API and the worker must share the same
-# SECRET_KEY (invitation and reset links are signed with it). Keys:
+# FIRST SYNC — this file creates an env group named `mentormama-secrets` with the keys below but NO values (values
+# never belong in git, and Blueprints cannot hold secrets in a group). Right after the first sync, open
+# Dashboard > Env Groups > mentormama-secrets and fill them in; the services redeploy when you save. The API and the
+# worker share this group on purpose: invitation and reset links are signed with SECRET_KEY, so every service
+# must have the same one.
 #   SECRET_KEY               openssl rand -hex 32
 #   RESEND_API_KEY           Resend > API keys (sending access, domain sinapstechnology.tech)
-#   RESEND_SIGNING_SECRET    Resend > Webhooks > the endpoint below > Signing secret (starts with whsec_)
+#   RESEND_SIGNING_SECRET    leave empty until step 1 below, then the endpoint's signing secret (whsec_...)
 #   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   for the private export bucket (any S3-compatible store)
 #   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION
@@ -23,7 +25,7 @@
 # AFTER THE FIRST DEPLOY
 #   1. Resend > Webhooks > Add endpoint: https://mentormama-api.onrender.com/anymail/resend/tracking/
 #      with events email.sent, email.delivered, email.delivery_delayed, email.bounced, email.complained.
-#      Paste its signing secret into `mentormama-secrets` as RESEND_SIGNING_SECRET and redeploy the API.
+#      Paste its signing secret into `mentormama-secrets` as RESEND_SIGNING_SECRET (the API redeploys).
 #   2. Custom domains: add them in each service (or under `domains:` below). Set PORTAL_DOMAIN to the portal's
 #      domain, and update the rewrite destination below if you give the API its own domain.
 #   3. Create the first programme admin once: Render shell on mentormama-api ->
@@ -35,6 +37,19 @@
 # commands or persistent disks.
 
 envVarGroups:
+  # Secrets: keys only. Fill the values in the Dashboard (see the note at the top).
+  - name: mentormama-secrets
+    envVars:
+      - key: SECRET_KEY
+      - key: RESEND_API_KEY
+      - key: RESEND_SIGNING_SECRET
+      - key: AI_API_KEY
+      - key: AWS_ACCESS_KEY_ID
+      - key: AWS_SECRET_ACCESS_KEY
+      - key: EXPORT_STORAGE_BUCKET
+      - key: EXPORT_STORAGE_ENDPOINT
+      - key: EXPORT_STORAGE_REGION
+
   - name: mentormama-config
     envVars:
       - key: DJANGO_SETTINGS_MODULE
