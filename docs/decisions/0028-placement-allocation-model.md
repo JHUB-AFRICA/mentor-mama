@@ -98,3 +98,9 @@ actually reaches the mentor (the event previously carried no recipient).
   model has no ward-to-mentor link; wards are not staffed in MentorMAMA).
 - Rotation rules (several wards in one placement) are not modelled; one ward per
   placement remains the invariant.
+
+## Amendment — 2026-11-11 (product owner direction; implementation pending)
+
+- A **coordinator may override** an arrangement and make the changes needed (ward, mentor, dates, facility) for placements of their own institution while the placement is not closed. The override needs a written reason, is audited, and notifies the facility's nurse manager. It is not the automatic arrange, which stays with the nurse manager. The statement "a coordinator never allocates wards" above now means "through the automatic arrange". Whether an override may exceed declared ward capacity is still open.
+- The arrangement should be visible **earlier**: the coordinator gets a downloadable allocation list (CSV, XLSX, PDF) and may share a provisional notice with students before releasing. Release stays manual.
+- Details, data model and tasks: `docs/engineering/placement-allocation-implementation-plan.md` (§2.6, §6A).

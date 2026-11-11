@@ -2838,3 +2838,100 @@
 /* The timeline is now an ordered list (single source: placementJourney). */
 ol.placement-timeline { margin: 0; padding: 0; list-style: none; }
 .placement-journey__note { margin: 1rem 0 0; color: #405675; font-size: 0.85rem; line-height: 1.5; }
+
+/* ---------------------------------------------------------------
+   Placement hero (replaces the old identity strip)
+---------------------------------------------------------------- */
+.placement-hero {
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid #dbe4ed;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(16, 34, 59, 0.05);
+}
+.placement-hero__top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 28px;
+  background: linear-gradient(120deg, #e7f5f5 0%, #f4faf9 55%, #fff 100%);
+  border-bottom: 1px solid #e3edf0;
+}
+.placement-hero__icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0b9696, #087575);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(11, 150, 150, 0.28);
+}
+.placement-hero__copy { min-width: 0; flex: 1; }
+.placement-hero__eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+  color: #087575;
+  font: 700 0.7rem/1 "Inter", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.placement-hero__copy h1 {
+  margin: 0;
+  color: #10223b;
+  font: 800 clamp(1.5rem, 2.6vw, 2.1rem)/1.15 "Inter", sans-serif;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.placement-hero__copy p { margin: 6px 0 0; color: #5b6b7e; font: 500 0.92rem/1.4 "Inter", sans-serif; }
+.placement-hero .placement-privacy { align-self: flex-start; }
+.placement-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+.placement-facts > div { padding: 16px 28px; border-right: 1px solid #eef2f6; min-width: 0; }
+.placement-facts > div:last-child { border-right: 0; }
+.placement-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #6b7a8c;
+  font: 700 0.68rem/1 "Inter", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.placement-facts dd { margin: 0; color: #10223b; font: 600 0.95rem/1.35 "Inter", sans-serif; overflow-wrap: anywhere; }
+.placement-facts__meter { display: grid; gap: 6px; }
+.placement-facts__bar { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: #e3edf0; }
+.placement-facts__bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0b9696, #3cc2b8); }
+.placement-facts__meter > span:last-child { color: #5b6b7e; font: 500 0.8rem/1 "Inter", sans-serif; }
+
+/* Journey and next-step cards share the hero's radius and shadow. */
+.student-detail .placement-journey,
+.student-detail .placement-current-step {
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(16, 34, 59, 0.04);
+}
+.student-detail .placement-current-step { border-left: 4px solid #0b9696; }
+
+@media (max-width: 900px) {
+  .placement-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .placement-facts > div { border-bottom: 1px solid #eef2f6; }
+}
+@media (max-width: 560px) {
+  .placement-hero__top { flex-wrap: wrap; padding: 18px; }
+  .placement-hero .placement-privacy { order: 3; }
+  .placement-hero__icon { width: 44px; height: 44px; border-radius: 13px; }
+  .placement-hero__copy { flex: 1 1 calc(100% - 70px); }
+  .placement-hero__copy h1 { font-size: 1.35rem; }
+  .placement-facts { grid-template-columns: 1fr; }
+  .placement-facts > div { padding: 12px 18px; border-right: 0; }
+}

@@ -493,50 +493,60 @@ export function StudentPlacementDetail({
         {/* Placement identity                                             */}
         {/* -------------------------------------------------------------- */}
 
-        <section className="placement-identity">
-          <div className="placement-identity__main">
-            <div className="placement-identity__icon">
-              <MapPin size={22} />
+        <section className="placement-hero">
+          <div className="placement-hero__top">
+            <div className="placement-hero__icon" aria-hidden="true">
+              <MapPin size={24} />
             </div>
-
-            <div className="placement-identity__copy">
-              <div className="placement-identity__eyebrow">
-                <span>Placement</span>
-
-                <span
-                  className={`student-detail-status student-detail-status--${tone}`}
-                >
+            <div className="placement-hero__copy">
+              <div className="placement-hero__eyebrow">
+                <span>Your placement</span>
+                <span className={`student-detail-status student-detail-status--${tone}`}>
                   <span />
                   {formatState(current.state)}
                 </span>
               </div>
-
-              <h1>
-                {current.facility_name ?? "My placement"}
-              </h1>
-
-              <div className="placement-identity__meta">
-                <span>
-                  <CalendarDays size={15} />
-                  {formatDate(current.planned_start)} –{" "}
-                  {formatDate(current.planned_end)}
-                </span>
-
-                <span className="placement-meta-divider" />
-
-                <span>
-                  <UserRound size={15} />
-                  {current.mentor?.name ??
-                    "Assignment pending"}
-                </span>
-              </div>
+              <h1>{current.facility_name ?? "My placement"}</h1>
+              <p>{current.cohort_name ?? "Clinical placement"}</p>
+            </div>
+            <div className="placement-privacy">
+              <ShieldCheck size={15} />
+              <span>Private learning record</span>
             </div>
           </div>
 
-          <div className="placement-privacy">
-            <ShieldCheck size={15} />
-            <span>Private learning record</span>
-          </div>
+          <dl className="placement-facts">
+            <div>
+              <dt><CalendarDays size={14} /> Dates</dt>
+              <dd>{formatDate(current.planned_start)} – {formatDate(current.planned_end)}</dd>
+            </div>
+            <div>
+              <dt><MapPin size={14} /> Ward</dt>
+              <dd>{current.ward?.name ?? "To be confirmed"}</dd>
+            </div>
+            <div>
+              <dt><UserRound size={14} /> Mentor</dt>
+              <dd>{current.mentor?.name ?? "Assignment pending"}</dd>
+            </div>
+            <div>
+              <dt><ShieldCheck size={14} /> Time on placement</dt>
+              <dd>
+                {(() => {
+                  const start = new Date(`${current.planned_start}T00:00:00`).getTime();
+                  const end = new Date(`${current.planned_end}T00:00:00`).getTime();
+                  const total = Math.max(1, Math.round((end - start) / 86_400_000));
+                  const done = Math.min(total, Math.max(0, Math.round((Date.now() - start) / 86_400_000)));
+                  const pct = current.state === "completed" ? 100 : Math.round((done / total) * 100);
+                  return (
+                    <span className="placement-facts__meter">
+                      <span className="placement-facts__bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+                      <span>{pct}% · {total} days</span>
+                    </span>
+                  );
+                })()}
+              </dd>
+            </div>
+          </dl>
         </section>
 
         {/* -------------------------------------------------------------- */}
