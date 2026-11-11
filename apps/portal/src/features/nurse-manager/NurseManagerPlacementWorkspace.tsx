@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, ClipboardList, Download, Inbox, RefreshCw, UserCog, Wand2 } from "lucide-react";
+import { Ban, Check, ClipboardList, Download, Inbox, RefreshCw, UserCog, Wand2 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { Field, Modal, SelectInput, TextArea } from "../../components/kit";
 import { PortalErrorState } from "../../components/PortalErrorState";
@@ -20,6 +20,7 @@ import { ServerPager } from "../programme-admin/ui/DataTable";
 import { isPlacementClosed, placementStateLabel, placementStateTone } from "../placements/placementJourney";
 import { AllocationListModal } from "../placements/AllocationListModal";
 import { RecentArrangements } from "./RecentArrangements";
+import { DeclineRequestsModal } from "./DeclineRequestsModal";
 import { ArrangeStudentsModal } from "./ArrangeStudentsModal";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 import { isManagerActionablePlacement, managerPlacementAction } from "./managerPlacementLogic";
@@ -87,6 +88,7 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
 
   const [arranging, setArranging] = useState(false);
   const [listing, setListing] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [replacement, setReplacement] = useState("");
@@ -170,7 +172,12 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
           <AdminCard
             title="Incoming students"
             description="Coordinators have asked your facility to host these students. Arrange them in one step, or open each placement."
-            action={<AdminButton size="sm" icon={<Wand2 />} onClick={() => setArranging(true)}>Arrange all</AdminButton>}
+            action={
+              <span className="pa-row-actions">
+                <AdminButton variant="secondary" size="sm" icon={<Ban />} onClick={() => setDeclining(true)}>Decline some</AdminButton>
+                <AdminButton size="sm" icon={<Wand2 />} onClick={() => setArranging(true)}>Arrange all</AdminButton>
+              </span>
+            }
             flush
           >
             <div className="pa-list">
@@ -263,6 +270,7 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
         )}
 
         <AllocationListModal open={listing} onClose={() => setListing(false)} cohorts={(options.data?.cohorts ?? []).map((item) => ({ id: item.id, name: item.name }))} />
+        <DeclineRequestsModal open={declining} onClose={() => setDeclining(false)} incoming={incoming.data ?? []} onError={onError} />
         <ArrangeStudentsModal open={arranging} onClose={() => setArranging(false)} incomingCount={incomingCount} />
 
         <Modal

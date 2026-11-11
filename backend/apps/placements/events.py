@@ -134,3 +134,19 @@ class PlacementStartsSoon:
     placement_id: UUID
     days: int
     recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementsDeclined:
+    """A facility declined some requested students; the coordinator needs to ask another facility."""
+
+    facility_id: UUID
+    count: int
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementRequestsWithdrawn:
+    facility_id: UUID
+    count: int
+    recipient_user_ids: tuple[UUID, ...] = ()

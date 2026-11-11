@@ -32,6 +32,8 @@ EVENT_TEMPLATES = {
     "PlacementsRequested": "placement.requested",
     "MentorReassigned": "placement.mentor_reassigned",
     "ArrangementOverridden": "placement.arrangement_overridden",
+    "PlacementsDeclined": "placement.requests_declined",
+    "PlacementRequestsWithdrawn": "placement.requests_withdrawn",
     "PlacementProvisionalNotice": "placement.provisional_notice",
     "PlacementStartsSoon": "placement.starts_soon",
     "EscalationRaised": "safeguarding.concern_raised",

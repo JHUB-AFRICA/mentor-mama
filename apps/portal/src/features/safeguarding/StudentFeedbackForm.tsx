@@ -139,17 +139,28 @@ export function StudentFeedbackForm({ placementId, onError }: { placementId: str
       <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">Your voice</p>
       <h2 className="mt-1 font-display text-h3 text-navy">Share placement feedback</h2>
       <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
-        It takes about two minutes. Confidential feedback goes to authorised staff who can follow up. Anonymous feedback is ratings only and is reported in groups of at least three.
-        Please do not include patient names or identifiers.
+        It takes about two minutes. Choose how you want your feedback handled. Please do not include patient names or identifiers.
       </p>
       <form className="mt-5 space-y-4" onSubmit={submit}>
-        <label className="block font-body text-sm font-semibold text-navy">
-          How should this be handled?
-          <select className="input mt-2" value={mode} onChange={(event) => { setMode(event.target.value as FeedbackMode); touch(); }}>
-            <option value="confidential">Confidential — authorised follow-up</option>
-            <option value="anonymous">Anonymous — grouped ratings only</option>
-          </select>
-        </label>
+        <fieldset className="grid gap-3 sm:grid-cols-2">
+          <legend className="mb-2 font-body text-sm font-semibold text-navy">How should this be handled?</legend>
+          {([
+            ["confidential", "Confidential", "Authorised programme staff can read your answers and follow up with you. Your mentor does not see them.", "Best if something needs to be put right."],
+            ["anonymous", "Anonymous", "Ratings only, with no comments. We cannot tell it was you. Results are grouped by cohort, hospital and ward, and are not shown until at least 3 people have answered.", "Best if you want to stay unidentifiable."],
+          ] as const).map(([value, title, text, hint]) => (
+            <label key={value} className={`flex cursor-pointer flex-col gap-1 rounded-xl border p-4 transition ${mode === value ? "border-teal bg-teal-light/40" : "border-border hover:border-teal/50"}`}>
+              <span className="flex items-center gap-2 font-body text-sm font-bold text-navy">
+                <input type="radio" name="feedback-mode" value={value} checked={mode === value} onChange={() => { setMode(value); touch(); }} className="accent-teal" />
+                {title}
+              </span>
+              <span className="font-body text-xs leading-5 text-navy-muted">{text}</span>
+              <span className="font-body text-xs font-semibold text-teal">{hint}</span>
+            </label>
+          ))}
+        </fieldset>
+        <p className="rounded-xl bg-mist px-4 py-3 font-body text-xs leading-5 text-navy-muted">
+          On a small ward even grouped results could point to one person, so we hide them until enough people have answered. If you are worried about your safety or someone else&rsquo;s, raise a safeguarding concern instead. Those are not anonymous, so that they can be investigated.
+        </p>
         <p className="font-body text-xs text-navy-muted">Rate each statement from 1 (strongly disagree) to 5 (strongly agree).</p>
         {questions.map((question) => (
           <RatingRow key={question.code} code={question.code} label={question.label} value={ratings[question.code]} onChange={(value) => { setRatings((current) => ({ ...current, [question.code]: value })); touch(); }} />

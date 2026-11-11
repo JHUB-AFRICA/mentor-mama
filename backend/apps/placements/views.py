@@ -675,3 +675,37 @@ class ShareWithStudentsView(APIView):
             result = notices.share_with_students(actor=request.user, placement_ids=ids, cohort_id=request.data.get("cohort_id") or None)
             command.record(UUID(int=0))
         return Response({"data": result})
+
+
+class DeclineRequestsView(APIView):
+    """A facility declines requested students, with a reason the coordinator sees."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import allocation
+
+        payload = serializers.DeclineRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with IdempotentCommand(request, "decline_facility_requests") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = allocation.decline_requests(actor=request.user, **payload.validated_data)
+            command.record(UUID(int=0))
+        return Response({"data": result})
+
+
+class WithdrawRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import allocation
+
+        payload = serializers.WithdrawRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with IdempotentCommand(request, "withdraw_facility_requests") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = allocation.withdraw_requests(actor=request.user, **payload.validated_data)
+            command.record(UUID(int=0))
+        return Response({"data": result})

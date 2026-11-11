@@ -52,7 +52,7 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
         return True
     if event_type in MANDATORY_EVENTS:
         return True
-    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
     if event_type in {"SessionLogged"}:
         return preference.account_activity
@@ -219,7 +219,7 @@ def deliver_outbox_event(event) -> None:
             event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
             event.save(update_fields=["delivered_to"])
     elif event.event_type in {
-        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden",
+        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden",
         "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",
         "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted",
         "PlacementScheduled", "OrientationAcknowledged", "InductionCompleted", "EscalationStatusChanged",
@@ -244,6 +244,16 @@ def deliver_outbox_event(event) -> None:
                 "Students are waiting to be placed at your facility", "Placement update",
                 "New students are waiting for your facility", "A university coordinator has asked your facility to host students.",
                 "Sign in and use Arrange students to place them into your wards in one step.",
+            ),
+            "PlacementsDeclined": (
+                "A facility could not host some of your students", "Placement update",
+                "Some students need another facility", "A partner facility has declined to host some of the students you requested.",
+                "Sign in to see the reason and ask another facility.",
+            ),
+            "PlacementRequestsWithdrawn": (
+                "A request for your facility was withdrawn", "Placement update",
+                "A request was withdrawn", "The university coordinator has withdrawn a request for students to be placed at your facility.",
+                "Nothing is needed from you. The incoming list has been updated.",
             ),
             "ArrangementOverridden": (
                 "A coordinator changed a placement arrangement", "Placement update",

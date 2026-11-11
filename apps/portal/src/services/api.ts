@@ -350,6 +350,8 @@ export interface Placement {
   facility_name?: string | null;
   requested_facility_id?: string | null;
   requested_facility_name?: string | null;
+  declined_facility_name?: string | null;
+  decline_reason?: string;
   state: PlacementState;
   planned_start: string;
   planned_end: string;
@@ -2978,6 +2980,25 @@ export async function shareAllocationWithStudents(cohortId?: string): Promise<{ 
     method: "POST",
     headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify(cohortId ? { cohort_id: cohortId } : {}),
+  });
+  return response.data;
+}
+
+/** A facility declines requested students, with a reason the coordinator sees. */
+export async function declineFacilityRequests(placementIds: string[], reason: string): Promise<{ declined: number }> {
+  const response = await request<{ data: { declined: number } }>("/api/v1/placements/decline-requests", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ placement_ids: placementIds, reason }),
+  });
+  return response.data;
+}
+/** The coordinator takes a request back before the facility has placed the student. */
+export async function withdrawFacilityRequests(placementIds: string[]): Promise<{ withdrawn: number }> {
+  const response = await request<{ data: { withdrawn: number } }>("/api/v1/placements/withdraw-requests", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ placement_ids: placementIds }),
   });
   return response.data;
 }

@@ -402,3 +402,62 @@ def retry_unplaced(*, actor, run_id) -> dict:
     if not ids:
         raise errors.InvalidTransition("Nobody was left unplaced in that run.")
     return apply_auto_arrange(actor=actor, facility_id=facility, placement_ids=ids, strategy=strategy)
+
+
+
+def _by_institution(rows):
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[row.institution_id].append(row)
+    return grouped
+
+
+@transaction.atomic
+def decline_requests(*, actor, placement_ids, reason: str) -> dict:
+    """The facility cannot host these students. They go back to the coordinator with the reason."""
+    identity.require_capability(actor, "arrange_placements")
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise errors.InvalidTransition("Say briefly why the facility cannot host these students.")
+    facility = _facility_for(actor, None)
+    rows = list(incoming(actor=actor).filter(id__in=placement_ids).select_for_update(of=("self",)))
+    if not rows:
+        raise errors.InvalidTransition("Choose students from your incoming list.")
+    now = timezone.now()
+    for placement in rows:
+        placement.declined_facility_id = facility
+        placement.decline_reason = reason[:300]
+        placement.declined_at = now
+        placement.requested_facility_id = None
+        placement.save(update_fields=["declined_facility", "decline_reason", "declined_at", "requested_facility", "updated_at"])
+    for institution_id, group in _by_institution(rows).items():
+        coordinators = tuple(identity.users(role=identity.ROLES.COORDINATOR, status=identity.STATUSES.ACTIVE, institution_id=institution_id).values_list("id", flat=True))
+        outbox.publish(events.PlacementsDeclined(facility_id=facility, count=len(group), recipient_user_ids=coordinators))
+    audit.record(actor=actor, action="placement.requests_declined", entity_table="placements_placement", entity_id=rows[0].id,
+                 scope={"program_id": str(actor.program_id), "facility_id": str(facility)}, changes={"count": len(rows)}, override_reason=reason)
+    return {"declined": len(rows)}
+
+
+@transaction.atomic
+def withdraw_requests(*, actor, placement_ids) -> dict:
+    """The coordinator takes a request back before the facility has placed the student."""
+    identity.require_capability(actor, "request_facility")
+    rows = list(
+        Placement.objects.select_for_update(of=("self",)).filter(
+            id__in=placement_ids, state=State.DRAFT, facility_id=None, requested_facility_id__isnull=False,
+            **({} if actor.role == identity.ROLES.PROGRAM_ADMIN else {"institution_id": actor.institution_id}),
+        )
+    )
+    if not rows:
+        raise errors.InvalidTransition("Only requests that the facility has not yet acted on can be withdrawn.")
+    by_facility = defaultdict(int)
+    for placement in rows:
+        by_facility[placement.requested_facility_id] += 1
+        placement.requested_facility_id = None
+        placement.save(update_fields=["requested_facility", "updated_at"])
+    for facility_id, count in by_facility.items():
+        managers = tuple(identity.users(role=identity.ROLES.NURSE_MANAGER, status=identity.STATUSES.ACTIVE, facility_id=facility_id).values_list("id", flat=True))
+        outbox.publish(events.PlacementRequestsWithdrawn(facility_id=facility_id, count=count, recipient_user_ids=managers))
+    audit.record(actor=actor, action="placement.requests_withdrawn", entity_table="placements_placement", entity_id=rows[0].id,
+                 scope={"program_id": str(actor.program_id)}, changes={"count": len(rows)})
+    return {"withdrawn": len(rows)}

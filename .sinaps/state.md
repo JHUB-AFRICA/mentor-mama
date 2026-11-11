@@ -1994,3 +1994,8 @@ Product owner authorized a bounded AI integration beginning with an API key and 
 
 - Done: allocation backend + UI (coordinator facility requests, NM incoming/arrange), branded PDF export, ref-counted scroll lock, personal plain-language Activity for all roles, safeguarding summary/take-concern (ADR 0029), NM pages redesigned (placements, placement detail, mentors, mentor detail, wards with NM-managed capacity), ward change command, mentor workload counts open placements only.
 - Next (see docs/engineering/placement-allocation-implementation-plan.md): P0-3 shared capacity check + plan hash, P0-4 run record first, P0-5 counts in emails, P0-6/7 notification categories + outbox back-off, P0-8 coordinator override, P0-9 allocation list export; consent mechanism; sidebar audit; remaining restyles (coordinator create/invite/cohorts, mentor and student dashboards).
+
+## Session 2026-11-11 (continued)
+
+- Done: consent mechanism, allocation list export, coordinator override, plan hash + run-first record, undo/retry arrangement, share-with-students + 14/3-day lead reminders, facility decline/withdraw/re-request, shared invite wizard (students and mentors), placement create restyle, clearer anonymous/confidential feedback wording, unified dashboard heading scale.
+- Remaining (see docs/engineering/placement-allocation-implementation-plan.md): PlacementChangeRequest approvals (P1-6), ward capacity windows/closures per date (P1-8), mentor workload view + orphaned placements (P1-9), provider email correlation (P1-12), PlacementActivated/InductionOpened templates (P1-13), digest with real content.

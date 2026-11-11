@@ -50,6 +50,7 @@ class PlacementSerializer(serializers.ModelSerializer):
     institution_name = serializers.CharField(source="cohort.institution.name", read_only=True)
     facility_name = serializers.CharField(source="facility.name", read_only=True, allow_null=True)
     requested_facility_name = serializers.CharField(source="requested_facility.name", read_only=True, allow_null=True)
+    declined_facility_name = serializers.CharField(source="declined_facility.name", read_only=True, allow_null=True)
     student = serializers.SerializerMethodField()
     mentor = serializers.SerializerMethodField()
     ward = serializers.SerializerMethodField()
@@ -58,7 +59,7 @@ class PlacementSerializer(serializers.ModelSerializer):
         model = Placement
         fields = [
             "id", "cohort_id", "cohort_name", "institution_id", "institution_name", "facility_id", "facility_name",
-            "requested_facility_id", "requested_facility_name", "state",
+            "requested_facility_id", "requested_facility_name", "declined_facility_name", "decline_reason", "state",
             "planned_start", "planned_end", "actual_start", "actual_end",
             "withdrawal_reason", "completed_at", "archived_at", "version", "active_mentor_id", "student", "mentor", "ward",
         ]
@@ -161,6 +162,15 @@ class OverrideArrangementSerializer(serializers.Serializer):
         if not attrs.get("ward_id") and not attrs.get("mentor_id"):
             raise serializers.ValidationError("Choose a ward, a mentor, or both.")
         return attrs
+
+
+class DeclineRequestSerializer(serializers.Serializer):
+    placement_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False, max_length=500)
+    reason = serializers.CharField(min_length=5, max_length=300)
+
+
+class WithdrawRequestSerializer(serializers.Serializer):
+    placement_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False, max_length=500)
 
 
 class AutoArrangeSerializer(serializers.Serializer):

@@ -741,3 +741,38 @@ def test_lead_reminders_go_to_student_and_mentor_once(scheduled_placement, stude
     assert notices.send_lead_reminders(today=today) == 0  # once only
     event = OutboxEvent.objects.get(event_type="PlacementStartsSoon")
     assert set(event.payload["recipient_user_ids"]) == {str(student.id), str(mentor.id)} and event.payload["days"] == 14
+
+
+def test_facility_can_decline_with_a_reason_and_coordinator_can_ask_another_or_withdraw(program, institution, cohort, coordinator, nurse_manager, facility, ward):
+    import uuid
+
+    from rest_framework.test import APIClient
+
+    from apps.core.models import OutboxEvent
+    from apps.facilities.models import Facility, Ward
+    from apps.placements.models import Placement
+
+    ids = _requested_drafts(program, institution, cohort, coordinator, facility, 2)
+    manager, coord = APIClient(), APIClient()
+    manager.force_authenticate(nurse_manager)
+    coord.force_authenticate(coordinator)
+    key = lambda: {"HTTP_IDEMPOTENCY_KEY": str(uuid.uuid4())}  # noqa: E731
+
+    assert manager.post("/api/v1/placements/decline-requests", {"placement_ids": [str(ids[0])], "reason": "no"}, format="json", **key()).status_code == 400
+    declined = manager.post("/api/v1/placements/decline-requests", {"placement_ids": [str(ids[0])], "reason": "Ward closed for renovation"}, format="json", **key())
+    assert declined.status_code == 200 and declined.json()["data"]["declined"] == 1
+    row = Placement.objects.get(id=ids[0])
+    assert row.requested_facility_id is None and row.declined_facility_id == facility.id and row.decline_reason == "Ward closed for renovation"
+    assert OutboxEvent.objects.filter(event_type="PlacementsDeclined").exists()
+    assert len(manager.get("/api/v1/placements/incoming").json()["data"]) == 1  # the other student is still waiting
+
+    other = Facility.objects.create(program=program, name="Second Hospital")
+    Ward.objects.create(facility=other, name="Second Ward", max_students=3)
+    again = coord.post("/api/v1/placements/facility-requests", {"placement_ids": [str(ids[0])], "facility_ids": [str(other.id)], "mode": "even"}, format="json", **key())
+    assert again.status_code == 201, again.content
+    assert Placement.objects.get(id=ids[0]).requested_facility_id == other.id
+
+    withdrawn = coord.post("/api/v1/placements/withdraw-requests", {"placement_ids": [str(ids[1])]}, format="json", **key())
+    assert withdrawn.status_code == 200 and withdrawn.json()["data"]["withdrawn"] == 1
+    assert Placement.objects.get(id=ids[1]).requested_facility_id is None
+    assert len(manager.get("/api/v1/placements/incoming").json()["data"]) == 0

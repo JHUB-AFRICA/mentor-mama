@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ClipboardList, Download, Layers, Plus } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
-import { getPlacementOptions, getPlacements, type CurrentUser, type Placement } from "../../services/api";
+import { getPlacementOptions, getPlacements, withdrawFacilityRequests, type CurrentUser, type Placement } from "../../services/api";
+import { useToast } from "../../components/ToastProvider";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { AdminButton, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
 import { AllocationListModal } from "../placements/AllocationListModal";
@@ -35,6 +36,7 @@ const fmt = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString(
 /** Every placement in the institution, filterable by stage, cohort and facility. */
 export function CoordinatorPlacementRegister({
   user,
+  onError,
   onOpen,
   onCreate,
   onOpenBatches,
@@ -45,6 +47,7 @@ export function CoordinatorPlacementRegister({
   onCreate: () => void;
   onOpenBatches?: () => void;
 }) {
+  const { pushToast } = useToast();
   const [params, setParams] = useSearchParams();
   const state = params.get("state") ?? "";
   const cohort = params.get("cohort") ?? "";
@@ -83,7 +86,20 @@ export function CoordinatorPlacementRegister({
   const [listing, setListing] = useState(false);
   const canRequest = Boolean(user.capabilities.request_facility);
   const requestable = (row: Placement) => row.state === "draft" && !row.facility_id && !row.requested_facility_id;
-  const requestableRows = rows.filter(requestable);
+  const withdrawable = (row: Placement) => row.state === "draft" && !row.facility_id && Boolean(row.requested_facility_id);
+  const pickable = (row: Placement) => requestable(row) || withdrawable(row);
+  const requestableRows = rows.filter(pickable);
+  async function withdrawPicked() {
+    const ids = rows.filter((row) => picked.includes(row.id) && withdrawable(row)).map((row) => row.id);
+    try {
+      const result = await withdrawFacilityRequests(ids);
+      pushToast({ kind: "success", title: "Request withdrawn", message: `${result.withdrawn} student${result.withdrawn === 1 ? "" : "s"} no longer requested.` });
+      setPicked([]);
+      void list.refetch();
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : "We could not withdraw that request.");
+    }
+  }
   const allPicked = requestableRows.length > 0 && requestableRows.every((row) => picked.includes(row.id));
 
   return (
@@ -123,7 +139,12 @@ export function CoordinatorPlacementRegister({
       {canRequest && picked.length > 0 && (
         <div className="pa-bulkbar" role="status" style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <strong>{picked.length} selected</strong>
-          <AdminButton size="sm" icon={<Building2 />} onClick={() => setRequesting(true)}>Send to partner facilities</AdminButton>
+          {rows.some((row) => picked.includes(row.id) && requestable(row)) && (
+            <AdminButton size="sm" icon={<Building2 />} onClick={() => setRequesting(true)}>Send to partner facilities</AdminButton>
+          )}
+          {rows.some((row) => picked.includes(row.id) && withdrawable(row)) && (
+            <AdminButton variant="secondary" size="sm" onClick={() => void withdrawPicked()}>Withdraw request</AdminButton>
+          )}
           <AdminButton variant="ghost" size="sm" onClick={() => setPicked([])}>Clear</AdminButton>
         </div>
       )}
@@ -190,7 +211,7 @@ export function CoordinatorPlacementRegister({
                   >
                     {canRequest && (
                       <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-                        {requestable(placement) && (
+                        {pickable(placement) && (
                           <input
                             type="checkbox"
                             aria-label={`Select ${placement.student?.name ?? "student"}`}
@@ -211,6 +232,9 @@ export function CoordinatorPlacementRegister({
                     <td>{placement.cohort_name ?? "—"}</td>
                     <td>
                       {placement.facility_name ?? (placement.requested_facility_name ? `Requested: ${placement.requested_facility_name}` : "Not allocated")}
+                      {!placement.facility_name && !placement.requested_facility_name && placement.declined_facility_name && (
+                        <small className="pa-sub" style={{ color: "#a4572a" }}>Declined by {placement.declined_facility_name}: {placement.decline_reason}</small>
+                      )}
                       {placement.ward?.name && <small className="pa-sub">{placement.ward.name}</small>}
                     </td>
                     <td>{placement.mentor?.name ?? <span className="pa-muted">Not assigned</span>}</td>

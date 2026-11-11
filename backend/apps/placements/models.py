@@ -68,6 +68,13 @@ class Placement(BaseModel):
         "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="requested_placements"
     )
 
+    # The last facility that declined to host this student, and why, so the coordinator can ask another.
+    declined_facility = models.ForeignKey(
+        "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="declined_placements"
+    )
+    decline_reason = models.CharField(max_length=300, blank=True, default="")
+    declined_at = models.DateTimeField(null=True, blank=True)
+
     state = models.CharField(max_length=24, choices=State.choices, default=State.DRAFT)
 
     # OD-01 (JKUAT, 30 Jul 2026): planned dates are the original agreement;

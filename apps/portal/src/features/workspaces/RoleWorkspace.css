@@ -876,3 +876,20 @@
     display: flex;
   }
 }
+
+/* One heading scale across roles: mentor and student greetings match the Nurse Manager,
+   Coordinator and Admin page titles instead of shouting. */
+.workspace-content .mentor-page-title,
+.workspace-content .student-welcome h1 {
+  font-size: clamp(1.75rem, 2.6vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.workspace-content .student-welcome {
+  padding-block: 1.6rem;
+}
+.workspace-content .mentor-page-description,
+.workspace-content .student-welcome p {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
