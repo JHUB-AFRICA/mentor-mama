@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
-import { AdminPageHeader } from "../programme-admin/ui/AdminKit";
-import {
-  ArrowLeft,
-  CalendarPlus,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Users,
-  X,
-} from "lucide-react";
-import { Button, Card, Skeleton } from "@mentormama/ui";
+import { ArrowLeft, CalendarPlus, CheckCircle2, Rocket, Users } from "lucide-react";
+import { Skeleton } from "@mentormama/ui";
+import { Field, Modal, SelectInput, TextInput } from "../../components/kit";
+import { AdminButton, AdminCard, AdminPage, AdminPageHeader, EmptyState, Notice, SearchField } from "../programme-admin/ui/AdminKit";
+import { ServerPager } from "../programme-admin/ui/DataTable";
 import {
   ApiError,
   createPlacementsBulk,
@@ -191,219 +184,146 @@ export function CoordinatorPlacementCreate({
     setAllEligible(true);
     setSelectedStudents([]);
   }
+  const invalidDates = Boolean(start && end && end < start);
+  const canCreate = !busy && Boolean(cohort) && selectionCount > 0 && Boolean(start) && Boolean(end) && !invalidDates;
+  const cohortName = options?.cohorts.find((item) => item.id === cohort)?.name;
   return (
-    <section
-      className="mx-auto w-full max-w-[75rem] space-y-5"
-      aria-labelledby="create-coordinator-placement-heading"
-    >
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex min-h-10 items-center gap-2 font-body text-sm font-semibold text-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-teal"
-      >
-        <ArrowLeft size={16} aria-hidden="true" />
-        All placements
-      </button>
+    <AdminPage>
+      <div>
+        <AdminButton variant="ghost" size="sm" icon={<ArrowLeft />} className="po-back" onClick={onBack}>
+          All placements
+        </AdminButton>
+      </div>
       <AdminPageHeader
         eyebrow="Placement setup"
-        title="Create a placement"
-        description="Choose an enrolled student and define the planned placement window. Facility allocation and mentor assignment remain with the operational facility team."
+        title="Create placements"
+        description="Choose a cohort, the students and the placement window. Then send the drafts to partner facilities, whose nurse managers place students in wards."
       />
-      <Card
-        padding="lg"
-        className="max-w-4xl rounded-2xl border-border shadow-[0_4px_18px_rgba(13,27,51,0.05)]"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-teal-light text-teal">
-            <CalendarPlus size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <h3 className="font-display text-xl font-bold text-navy">
-              Placement foundation
-            </h3>
-            <p className="mt-1 font-body text-sm text-navy-muted">
-              This creates the institution-side handoff record.
-            </p>
-          </div>
-        </div>
-        {!options ? (
-          <Skeleton className="mt-7 h-48 rounded-xl" />
-        ) : (
-          <form
-            className="mt-7 space-y-7"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setReviewing(true);
-            }}
-          >
-            <Select label="Cohort" value={cohort} onChange={chooseCohort}>
-              <option value="">Choose cohort</option>
-              {options.cohorts.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-            {cohort && (
-              <div className="rounded-2xl border border-border bg-mist/25 p-4 sm:p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-light text-teal">
-                      <Users size={18} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">
-                        Student selection
-                      </p>
-                      <p className="mt-1 font-body text-sm font-semibold text-navy">
-                        {allEligible
-                          ? `All ${eligibleCount} eligible students selected`
-                          : selectionCount
-                            ? `${selectionCount} student${selectionCount === 1 ? "" : "s"} selected`
-                            : `${eligibleCount} eligible students`}
-                      </p>
-                      <p className="mt-1 font-body text-xs leading-5 text-navy-muted">
-                        Choose who should receive the same placement window.
-                      </p>
-                    </div>
+      {!options ? (
+        <Skeleton className="h-72" />
+      ) : (
+        <div className="rp-grid-2">
+          <AdminCard title="Placement details" description="One window for everyone you select.">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (canCreate) setReviewing(true);
+              }}
+            >
+              <Field label="Cohort" required>
+                <SelectInput value={cohort} onChange={(event) => chooseCohort(event.target.value)}>
+                  <option value="">Choose cohort</option>
+                  {options.cohorts.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </SelectInput>
+              </Field>
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+                <Field label="Planned start" required>
+                  <TextInput type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+                </Field>
+                <Field label="Planned end" required error={invalidDates ? "The end date must be after the start date." : undefined}>
+                  <TextInput type="date" min={start} value={end} onChange={(event) => setEnd(event.target.value)} />
+                </Field>
+              </div>
+              {cohort ? (
+                <div className="pa-card" style={{ padding: 14, margin: "6px 0 14px" }}>
+                  <strong>
+                    {allEligible
+                      ? `All ${eligibleCount} eligible students`
+                      : selectionCount
+                        ? `${selectionCount} student${selectionCount === 1 ? "" : "s"} selected`
+                        : `${eligibleCount} eligible student${eligibleCount === 1 ? "" : "s"}`}
+                  </strong>
+                  <small className="pa-sub">
+                    {excluded.length > 0
+                      ? `${excluded.length} hidden: already placed in this window.`
+                      : "Choose who gets this placement window."}
+                  </small>
+                  <div style={{ marginTop: 10 }}>
+                    <AdminButton type="button" variant="secondary" size="sm" icon={<Users />} onClick={() => setStudentPickerOpen(true)} disabled={!eligibleCount}>
+                      {selectionCount ? "Review students" : "Choose students"}
+                    </AdminButton>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="tertiary"
-                    onClick={() => setStudentPickerOpen(true)}
-                    disabled={!eligibleCount}
-                  >
-                    {selectionCount ? "Review students" : "Choose students"}
-                  </Button>
                 </div>
-                {excluded.length > 0 && (
-                  <p className="mt-4 border-t border-border pt-3 font-body text-xs text-navy-muted">
-                    {excluded.length} student
-                    {excluded.length === 1 ? " is" : "s are"} hidden because
-                    they already have an active placement in this window.
-                  </p>
-                )}
-              </div>
-            )}
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Planned start" value={start} onChange={setStart} />
-              <Field label="Planned end" value={end} onChange={setEnd} />
-            </div>
-            {reviewing && (
-              <div
-                className="rounded-2xl border border-teal/30 bg-teal-light/40 p-4"
-                role="dialog"
-                aria-label="Review bulk placement creation"
-              >
-                <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">
-                  Review before creating
-                </p>
-                <p className="mt-2 font-display text-lg font-bold text-navy">
-                  Create {selectionCount} placement
-                  {selectionCount === 1 ? "" : "s"}?
-                </p>
-                <p className="mt-1 font-body text-sm text-navy-muted">
-                  {start} → {end}. Facility, ward, and mentor details will be
-                  added by the operational team later.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => void submit()}
-                    disabled={busy}
-                  >
-                    {busy ? "Creating…" : "Confirm and create"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="tertiary"
-                    onClick={() => setReviewing(false)}
-                    disabled={busy}
-                  >
-                    Back to selection
-                  </Button>
-                </div>
-              </div>
-            )}
+              ) : (
+                <Notice icon={<Users />}>Choose a cohort to see its eligible students.</Notice>
+              )}
+              <AdminButton type="submit" icon={<Rocket />} disabled={!canCreate || reviewing}>
+                {busy ? "Creating…" : `Create ${selectionCount || ""} placement${selectionCount === 1 ? "" : "s"}`.replace("  ", " ")}
+              </AdminButton>
+            </form>
+          </AdminCard>
+
+          <AdminCard title="Summary" description="Check this before you create.">
+            <dl className="pa-summary">
+              <div><dt>Cohort</dt><dd>{cohortName ?? "Not chosen"}</dd></div>
+              <div><dt>Students</dt><dd>{selectionCount || "None selected"}</dd></div>
+              <div><dt>Window</dt><dd>{start && end ? `${start} → ${end}` : "Not set"}</dd></div>
+              <div><dt>Next</dt><dd>Drafts appear in Placements. Select them and use “Send to partner facilities”.</dd></div>
+            </dl>
             {result && (
-              <div
-                role="status"
-                className="rounded-xl bg-teal-light px-4 py-3 font-body text-sm text-navy"
-              >
+              <Notice icon={<CheckCircle2 />}>
                 {result.status === "queued" || result.status === "processing"
-                  ? "Batch is processing"
+                  ? "Batch is processing…"
                   : `${result.created} placement${result.created === 1 ? "" : "s"} created${result.skipped ? ` · ${result.skipped} skipped` : ""}.`}{" "}
-                Batch {result.batchId.slice(0, 8)}.{" "}
                 {onOpenBatch && (
-                  <button type="button" onClick={() => onOpenBatch(result.batchId)} className="font-semibold text-teal underline underline-offset-2 hover:text-teal-dark">
+                  <button type="button" onClick={() => onOpenBatch(result.batchId)} className="pa-link">
                     View batch details
                   </button>
                 )}
-              </div>
+              </Notice>
             )}
-            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
-              <Button
-                type="submit"
-                disabled={
-                  busy ||
-                  reviewing ||
-                  !cohort ||
-                  !selectionCount ||
-                  !start ||
-                  !end ||
-                  end < start
-                }
-              >
-                {busy
-                  ? "Creating…"
-                  : `Create ${selectionCount || ""} placement${selectionCount === 1 ? "" : "s"}`}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Card>
-      {studentPickerOpen && cohort && (
-        <StudentPickerModal
-          students={students}
-          pagination={studentPagination}
-          search={studentSearch}
-          selectedStudents={selectedStudents}
-          allEligible={allEligible}
-          onSearch={(value) => {
-            setStudentSearch(value);
-            setStudentPage(1);
-            setAllEligible(false);
-          }}
-          onPageChange={setStudentPage}
-          onToggle={(id) => {
-            setAllEligible(false);
-            setSelectedStudents((current) =>
-              current.includes(id)
-                ? current.filter((item) => item !== id)
-                : [...current, id],
-            );
-          }}
-          onToggleAll={toggleAllStudents}
-          onClose={() => setStudentPickerOpen(false)}
-        />
+          </AdminCard>
+        </div>
       )}
-    </section>
+
+      <Modal
+        open={reviewing}
+        onClose={() => !busy && setReviewing(false)}
+        dismissible={!busy}
+        size="sm"
+        icon={<CalendarPlus />}
+        title={`Create ${selectionCount} placement${selectionCount === 1 ? "" : "s"}?`}
+        description={`${cohortName ?? "Cohort"} · ${start} → ${end}. Facility, ward and mentor are set later.`}
+        footer={
+          <>
+            <AdminButton variant="secondary" size="sm" onClick={() => setReviewing(false)} disabled={busy}>Back</AdminButton>
+            <AdminButton size="sm" onClick={() => void submit()} disabled={busy}>{busy ? "Creating…" : "Confirm and create"}</AdminButton>
+          </>
+        }
+      >
+        <p className="pa-sub">Each student gets a draft placement. Nobody is emailed until the placement is released.</p>
+      </Modal>
+
+      <StudentPickerModal
+        open={studentPickerOpen && Boolean(cohort)}
+        students={students}
+        pagination={studentPagination}
+        search={studentSearch}
+        selectedStudents={selectedStudents}
+        allEligible={allEligible}
+        onSearch={(value) => {
+          setStudentSearch(value);
+          setStudentPage(1);
+          setAllEligible(false);
+        }}
+        onPageChange={setStudentPage}
+        onToggle={(id) => {
+          setAllEligible(false);
+          setSelectedStudents((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+        }}
+        onToggleAll={toggleAllStudents}
+        onClose={() => setStudentPickerOpen(false)}
+      />
+    </AdminPage>
   );
 }
 
 function StudentPickerModal({
-  students,
-  pagination,
-  search,
-  selectedStudents,
-  allEligible,
-  onSearch,
-  onPageChange,
-  onToggle,
-  onToggleAll,
-  onClose,
+  open, students, pagination, search, selectedStudents, allEligible, onSearch, onPageChange, onToggle, onToggleAll, onClose,
 }: {
+  open: boolean;
   students: PlacementEligibleStudent[];
   pagination: PlacementEligibility["pagination"] | null;
   search: string;
@@ -415,233 +335,49 @@ function StudentPickerModal({
   onToggleAll: () => void;
   onClose: () => void;
 }) {
-  const selectedOnPage = students.filter((item) =>
-    selectedStudents.includes(item.id),
-  ).length;
-  const allOnPage = students.length > 0 && selectedOnPage === students.length;
+  const allOnPage = students.length > 0 && students.every((item) => selectedStudents.includes(item.id));
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-navy/45 p-4 backdrop-blur-[2px]"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      icon={<Users />}
+      title="Choose eligible students"
+      description="Select individual students, or everyone eligible."
+      footer={
+        <>
+          <span className="pa-sub" style={{ marginRight: "auto" }}>
+            {allEligible ? "Every eligible student is selected" : `${selectedStudents.length} selected`} · {pagination?.total_count ?? students.length} eligible
+          </span>
+          <AdminButton size="sm" onClick={onClose}>Done</AdminButton>
+        </>
+      }
     >
-      <div
-        className="relative flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-[0_24px_70px_rgba(13,27,51,0.24)]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="student-picker-heading"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-5 sm:px-7">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-light text-teal">
-              <Users size={19} aria-hidden="true" />
-            </span>
-            <div>
-              <p className="font-body text-xs font-bold uppercase tracking-[0.14em] text-teal">
-                Placement students
-              </p>
-              <h3
-                id="student-picker-heading"
-                className="mt-1 font-display text-xl font-bold text-navy sm:text-2xl"
-              >
-                Choose eligible students
-              </h3>
-              <p className="mt-1 font-body text-sm leading-6 text-navy-muted">
-                Select individual students or apply the same placement window to
-                everyone eligible.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl text-navy-muted transition hover:bg-mist hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-teal"
-            aria-label="Close student picker"
-          >
-            <X size={19} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="flex flex-col gap-3 border-b border-border bg-mist/25 px-5 py-4 sm:flex-row sm:items-center sm:px-7">
-          <label className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-white px-3 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/20">
-            <Search
-              size={17}
-              className="shrink-0 text-navy-muted"
-              aria-hidden="true"
-            />
-            <input
-              value={search}
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="Search name, email, or registration number"
-              aria-label="Search eligible students"
-              className="min-w-0 flex-1 bg-transparent font-body text-sm text-navy outline-none placeholder:text-navy-muted/70"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={onToggleAll}
-            className="min-h-11 shrink-0 rounded-xl px-3 text-left font-body text-sm font-bold text-teal transition hover:bg-teal-light focus:outline-none focus-visible:ring-2 focus-visible:ring-teal sm:text-center"
-          >
-            {allEligible || allOnPage ? "Clear all" : "Select all"}
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {students.length ? (
-            <div className="divide-y divide-border">
-              {students.map((item) => {
-                const selected =
-                  allEligible || selectedStudents.includes(item.id);
-                return (
-                  <label
-                    key={item.id}
-                    className="flex cursor-pointer items-center gap-3 px-5 py-4 transition hover:bg-mist/35 sm:px-7"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => onToggle(item.id)}
-                      className="size-4 accent-teal"
-                    />
-                    <span className="flex min-w-0 flex-1 items-center gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal-light font-body text-sm font-bold text-teal">
-                        {item.name.slice(0, 1).toUpperCase()}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-body text-sm font-semibold text-navy">
-                          {item.name}
-                        </span>
-                        <span className="block truncate font-body text-xs text-navy-muted">
-                          {item.email}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="hidden shrink-0 text-right sm:block">
-                      <span className="block font-body text-xs font-semibold text-navy">
-                        {item.registration_number}
-                      </span>
-                      <span className="mt-1 block font-body text-[0.68rem] text-navy-muted">
-                        Eligible
-                      </span>
-                    </span>
-                    {selected && (
-                      <Check
-                        size={17}
-                        className="shrink-0 text-teal"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="px-5 py-14 text-center sm:px-7">
-              <Users
-                size={24}
-                className="mx-auto text-navy-muted"
-                aria-hidden="true"
-              />
-              <p className="mt-3 font-body text-sm font-semibold text-navy">
-                No eligible students found
-              </p>
-              <p className="mt-1 font-body text-sm text-navy-muted">
-                Try another search or return to the cohort after resolving
-                existing placements.
-              </p>
-            </div>
-          )}
-        </div>
-        <footer className="flex flex-col gap-3 border-t border-border bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-          <p className="font-body text-xs text-navy-muted">
-            {allEligible
-              ? "Every eligible student is selected"
-              : `${selectedStudents.length} selected`}{" "}
-            · {pagination?.total_count ?? students.length} eligible
-          </p>
-          <div className="flex items-center justify-between gap-3 sm:justify-end">
-            {pagination && pagination.total_pages > 1 && (
-              <>
-                <button
-                  type="button"
-                  disabled={!pagination.has_previous}
-                  onClick={() => onPageChange(pagination.page - 1)}
-                  className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 font-body text-xs font-semibold text-teal disabled:opacity-40"
-                >
-                  <ChevronLeft size={15} />
-                  Previous
-                </button>
-                <span className="font-body text-xs font-semibold text-navy-muted">
-                  Page {pagination.page} of {pagination.total_pages}
-                </span>
-                <button
-                  type="button"
-                  disabled={!pagination.has_next}
-                  onClick={() => onPageChange(pagination.page + 1)}
-                  className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 font-body text-xs font-semibold text-teal disabled:opacity-40"
-                >
-                  Next
-                  <ChevronRight size={15} />
-                </button>
-              </>
-            )}
-            <Button type="button" size="sm" onClick={onClose}>
-              Done
-            </Button>
-          </div>
-        </footer>
+      <SearchField label="Search eligible students" placeholder="Search name, email or registration number" value={search} onChange={onSearch} />
+      <div style={{ margin: "8px 0" }}>
+        <AdminButton type="button" variant="ghost" size="sm" onClick={onToggleAll}>{allEligible || allOnPage ? "Clear all" : "Select all eligible"}</AdminButton>
       </div>
-    </div>
-  );
-}
-function Select({
-  label,
-  value,
-  onChange,
-  disabled,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block font-body text-sm font-semibold text-navy">
-      {label}
-      <select
-        required
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className="auth-control mt-2 disabled:opacity-60"
-      >
-        {children}
-      </select>
-    </label>
-  );
-}
-function Field({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block font-body text-sm font-semibold text-navy">
-      {label}
-      <input
-        required
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="auth-control mt-2"
-      />
-    </label>
+      {students.length === 0 ? (
+        <EmptyState icon={<Users />} title="No eligible students found" text="Try another search, or resolve existing placements first." />
+      ) : (
+        <div className="pa-table-scroll" style={{ maxHeight: 340, overflow: "auto" }}>
+          <table className="pa-table">
+            <caption className="sr-only">Eligible students</caption>
+            <thead>
+              <tr><th scope="col" style={{ width: 36 }}><span className="sr-only">Select</span></th><th scope="col">Student</th><th scope="col">Registration</th></tr>
+            </thead>
+            <tbody>
+              {students.map((item) => (
+                <tr key={item.id} className="is-clickable" onClick={() => onToggle(item.id)}>
+                  <td><input type="checkbox" aria-label={`Select ${item.name}`} checked={allEligible || selectedStudents.includes(item.id)} onChange={() => onToggle(item.id)} onClick={(event) => event.stopPropagation()} /></td>
+                  <td><strong>{item.name}</strong><small className="pa-sub">{item.email}</small></td>
+                  <td>{item.registration_number}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pagination && pagination.total_pages > 1 && <ServerPager pagination={pagination} onPage={onPageChange} noun="students" />}
+    </Modal>
   );
 }

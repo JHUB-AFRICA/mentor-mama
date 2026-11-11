@@ -97,3 +97,30 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Roster upload drop zone */
+.pa .invite-drop {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  border: 1.5px dashed #9fd6d3;
+  border-radius: 1rem;
+  background: #f4fafa;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pa .invite-drop:hover, .pa .invite-drop:focus-within { border-color: #0b9696; background: #e9f6f5; }
+.pa .invite-drop strong { color: #10223b; font: 700 0.95rem/1.3 "Inter", sans-serif; }
+.pa .invite-drop small { color: #5b6b7e; font: 500 0.8rem/1.4 "Inter", sans-serif; }
+.pa .invite-drop__icon { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border-radius: 0.8rem; background: #fff; color: #0b9696; box-shadow: 0 2px 8px rgba(16, 34, 59, 0.08); }
+.pa .invite-drop__icon svg { width: 1.2rem; height: 1.2rem; }
+
+/* Compact key/value summary list */
+.pa .pa-summary { display: grid; gap: 0.75rem; margin: 0 0 1rem; }
+.pa .pa-summary > div { display: grid; gap: 0.15rem; padding-bottom: 0.7rem; border-bottom: 1px solid #eef2f6; }
+.pa .pa-summary > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.pa .pa-summary dt { color: #6b7a8c; font: 700 0.68rem/1 "Inter", sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+.pa .pa-summary dd { margin: 0; color: #10223b; font: 600 0.92rem/1.4 "Inter", sans-serif; }
+.pa .pa-link { color: #087575; font-weight: 700; text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer; }
