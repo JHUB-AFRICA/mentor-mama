@@ -1078,3 +1078,38 @@ def test_coordinator_override_needs_a_reason_and_tells_the_facility(active_place
     audit_row = AuditEntry.objects.filter(action="placement.change_ward", entity_id=active_placement.id).latest("occurred_at")
     assert audit_row.is_override and audit_row.override_reason == "Cohort needs a surgical ward"
     assert OutboxEvent.objects.filter(event_type="ArrangementOverridden").exists()
+
+
+def test_consent_is_inert_until_published_then_gates_students_and_mentors(active_placement, student, program, coordinator):
+    import uuid
+
+    program_admin = User.objects.create_user(
+        email="consent-admin@example.test", password="pw", first_name="Consent", last_name="Admin",
+        role=Role.PROGRAM_ADMIN, status=Status.ACTIVE, program=program,
+    )
+    admin = client_for(program_admin)
+    # Nothing published: the student is not gated and /me says so.
+    assert client_for(student).get("/api/v1/consent/current", **HEADERS).json()["data"] is None
+
+    wording = "x" * 60
+    draft = admin.post("/api/v1/consent/versions", {"title": "Consent", "body": wording}, format="json", **HEADERS)
+    assert draft.status_code == 201
+    version_id = draft.json()["data"]["id"]
+    assert client_for(student).get("/api/v1/consent/current", **HEADERS).json()["data"] is None  # a draft is not live
+    assert client_for(coordinator).post("/api/v1/consent/versions", {"title": "No", "body": wording}, format="json", **HEADERS).status_code in {403, 404}
+    assert admin.post(f"/api/v1/consent/versions/{version_id}/publish", {}, format="json", **HEADERS).status_code == 200
+
+    current = client_for(student).get("/api/v1/consent/current", **HEADERS).json()["data"]
+    assert current["accepted"] is False and current["version"] == 1
+
+    # Real session: the gate blocks changes until the wording is accepted.
+    session = APIClient()
+    session.force_login(student)
+    session.cookies  # noqa: B018
+    blocked = session.post(f"/api/v1/placements/{active_placement.id}/orientation/acknowledge", {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS)
+    assert blocked.status_code == 403 and blocked.json()["error"]["code"] == "ConsentRequired"
+
+    assert client_for(student).post("/api/v1/consent/accept", {"version_id": version_id}, format="json", **HEADERS).status_code == 200
+    assert client_for(student).get("/api/v1/consent/current", **HEADERS).json()["data"]["accepted"] is True
+    again = session.post(f"/api/v1/placements/{active_placement.id}/orientation/acknowledge", {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS)
+    assert again.json().get("error", {}).get("code") != "ConsentRequired"

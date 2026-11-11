@@ -27,6 +27,7 @@ const StudentWorkspace = lazy(() =>
 );
 import { Navigate, useLocation } from "react-router-dom";
 import { MentaBuddy } from "../features/assistant/MentaBuddy";
+import { ConsentGate } from "../features/consent/ConsentGate";
 import {
   PortalWorkspaceSkeleton,
   type PortalWorkspaceRole,
@@ -150,6 +151,7 @@ export function AuthenticatedRouter({
         {workspace}
       </Suspense>
       <MentaBuddy user={user} />
+      <ConsentGate user={user} onUserUpdated={onUserUpdated} />
     </>
   );
 }

@@ -1,7 +1,7 @@
 # MentorMAMA consent wording — working draft v0.1
 
 **Status:** DRAFT for enhancement. Not approved. Must be reviewed by the programme/ethics owner and the data-governance lead before any pilot data is collected (see `docs/OPEN-QUESTIONS.md` and `docs/product/stakeholder-decision-memo.md` §2–§3).
-**Not yet built:** no consent capture exists in the product. This text is the input for that build.
+**Built:** consent capture exists (Admin → Consent): versioned wording, publish, per-person acceptance records, and a gate for students and mentors that is inert until a version is published. This text is the input for the final wording.
 **How to read this:** text in `[square brackets]` is a placeholder the programme must supply. Lines marked **CONFIRM** depend on a decision not yet made. Nothing here is legal advice.
 
 Sources used to keep the wording truthful to the system: `docs/product/stakeholder-decision-memo.md` (feedback visibility, anonymity limits, escalation access, small-ward caveat), `.sinaps/state.md` (feedback form, baseline/endline confidence, session log, mentor profile), `backend/apps/notifications/email.py` (what emails contain).

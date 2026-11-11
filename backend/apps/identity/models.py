@@ -224,3 +224,31 @@ class MentorProfile(BaseModel):
 
     class Meta:
         db_table = "identity_mentor_profile"
+
+
+class ConsentVersion(BaseModel):
+    """Versioned consent wording a programme admin publishes. People accept a specific version."""
+
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="consent_versions")
+    version = models.PositiveIntegerField()
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+
+    class Meta:
+        db_table = "identity_consent_version"
+        constraints = [models.UniqueConstraint(fields=["program", "version"], name="consent_version_unique_per_program")]
+        ordering = ["-version"]
+
+
+class ConsentRecord(BaseModel):
+    """Who accepted which version, and when. The accepted text is the version, never just a tick."""
+
+    user = models.ForeignKey("identity.User", on_delete=models.CASCADE, related_name="consent_records")
+    consent_version = models.ForeignKey(ConsentVersion, on_delete=models.PROTECT, related_name="records")
+    accepted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "identity_consent_record"
+        constraints = [models.UniqueConstraint(fields=["user", "consent_version"], name="consent_once_per_version")]

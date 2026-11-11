@@ -20,6 +20,8 @@ export interface CurrentUser {
   };
   capabilities: CapabilityMap;
   email_verified?: boolean;
+  /** True when a published consent wording is waiting for this student or mentor to accept. */
+  consent_required?: boolean;
 }
 
 export interface Person {
@@ -2903,4 +2905,37 @@ export async function overrideArrangement(
     body: JSON.stringify(input),
   });
   return response.data;
+}
+
+export interface ConsentWording {
+  id: string;
+  version: number;
+  title: string;
+  body: string;
+  accepted: boolean;
+}
+export async function acceptConsent(versionId: string): Promise<void> {
+  await request("/api/v1/consent/accept", { method: "POST", body: JSON.stringify({ version_id: versionId }) });
+}
+export async function getConsent(): Promise<ConsentWording | null> {
+  const response = await request<{ data: ConsentWording | null }>("/api/v1/consent/current");
+  return response.data;
+}
+export interface ConsentVersionRow {
+  id: string;
+  version: number;
+  title: string;
+  body: string;
+  published_at: string | null;
+  accepted_count: number;
+}
+export async function getConsentVersions(): Promise<{ versions: ConsentVersionRow[]; starter: { title: string; body: string } }> {
+  const response = await request<{ data: ConsentVersionRow[]; meta: { starter: { title: string; body: string } } }>("/api/v1/consent/versions");
+  return { versions: response.data, starter: response.meta.starter };
+}
+export async function createConsentDraft(input: { title: string; body: string }): Promise<void> {
+  await request("/api/v1/consent/versions", { method: "POST", body: JSON.stringify(input) });
+}
+export async function publishConsent(versionId: string): Promise<void> {
+  await request(`/api/v1/consent/versions/${versionId}/publish`, { method: "POST", body: JSON.stringify({}) });
 }

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
@@ -29,6 +30,7 @@ export type ProgrammeAdminNav =
   | "placements"
   | "reports"
   | "safeguarding"
+  | "consent"
   | "activity"
   | "settings";
 
@@ -155,6 +157,7 @@ export function ProgrammeAdminFrame({
               { id: "people", label: "People & access", icon: <Users />, onSelect: () => navigate("people") },
               { id: "setup", label: "Programme setup", icon: <Building2 />, onSelect: () => navigate("setup") },
               { id: "content", label: "Content library", icon: <BookOpen />, onSelect: () => navigate("content") },
+              { id: "consent", label: "Consent", icon: <ShieldCheck />, onSelect: () => navigate("consent") },
             ],
           },
           {

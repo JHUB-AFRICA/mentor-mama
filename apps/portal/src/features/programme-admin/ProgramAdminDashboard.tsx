@@ -62,6 +62,7 @@ const PeopleTable = lazy(() =>
 const MFARecoveryInbox = lazy(() =>
   import("./MFARecoveryInbox").then((module) => ({ default: module.MFARecoveryInbox })),
 );
+import { ConsentEditor } from "./ConsentEditor";
 const ActivityTimeline = lazy(() =>
   import("./ActivityTimeline").then((module) => ({
     default: module.ActivityTimeline,
@@ -104,6 +105,7 @@ type AdminView =
   | "content-authoring"
   | "reports"
   | "safeguarding"
+  | "consent"
   | "activity"
   | "account";
 type AccountTab =
@@ -156,6 +158,7 @@ function viewFromPath(pathname: string): AdminView {
   if (pathname.endsWith("/activity")) return "activity";
   if (pathname.endsWith("/reports")) return "reports";
   if (pathname.endsWith("/safeguarding")) return "safeguarding";
+  if (pathname.endsWith("/consent")) return "consent";
   if (pathname.endsWith("/content")) return "content";
   if (pathname.endsWith("/account")) return "account";
   if (pathname.endsWith("/settings")) return "setup";
@@ -177,6 +180,8 @@ function titleForView(view: AdminView) {
           ? "Content library"
           : view === "reports"
             ? "Reports"
+            : view === "consent"
+              ? "Consent"
             : view === "safeguarding"
               ? "Safeguarding"
               : view === "account"
@@ -297,6 +302,8 @@ export function ProgramAdminDashboard({
       <ReportsDashboard user={user} onError={onError} onOpenSafeguarding={() => navigate("safeguarding")} />
     ) : view === "safeguarding" ? (
       <ConcernQueue user={user} onError={onError} />
+    ) : view === "consent" ? (
+      <ConsentEditor onError={onError} />
     ) : view === "activity" ? (
       <ActivityTimeline />
     ) : (

@@ -13,6 +13,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.identity import api as identity
+from apps.identity import consent as consent_service
 from apps.identity import authentication
 from apps.identity import capabilities
 from apps.identity import selectors
@@ -52,7 +53,8 @@ def _user_payload(user):
     return {"id": str(user.id), "email": user.email, "name": user.full_name, "phone": user.phone,
             "registration_number": user.registration_number,
             "role": user.role, "email_verified": bool(user.email_verified_at), "scope": scope.as_dict(),
-            "capabilities": identity.capabilities_for(user)}
+            "capabilities": identity.capabilities_for(user),
+            "consent_required": consent_service.is_required(user)}
 
 
 class LoginView(APIView):
@@ -754,3 +756,58 @@ class MentorProfileView(APIView):
                 changes={"fields": sorted(payload.validated_data)},
             )
         return Response({"data": _mentor_profile_payload(profile)})
+
+
+class ConsentCurrentView(APIView):
+    """The wording the signed-in student or mentor must accept (null when none applies)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.identity import consent
+
+        return Response({"data": consent.current_for(request.user)})
+
+
+class ConsentAcceptView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.identity import consent
+
+        version_id = request.data.get("version_id")
+        if not version_id:
+            return Response({"error": {"code": "ValidationError", "message": "Choose the wording you are accepting."}}, status=400)
+        consent.accept(request.user, version_id)
+        return Response({"data": {"accepted": True}})
+
+
+class ConsentVersionsView(APIView):
+    """Programme admin: list versions, save a new draft, or load the starter wording."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.identity import consent
+
+        data = consent.list_versions(request.user)
+        return Response({"data": data, "meta": {"starter": {"title": consent.STARTER_TITLE, "body": consent.STARTER_BODY}}})
+
+    def post(self, request):
+        from apps.identity import consent
+
+        title, body = str(request.data.get("title", "")).strip(), str(request.data.get("body", "")).strip()
+        if not title or len(body) < 40:
+            return Response({"error": {"code": "ValidationError", "message": "Add a title and the full consent wording."}}, status=400)
+        version = consent.create_draft(request.user, title=title, body=body)
+        return Response({"data": {"id": str(version.id), "version": version.version}}, status=201)
+
+
+class ConsentPublishView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, version_id):
+        from apps.identity import consent
+
+        version = consent.publish(request.user, version_id)
+        return Response({"data": {"id": str(version.id), "version": version.version, "published_at": version.published_at}})
