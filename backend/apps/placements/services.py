@@ -342,10 +342,12 @@ def confirm_programme_directory_coverage(*, actor):
 @transaction.atomic
 def update_programme_ward(*, actor, ward_id: UUID, **data):
     """Update shared ward configuration while enforcing POL-007 under lock."""
-    if actor.status != identity.STATUSES.ACTIVE or actor.role != identity.ROLES.PROGRAM_ADMIN:
+    if actor.status != identity.STATUSES.ACTIVE or actor.role not in {identity.ROLES.PROGRAM_ADMIN, identity.ROLES.NURSE_MANAGER}:
         return None
     ward = facilities.lock_ward(ward_id)
     if ward is None or ward.facility.program_id != actor.program_id:
+        return None
+    if actor.role == identity.ROLES.NURSE_MANAGER and ward.facility_id != actor.facility_id:
         return None
     archived = data.pop("archived", None)
     occupied = WardAssignment.objects.filter(
@@ -369,7 +371,8 @@ def update_programme_ward(*, actor, ward_id: UUID, **data):
         changes={"fields": list(data), "occupied": occupied,
                  **({"archived": archived} if archived is not None else {})},
     )
-    identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
+    if actor.role == identity.ROLES.PROGRAM_ADMIN:
+        identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
     return ward
 
 

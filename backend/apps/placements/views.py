@@ -419,9 +419,12 @@ def _ward_row_for_actor(actor, ward_id):
     return next((row for row in rows if row["id"] == ward_id), None)
 
 
+_WARD_MANAGERS = {identity.ROLES.PROGRAM_ADMIN, identity.ROLES.NURSE_MANAGER}
+
+
 def _programme_admin_denied():
     return Response(
-        {"error": {"code": "UnauthorizedProgrammeAction", "message": "Ward configuration is available to Programme Administrators only."}},
+        {"error": {"code": "UnauthorizedProgrammeAction", "message": "Ward configuration is available to Programme Administrators and the facility's Nurse Manager."}},
         status=status.HTTP_403_FORBIDDEN,
     )
 
@@ -437,7 +440,7 @@ class ProgrammeWardDirectoryView(APIView):
         return Response({"data": [_programme_ward_payload(row) for row in rows]})
 
     def post(self, request):
-        if request.user.role != identity.ROLES.PROGRAM_ADMIN or request.user.status != identity.STATUSES.ACTIVE:
+        if request.user.role not in _WARD_MANAGERS or request.user.status != identity.STATUSES.ACTIVE:
             return _programme_admin_denied()
         payload = serializers.CreateProgrammeWardSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
@@ -460,7 +463,7 @@ class ProgrammeWardConfigurationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, ward_id):
-        if request.user.role != identity.ROLES.PROGRAM_ADMIN or request.user.status != identity.STATUSES.ACTIVE:
+        if request.user.role not in _WARD_MANAGERS or request.user.status != identity.STATUSES.ACTIVE:
             return _programme_admin_denied()
         payload = serializers.UpdateProgrammeWardSerializer(data=request.data, partial=True)
         payload.is_valid(raise_exception=True)

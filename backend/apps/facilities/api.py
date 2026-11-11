@@ -60,8 +60,10 @@ def ward_of_id(ward_id: UUID, *, program_id: UUID) -> Ward | None:
 
 @transaction.atomic
 def create_ward_record(*, actor, facility_id: UUID, name: str, max_students: int, shift_pattern: str = "") -> Ward | None:
-    """Create a Programme Admin ward record through the facilities boundary."""
-    if actor.status != "active" or actor.role != "program_admin":
+    """Create a ward record: a Programme Admin anywhere in the programme, a Nurse Manager in their own facility."""
+    if actor.status != "active" or actor.role not in {"program_admin", "nurse_manager"}:
+        return None
+    if actor.role == "nurse_manager" and actor.facility_id != facility_id:
         return None
     facility = Facility.objects.filter(
         id=facility_id, program_id=actor.program_id, archived_at=None,
@@ -78,5 +80,6 @@ def create_ward_record(*, actor, facility_id: UUID, name: str, max_students: int
         scope={"program_id": str(actor.program_id), "facility_id": str(facility.id)},
         changes={"name": ward.name, "max_students": ward.max_students},
     )
-    identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
+    if actor.role == "program_admin":
+        identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
     return ward

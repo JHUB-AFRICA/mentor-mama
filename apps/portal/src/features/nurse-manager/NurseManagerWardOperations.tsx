@@ -1,344 +1,195 @@
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Hospital, RefreshCw, Users } from "lucide-react";
-import { Button, Skeleton } from "@mentormama/ui";
-import { getPlacements, getWards, type CurrentUser } from "../../services/api";
-import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
-import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { TablePagination } from "../../components/TablePagination";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Building2, Gauge, Lock, LockOpen, Pencil, Plus, RefreshCw, Users } from "lucide-react";
+import { Skeleton } from "@mentormama/ui";
+import { Field, FieldRow, Modal, TextInput } from "../../components/kit";
+import { PortalErrorState } from "../../components/PortalErrorState";
+import { useToast } from "../../components/ToastProvider";
+import { ApiError, createWard, getFacilities, getWards, updateWard, type CurrentUser, type Ward } from "../../services/api";
+import { AdminButton, AdminPage, AdminPageHeader, EmptyState, StatCard, StatGrid, StatusPill } from "../programme-admin/ui/AdminKit";
+import { DataTable, type ColumnDef } from "../programme-admin/ui/DataTable";
+import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 
-export function NurseManagerWardOperations({
-  user,
-  onError,
-}: {
-  user: CurrentUser;
-  onError: (message: string) => void;
-}) {
+type Draft = { id: string | null; name: string; shift_pattern: string; max_students: string };
+const EMPTY: Draft = { id: null, name: "", shift_pattern: "", max_students: "" };
+
+/** Ward capacity for this facility. Declared capacity is what automatic arrangement and coordinators plan against. */
+export function NurseManagerWardOperations({ user, onError }: { user: CurrentUser; onError: (message: string) => void }) {
   const navigate = useNavigate();
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const wards = useQuery({
-    queryKey: ["facility-ward-operations"],
-    queryFn: getWards,
-    staleTime: 15_000,
+  const queryClient = useQueryClient();
+  const { pushToast } = useToast();
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const wards = useQuery({ queryKey: ["facility-ward-operations"], queryFn: getWards, staleTime: 15_000 });
+  const facilities = useQuery({ queryKey: ["facility-dashboard-facilities"], queryFn: getFacilities, staleTime: 60_000 });
+  const rows = wards.data ?? [];
+  const open = rows.filter((ward) => !ward.archived_at);
+  const capacity = open.reduce((sum, ward) => sum + ward.max_students, 0);
+  const allocated = open.reduce((sum, ward) => sum + ward.allocated_students, 0);
+  const free = open.reduce((sum, ward) => sum + ward.available_slots, 0);
+
+  const save = useMutation({
+    mutationFn: async (value: Draft) => {
+      const input = { name: value.name.trim(), shift_pattern: value.shift_pattern.trim(), max_students: Number(value.max_students) };
+      if (value.id) return updateWard(value.id, input);
+      const facilityId = facilities.data?.[0]?.id ?? rows[0]?.facility_id;
+      if (!facilityId) throw new Error("Your facility could not be found.");
+      return createWard({ facility_id: facilityId, ...input });
+    },
+    onSuccess: (_ward, value) => {
+      pushToast({ kind: "success", title: value.id ? "Ward updated" : "Ward added", message: "Capacity changes apply to new arrangements straight away." });
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["facility-ward-operations"] });
+      void queryClient.invalidateQueries({ queryKey: ["facility-dashboard-wards"] });
+    },
+    onError: (cause) => onError(cause instanceof ApiError || cause instanceof Error ? cause.message : "We could not save that ward."),
   });
-  const placements = useQuery({
-    queryKey: ["facility-ward-placements"],
-    queryFn: () => getPlacements({ pageSize: 50 }),
-    staleTime: 15_000,
+  const toggle = useMutation({
+    mutationFn: (ward: Ward) => updateWard(ward.id, { archived: !ward.archived_at }),
+    onSuccess: (_result, ward) => {
+      pushToast({ kind: "success", title: ward.archived_at ? "Ward reopened" : "Ward closed", message: ward.archived_at ? "It can receive students again." : "No new students will be placed there." });
+      void queryClient.invalidateQueries({ queryKey: ["facility-ward-operations"] });
+    },
+    onError: (cause) => onError(cause instanceof Error ? cause.message : "We could not change that ward."),
   });
-  const busy = wards.isFetching || placements.isFetching;
-  const refresh = () =>
-    void Promise.all([wards.refetch(), placements.refetch()]);
-  const allWards = wards.data ?? [];
-  const allPlacements = placements.data?.results ?? [];
-  const openSlots = allWards.reduce(
-    (sum, ward) => sum + ward.available_slots,
-    0,
-  );
-  const allocated = allWards.reduce(
-    (sum, ward) => sum + ward.allocated_students,
-    0,
-  );
-  const visibleWards = allWards.slice((page - 1) * pageSize, page * pageSize);
+
+  const columns: ColumnDef<Ward>[] = [
+    { accessorKey: "name", header: "Ward", cell: ({ row }) => <strong>{row.original.name}</strong> },
+    { accessorKey: "shift_pattern", header: "Shifts", cell: ({ row }) => row.original.shift_pattern || <span className="pa-muted">Not recorded</span> },
+    {
+      id: "occupancy",
+      header: "Occupancy",
+      accessorFn: (ward) => (ward.max_students ? ward.allocated_students / ward.max_students : 0),
+      cell: ({ row }) => (
+        <span className="pa-cell-fill">
+          <span>{row.original.allocated_students} / {row.original.max_students}</span>
+          <span className="pa-meter" aria-hidden="true">
+            <span style={{ width: `${Math.min(100, row.original.max_students ? (row.original.allocated_students / row.original.max_students) * 100 : 0)}%` }} />
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorFn: (ward) => (ward.archived_at ? "closed" : ward.available_slots > 0 ? "open" : "full"),
+      cell: ({ row }) =>
+        row.original.archived_at ? (
+          <StatusPill tone="neutral">Closed</StatusPill>
+        ) : row.original.available_slots > 0 ? (
+          <StatusPill tone="success">{row.original.available_slots} open</StatusPill>
+        ) : (
+          <StatusPill tone="warning">Full</StatusPill>
+        ),
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      meta: { align: "right" },
+      cell: ({ row }) => (
+        <span className="pa-row-actions" onClick={(event) => event.stopPropagation()}>
+          <AdminButton variant="ghost" size="sm" icon={<Pencil />} onClick={() => setDraft({ id: row.original.id, name: row.original.name, shift_pattern: row.original.shift_pattern, max_students: String(row.original.max_students) })}>
+            Edit
+          </AdminButton>
+          <AdminButton variant="ghost" size="sm" icon={row.original.archived_at ? <LockOpen /> : <Lock />} disabled={toggle.isPending} onClick={() => toggle.mutate(row.original)}>
+            {row.original.archived_at ? "Reopen" : "Close"}
+          </AdminButton>
+          <AdminButton variant="ghost" size="sm" onClick={() => navigate(`/placements?ward=${encodeURIComponent(row.original.id)}`)}>
+            Students
+          </AdminButton>
+        </span>
+      ),
+    },
+  ];
+
+  const valid = draft ? draft.name.trim().length > 0 && Number(draft.max_students) >= 1 && Number(draft.max_students) <= 500 : false;
+  const nav = (destination: string) => navigate(destination === "overview" ? "/facility" : destination === "placements" ? "/placements" : `/facility/${destination}`);
 
   return (
-    <FacilityWorkspaceFrame
-      user={user}
-      active="wards"
-      title="Ward operations"
-      onNavigate={(destination) =>
-        navigate(
-          destination === "overview"
-            ? "/facility"
-            : destination === "placements"
-              ? "/placements"
-              : `/facility/${destination}`,
-        )
-      }
-      onAccount={() => navigate("/facility/account")}
-      onError={onError}
-    >
-      <div className="space-y-8">
-        <header className="flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row sm:items-end">
-          <div>
-            <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-              Facility operations
-            </p>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-navy sm:text-4xl">
-              Ward readiness
-            </h2>
-            <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-navy-muted">
-              Know where capacity is available, then move directly into the
-              placement decisions that keep students progressing.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={busy}
-            className="inline-flex min-h-10 items-center gap-2 self-start rounded-xl px-3 font-body text-sm font-semibold text-teal transition hover:bg-teal-light disabled:opacity-50 sm:self-auto"
-          >
-            <RefreshCw
-              size={16}
-              className={busy ? "animate-spin" : ""}
-              aria-hidden="true"
-            />{" "}
-            {busy ? "Refreshing…" : "Refresh"}
-          </button>
-        </header>
+    <FacilityWorkspaceFrame user={user} active="wards" title="Ward operations" onNavigate={nav} onAccount={() => navigate("/facility/account")} onError={onError}>
+      <AdminPage>
+        <AdminPageHeader
+          eyebrow="Facility operations"
+          title="Wards and capacity"
+          description="Declare how many students each ward can take. Coordinators plan requests against this, and automatic arrangement never goes over it."
+          actions={
+            <>
+              <AdminButton variant="ghost" size="sm" icon={<RefreshCw />} disabled={wards.isFetching} onClick={() => void wards.refetch()}>
+                Refresh
+              </AdminButton>
+              <AdminButton size="sm" icon={<Plus />} onClick={() => setDraft(EMPTY)}>
+                Add ward
+              </AdminButton>
+            </>
+          }
+        />
+        <StatGrid columns={3}>
+          <StatCard icon={<Building2 />} tone="teal" value={open.length} label="Open wards" hint={`${rows.length - open.length} closed`} loading={wards.isPending} />
+          <StatCard icon={<Gauge />} tone={free ? "green" : "amber"} value={free} label="Spaces available" hint={`${capacity} declared capacity`} loading={wards.isPending} />
+          <StatCard icon={<Users />} tone="blue" value={allocated} label="Students placed" hint="Across open wards" loading={wards.isPending} />
+        </StatGrid>
 
         {wards.isPending ? (
-          <div className="grid divide-y divide-border overflow-hidden rounded-xl border border-border bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {[1, 2, 3].map((item) => (
-              <Skeleton key={item} className="h-24 rounded-2xl" />
-            ))}
-          </div>
+          <Skeleton className="h-64" />
         ) : wards.isError ? (
-          <ErrorState onRetry={() => void wards.refetch()} />
+          <PortalErrorState onRetry={() => void wards.refetch()} />
         ) : (
-          <>
-            <section
-              aria-label="Facility capacity summary"
-              className="grid gap-3 sm:grid-cols-3"
-            >
-              <SummaryCard
-                label="Wards in scope"
-                value={allWards.length}
-                detail="Configured for this facility"
-                icon={<Hospital size={18} aria-hidden="true" />}
+          <DataTable
+            data={rows}
+            columns={columns}
+            caption="Facility wards"
+            pageSize={10}
+            csvName="mentormama-wards"
+            empty={
+              <EmptyState
+                icon={<Building2 />}
+                title="Add your first ward"
+                text="Wards and their capacity let coordinators send students your way and let the system place them for you."
+                action={<AdminButton size="sm" icon={<Plus />} onClick={() => setDraft(EMPTY)}>Add ward</AdminButton>}
               />
-              <SummaryCard
-                label="Open capacity"
-                value={openSlots}
-                detail="Spaces available now"
-                icon={<span className="font-display text-lg font-bold">+</span>}
-                tone="teal"
-              />
-              <SummaryCard
-                label="Students allocated"
-                value={allocated}
-                detail={`${allPlacements.length} visible placements`}
-                icon={<Users size={18} aria-hidden="true" />}
-              />
-            </section>
-            <section aria-labelledby="wards-heading">
-              <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-                <div>
-                  <p className="font-body text-xs font-bold uppercase tracking-[0.16em] text-teal">
-                    Your facility
-                  </p>
-                  <h2
-                    id="wards-heading"
-                    className="mt-2 font-display text-2xl font-bold tracking-tight text-navy"
-                  >
-                    Wards on duty
-                  </h2>
-                </div>
-                <p className="font-body text-sm text-navy-muted">
-                  Operational view · configuration is managed by Programme Admin
-                </p>
-              </div>
-              {allWards.length === 0 ? (
-                <div className="mt-5 rounded-2xl border border-dashed border-border bg-white px-5 py-12 text-center">
-                  <Hospital
-                    className="mx-auto text-teal"
-                    size={25}
-                    aria-hidden="true"
-                  />
-                  <p className="mt-3 font-body text-sm font-bold text-navy">
-                    No wards are configured
-                  </p>
-                  <p className="mt-1 font-body text-sm text-navy-muted">
-                    Ask a Programme Administrator to configure a ward for this
-                    facility.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-5 overflow-hidden rounded-xl border border-border bg-white">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-[60rem] w-full text-left">
-                      <caption className="sr-only">
-                        Ward capacity and operational placement summary
-                      </caption>
-                      <thead className="border-b border-border bg-mist/45">
-                        <tr className="font-body text-[0.68rem] font-bold uppercase tracking-[0.1em] text-navy-muted">
-                          <th scope="col" className="px-5 py-3">
-                            Ward
-                          </th>
-                          <th scope="col" className="px-5 py-3">
-                            Shift pattern
-                          </th>
-                          <th scope="col" className="px-5 py-3">
-                            Occupancy
-                          </th>
-                          <th scope="col" className="px-5 py-3">
-                            Open capacity
-                          </th>
-                          <th scope="col" className="px-5 py-3">
-                            Placements
-                          </th>
-                          <th scope="col" className="px-5 py-3 text-right">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {visibleWards.map((ward) => {
-                          const wardPlacements = allPlacements.filter(
-                            (placement) => placement.ward?.id === ward.id,
-                          );
-                          const occupancy = Math.min(
-                            (ward.allocated_students /
-                              Math.max(ward.max_students, 1)) *
-                              100,
-                            100,
-                          );
-                          return (
-                            <tr
-                              key={ward.id}
-                              className="group transition hover:bg-mist/30"
-                            >
-                              <th
-                                scope="row"
-                                className="px-5 py-4 align-middle"
-                              >
-                                <span className="flex items-center gap-3">
-                                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-light text-teal">
-                                    <Hospital size={17} aria-hidden="true" />
-                                  </span>
-                                  <span className="min-w-0">
-                                    <span className="block truncate font-body text-sm font-bold text-navy group-hover:text-teal">
-                                      {ward.name}
-                                    </span>
-                                    <span className="mt-1 block font-body text-xs text-navy-muted">
-                                      Capacity enforced at allocation
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <td className="px-5 py-4 font-body text-sm text-navy-muted">
-                                {ward.shift_pattern || "Not recorded"}
-                              </td>
-                              <td className="min-w-48 px-5 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-2 min-w-24 flex-1 overflow-hidden rounded-full bg-mist">
-                                    <div
-                                      className={`h-full rounded-full ${ward.available_slots > 0 ? "bg-teal" : "bg-error"}`}
-                                      style={{ width: `${occupancy}%` }}
-                                    />
-                                  </div>
-                                  <span className="whitespace-nowrap font-body text-sm font-semibold text-navy">
-                                    {ward.allocated_students}/
-                                    {ward.max_students}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4">
-                                <span
-                                  className={`inline-flex rounded-full px-2.5 py-1 font-body text-xs font-bold ${ward.available_slots > 0 ? "bg-teal-light text-teal" : "bg-error/10 text-error"}`}
-                                >
-                                  {ward.available_slots} open
-                                </span>
-                              </td>
-                              <td className="px-5 py-4">
-                                <span className="inline-flex items-center gap-1.5 font-body text-sm font-semibold text-navy">
-                                  <Users
-                                    size={14}
-                                    className="text-navy-muted"
-                                    aria-hidden="true"
-                                  />
-                                  {wardPlacements.length} visible
-                                </span>
-                              </td>
-                              <td className="px-5 py-4 text-right">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="tertiary"
-                                  className="whitespace-nowrap"
-                                  onClick={() =>
-                                    navigate(
-                                      `/placements?ward=${encodeURIComponent(ward.id)}`,
-                                    )
-                                  }
-                                >
-                                  Open placements{" "}
-                                  <ArrowRight
-                                    size={15}
-                                    className="ml-2"
-                                    aria-hidden="true"
-                                  />
-                                </Button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <TablePagination
-                    page={page}
-                    totalPages={Math.ceil(allWards.length / pageSize)}
-                    totalCount={allWards.length}
-                    pageSize={pageSize}
-                    onPage={setPage}
-                  />
-                </div>
-              )}
-            </section>
-          </>
+            }
+          />
         )}
-      </div>
+
+        <Modal
+          open={Boolean(draft)}
+          onClose={() => !save.isPending && setDraft(null)}
+          dismissible={!save.isPending}
+          icon={<Building2 />}
+          title={draft?.id ? "Edit ward" : "Add a ward"}
+          description="Capacity cannot be set lower than the students already placed there."
+          footer={
+            <>
+              <AdminButton variant="secondary" size="sm" onClick={() => setDraft(null)} disabled={save.isPending}>Cancel</AdminButton>
+              <AdminButton size="sm" disabled={!valid || save.isPending} onClick={() => draft && save.mutate(draft)}>
+                {save.isPending ? "Saving…" : draft?.id ? "Save ward" : "Add ward"}
+              </AdminButton>
+            </>
+          }
+        >
+          {draft && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (valid && !save.isPending) save.mutate(draft);
+              }}
+            >
+              <Field label="Ward name" required>
+                <TextInput autoFocus maxLength={120} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="e.g. Medical Ward 3" />
+              </Field>
+              <FieldRow>
+                <Field label="Student capacity" required hint="Most students at one time">
+                  <TextInput type="number" min="1" max="500" value={draft.max_students} onChange={(event) => setDraft({ ...draft, max_students: event.target.value })} />
+                </Field>
+                <Field label="Shift pattern" optional>
+                  <TextInput maxLength={120} value={draft.shift_pattern} onChange={(event) => setDraft({ ...draft, shift_pattern: event.target.value })} placeholder="e.g. Day, Night" />
+                </Field>
+              </FieldRow>
+            </form>
+          )}
+        </Modal>
+      </AdminPage>
     </FacilityWorkspaceFrame>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-  icon,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  detail: string;
-  icon: React.ReactNode;
-  tone?: "default" | "teal";
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-5 ${tone === "teal" ? "border-teal/20 bg-[#edf8f7]" : "border-border bg-white"}`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-teal-light text-teal">
-          {icon}
-        </span>
-        <span className="font-display text-3xl font-bold tabular-nums text-navy">
-          {value}
-        </span>
-      </div>
-      <p className="mt-4 font-body text-sm font-bold text-navy">{label}</p>
-      <p className="mt-1 font-body text-xs text-navy-muted">{detail}</p>
-    </div>
-  );
-}
-
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div
-      role="alert"
-      className="rounded-2xl border border-error/20 bg-error/5 px-5 py-4 font-body text-sm text-error"
-    >
-      We could not load your ward records.
-      <button
-        type="button"
-        className="ml-2 font-bold underline"
-        onClick={onRetry}
-      >
-        Try again
-      </button>
-    </div>
   );
 }

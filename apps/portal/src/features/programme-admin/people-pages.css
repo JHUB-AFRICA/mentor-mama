@@ -85,3 +85,15 @@
   .pa .pa-activity-row .pa-activity-row__time { margin-left: 3.05rem; }
   .pa .pa-activity-row .pa-btn { margin-left: auto; }
 }
+
+/* Day headings in personal activity feeds */
+.pa .pa-feed__day {
+  margin: 0;
+  padding: 0.75rem 1.1rem 0.4rem;
+  border-bottom: 1px solid var(--pa-line, #e3edf0);
+  background: #f7fafb;
+  color: #5b6b7e;
+  font: 700 0.72rem/1 "Inter", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
