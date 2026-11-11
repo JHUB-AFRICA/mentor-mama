@@ -46,9 +46,9 @@ envVarGroups:
         value: "1"
       # Domains. PORTAL_DOMAIN feeds ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS and the links inside emails.
       - key: PORTAL_DOMAIN
-        value: app.sinapstechnology.tech # TODO: set to the portal's real domain
+        value: mentormama-portal.onrender.com # the portal's host; switch to the custom domain when it has one
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://app.sinapstechnology.tech # keep in step with PORTAL_DOMAIN
+        value: https://mentormama-portal.onrender.com # keep in step with PORTAL_DOMAIN
       # Email: Resend, one sender for the whole product.
       - key: EMAIL_PROVIDER
         value: resend
@@ -78,6 +78,11 @@ services:
     runtime: static
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @mentormama/web build
     staticPublishPath: apps/web/dist
+    envVars:
+      # Where "Portal sign in" on the website goes. Baked into the site at build time, so a change needs a redeploy.
+      # Use the portal's custom domain here once it has one (and keep PORTAL_DOMAIN below in step).
+      - key: VITE_PORTAL_URL
+        value: https://mentormama-portal.onrender.com
     # domains:
     #   - mentormama.sinapstechnology.tech
     headers:

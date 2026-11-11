@@ -11,7 +11,11 @@ const navLinks = [
   { label: "Contact", href: "/contact" },
 ];
 
-const portalUrl = import.meta.env.VITE_PORTAL_URL ?? "http://localhost:5174";
+// "Portal sign in" goes to the signed-in app. Set VITE_PORTAL_URL when building (render.yaml does); the local
+// address is only the fallback for `pnpm dev`, so a production build can never point visitors at localhost.
+const portalUrl =
+  import.meta.env.VITE_PORTAL_URL ||
+  (import.meta.env.DEV ? "http://localhost:5174" : "https://mentormama-portal.onrender.com");
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
