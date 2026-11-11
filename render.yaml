@@ -10,14 +10,13 @@
 #   mentormama-cache     Key Value (cache, may evict)
 #   mentormama-broker    Key Value (Celery queue, never evicts)
 #
-# FIRST SYNC — this file creates an env group named `mentormama-secrets` with the keys below but NO values (values
-# never belong in git, and Blueprints cannot hold secrets in a group). Right after the first sync, open
-# Dashboard > Env Groups > mentormama-secrets and fill them in; the services redeploy when you save. The API and the
-# worker share this group on purpose: invitation and reset links are signed with SECRET_KEY, so every service
-# must have the same one.
+# BEFORE THE FIRST SYNC — the secrets live in an env group that is NOT defined here (Blueprints reject keys without
+# values, and secrets never belong in git). Create it once in the Dashboard (Env Groups > New), named exactly
+# `mentormama-secrets`, using .env.render.example as the list of keys. The API, worker and scheduler all attach it
+# with `fromGroup`, and they must share one SECRET_KEY because invitation and reset links are signed with it.
 #   SECRET_KEY               openssl rand -hex 32
 #   RESEND_API_KEY           Resend > API keys (sending access, domain sinapstechnology.tech)
-#   RESEND_SIGNING_SECRET    leave empty until step 1 below, then the endpoint's signing secret (whsec_...)
+#   RESEND_SIGNING_SECRET    add after step 1 below (the endpoint's signing secret, whsec_...)
 #   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   for the private export bucket (any S3-compatible store)
 #   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION
@@ -37,19 +36,6 @@
 # commands or persistent disks.
 
 envVarGroups:
-  # Secrets: keys only. Fill the values in the Dashboard (see the note at the top).
-  - name: mentormama-secrets
-    envVars:
-      - key: SECRET_KEY
-      - key: RESEND_API_KEY
-      - key: RESEND_SIGNING_SECRET
-      - key: AI_API_KEY
-      - key: AWS_ACCESS_KEY_ID
-      - key: AWS_SECRET_ACCESS_KEY
-      - key: EXPORT_STORAGE_BUCKET
-      - key: EXPORT_STORAGE_ENDPOINT
-      - key: EXPORT_STORAGE_REGION
-
   - name: mentormama-config
     envVars:
       - key: DJANGO_SETTINGS_MODULE
