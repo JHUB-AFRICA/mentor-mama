@@ -208,3 +208,20 @@
   .ui-dialog--drawer { border-radius: 0; }
   .ui-details, .ui-field-row { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Vertical rhythm for stacked form pieces: consistent space between fields, rows and the action that follows. */
+.ui-field + .ui-field,
+.ui-field + .ui-field-row,
+.ui-field-row + .ui-field,
+.ui-field-row + .ui-field-row { margin-top: 1rem; }
+.ui-field-row > .ui-field + .ui-field { margin-top: 0; }
+.ui-field + button,
+.ui-field-row + button,
+.ui-field + .pa-btn,
+.ui-field-row + .pa-btn,
+.ui-field + .pa-row-actions,
+.ui-field-row + .pa-row-actions,
+.ui-field + .pa-card,
+.ui-field-row + .pa-card { margin-top: 1.25rem; }
+.ui-field-row + .pa-notice,
+.ui-field + .pa-notice { margin-top: 1rem; }

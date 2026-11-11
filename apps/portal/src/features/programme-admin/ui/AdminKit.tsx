@@ -8,6 +8,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import "./admin-kit.css";
+import "../people-pages.css";
 
 export type Tone = "teal" | "violet" | "blue" | "sky" | "amber" | "rose" | "green" | "slate";
 export type PillTone = "success" | "warning" | "danger" | "info" | "teal" | "neutral";
