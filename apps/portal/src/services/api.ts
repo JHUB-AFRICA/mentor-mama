@@ -342,6 +342,8 @@ export interface Placement {
   institution_name?: string;
   facility_id?: string | null;
   facility_name?: string | null;
+  requested_facility_id?: string | null;
+  requested_facility_name?: string | null;
   state: PlacementState;
   planned_start: string;
   planned_end: string;
@@ -2236,6 +2238,102 @@ export async function createPlacement(input: {
     headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify(input),
   });
+  return response.data;
+}
+
+export type ArrangeRow = {
+  placement_id: string;
+  student: string;
+  cohort?: string;
+  window?: [string, string];
+  ward: { id: string; name: string } | null;
+  mentor: { id: string; name: string; trained: boolean } | null;
+  issues: string[];
+  reason?: string;
+};
+export type ArrangePlan = {
+  seed: string;
+  strategy: "balanced" | "fill";
+  assignments: ArrangeRow[];
+  unplaced: ArrangeRow[];
+  summary: {
+    incoming: number;
+    arranged: number;
+    unplaced: number;
+    with_mentor: number;
+    wards: Array<{ id: string; name: string; capacity: number; added: number }>;
+    mentors: Array<{ id: string; name: string; assigned: number; remaining: number }>;
+  };
+};
+export type ArrangeResult = {
+  seed: string;
+  arranged: ArrangeRow[];
+  unplaced: ArrangeRow[];
+  summary: { arranged: number; unplaced: number; mentors_notified: number };
+};
+export type ArrangeInput = {
+  strategy: "balanced" | "fill";
+  assign_mentors: boolean;
+  seed?: string;
+  placement_ids?: string[];
+};
+
+/** Draft placements that coordinators have requested of this facility. */
+export async function getIncomingPlacements(): Promise<Placement[]> {
+  const response = await request<{ data: Placement[] }>("/api/v1/placements/incoming");
+  return response.data;
+}
+
+export async function previewAutoArrange(input: ArrangeInput): Promise<ArrangePlan> {
+  const response = await request<{ data: ArrangePlan }>("/api/v1/placements/auto-arrange", {
+    method: "POST",
+    body: JSON.stringify({ ...input, preview: true }),
+  });
+  return response.data;
+}
+
+export async function applyAutoArrange(input: ArrangeInput): Promise<ArrangeResult> {
+  const response = await request<{ data: ArrangeResult }>("/api/v1/placements/auto-arrange", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ ...input, preview: false }),
+  });
+  return response.data;
+}
+
+export type FacilityRequestInput = {
+  placement_ids: string[];
+  facility_ids: string[];
+  mode: "capacity" | "even";
+  seed?: string;
+};
+export type FacilityRequestPlan = {
+  seed: string;
+  mode: string;
+  facilities: Array<{ facility_id: string; free_capacity: number; requested: number }>;
+  assignments: Array<{ placement_id: string; student: string; facility_id: string }>;
+  unplaced: Array<{ placement_id: string; student: string; reason: string }>;
+};
+
+export async function previewFacilityRequest(input: FacilityRequestInput): Promise<FacilityRequestPlan> {
+  const response = await request<{ data: FacilityRequestPlan }>("/api/v1/placements/facility-requests", {
+    method: "POST",
+    body: JSON.stringify({ ...input, preview: true }),
+  });
+  return response.data;
+}
+
+export async function applyFacilityRequest(
+  input: FacilityRequestInput,
+): Promise<{ requested: number; by_facility: Record<string, number>; unplaced: unknown[] }> {
+  const response = await request<{ data: { requested: number; by_facility: Record<string, number>; unplaced: unknown[] } }>(
+    "/api/v1/placements/facility-requests",
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify({ ...input, preview: false }),
+    },
+  );
   return response.data;
 }
 

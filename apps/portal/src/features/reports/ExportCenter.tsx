@@ -111,7 +111,7 @@ export function ExportCenter({
             {facilities.length > 1 && (
               <SelectField label="Facility" value={facilityId} onChange={setFacilityId} options={[{ value: "", label: "All facilities" }, ...facilities.map((f) => ({ value: f.id, label: f.name }))]} />
             )}
-            <SelectField label="Format" value={format} onChange={(value) => setFormat(value as ExportFormat)} options={[{ value: "csv", label: "CSV" }, { value: "xlsx", label: "Excel (XLSX)" }]} />
+            <SelectField label="Format" value={format} onChange={(value) => setFormat(value as ExportFormat)} options={[{ value: "csv", label: "CSV" }, { value: "xlsx", label: "Excel (XLSX)" }, { value: "pdf", label: "PDF (branded report)" }]} />
             <AdminButton icon={<FileSpreadsheet />} disabled={request.isPending || (type === "cohort" && !cohortId)} onClick={() => request.mutate()}>
               {request.isPending ? "Requesting…" : "Request export"}
             </AdminButton>

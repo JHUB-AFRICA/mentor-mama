@@ -3,6 +3,7 @@ import { CalendarDays, Check, FileText, MapPin, ShieldCheck, UserRound, X } from
 import { Button, Card } from "@mentormama/ui";
 import { useToast } from "../../components/ToastProvider";
 import { acknowledgeOrientation, getOrientationAcknowledgement, type Placement } from "../../services/api";
+import { lockScroll } from "../../lib/scrollLock";
 
 type ConfirmedItems = {
   details: boolean;
@@ -42,9 +43,7 @@ export function OrientationPanel({ placement, onComplete, onError }: { placement
 
   useEffect(() => {
     if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
+    return lockScroll();
   }, [open]);
 
   function close() {

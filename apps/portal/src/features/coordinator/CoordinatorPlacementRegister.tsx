@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Layers, Plus } from "lucide-react";
+import { Building2, ClipboardList, Layers, Plus } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { getPlacementOptions, getPlacements, type CurrentUser, type Placement } from "../../services/api";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { AdminButton, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { RequestFacilitiesModal } from "./RequestFacilitiesModal";
 import { ServerPager } from "../programme-admin/ui/DataTable";
 import { placementStateLabel, placementStateTone } from "../placements/placementJourney";
 
@@ -76,6 +77,12 @@ export function CoordinatorPlacementRegister({
   const facilities = [...new Map((options.data?.wards ?? []).map((item) => [item.facility_id, item.facility_name])).entries()];
   const hasFilters = Boolean(search || state || cohort || facility);
   const rows: Placement[] = list.data?.results ?? [];
+  const [picked, setPicked] = useState<string[]>([]);
+  const [requesting, setRequesting] = useState(false);
+  const canRequest = Boolean(user.capabilities.request_facility);
+  const requestable = (row: Placement) => row.state === "draft" && !row.facility_id && !row.requested_facility_id;
+  const requestableRows = rows.filter(requestable);
+  const allPicked = requestableRows.length > 0 && requestableRows.every((row) => picked.includes(row.id));
 
   return (
     <AdminPage>
@@ -108,6 +115,13 @@ export function CoordinatorPlacementRegister({
         )}
       </Toolbar>
 
+      {canRequest && picked.length > 0 && (
+        <div className="pa-bulkbar" role="status" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <strong>{picked.length} selected</strong>
+          <AdminButton size="sm" icon={<Building2 />} onClick={() => setRequesting(true)}>Send to partner facilities</AdminButton>
+          <AdminButton variant="ghost" size="sm" onClick={() => setPicked([])}>Clear</AdminButton>
+        </div>
+      )}
       {list.isPending ? (
         <Skeleton className="h-72" />
       ) : list.isError ? (
@@ -136,6 +150,17 @@ export function CoordinatorPlacementRegister({
               <caption className="sr-only">Institution placements</caption>
               <thead>
                 <tr>
+                  {canRequest && (
+                    <th scope="col" style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all draft placements on this page"
+                        disabled={requestableRows.length === 0}
+                        checked={allPicked}
+                        onChange={() => setPicked(allPicked ? picked.filter((id) => !requestableRows.some((r) => r.id === id)) : [...new Set([...picked, ...requestableRows.map((r) => r.id)])])}
+                      />
+                    </th>
+                  )}
                   <th scope="col">Student</th>
                   <th scope="col">Cohort</th>
                   <th scope="col">Facility · ward</th>
@@ -158,6 +183,18 @@ export function CoordinatorPlacementRegister({
                       }
                     }}
                   >
+                    {canRequest && (
+                      <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                        {requestable(placement) && (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${placement.student?.name ?? "student"}`}
+                            checked={picked.includes(placement.id)}
+                            onChange={() => setPicked((cur) => (cur.includes(placement.id) ? cur.filter((id) => id !== placement.id) : [...cur, placement.id]))}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td>
                       <div className="pa-cell-title">
                         <span>
@@ -168,7 +205,7 @@ export function CoordinatorPlacementRegister({
                     </td>
                     <td>{placement.cohort_name ?? "—"}</td>
                     <td>
-                      {placement.facility_name ?? "Not allocated"}
+                      {placement.facility_name ?? (placement.requested_facility_name ? `Requested: ${placement.requested_facility_name}` : "Not allocated")}
                       {placement.ward?.name && <small className="pa-sub">{placement.ward.name}</small>}
                     </td>
                     <td>{placement.mentor?.name ?? <span className="pa-muted">Not assigned</span>}</td>
@@ -186,6 +223,12 @@ export function CoordinatorPlacementRegister({
           {list.data && <ServerPager pagination={list.data.pagination} onPage={(next) => patch({ page: String(next) })} noun="placements" />}
         </div>
       )}
+      <RequestFacilitiesModal
+        open={requesting}
+        onClose={() => { setRequesting(false); setPicked([]); }}
+        placementIds={picked}
+        facilities={facilities.map(([id, name]) => ({ id, name }))}
+      />
     </AdminPage>
   );
 }

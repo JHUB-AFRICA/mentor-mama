@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ClipboardList,
   BookOpen,
@@ -8,8 +8,9 @@ import {
   Settings2,
   Users,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { resetScrollLockIfIdle } from "../../lib/scrollLock";
 import { logout, type CurrentUser } from "../../services/api";
 import "./RoleWorkspace.css";
 import { PortalSidebar, type SidebarItem } from "./PortalSidebar";
@@ -59,6 +60,9 @@ export function RoleWorkspaceFrame({
 }: RoleWorkspaceFrameProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Safety net: a route change with no dialog open must never leave the page scroll-locked.
+  useEffect(() => resetScrollLockIfIdle(), [location.pathname, location.search]);
 
   const roleLabel =
     roleLabels[user.role] ??

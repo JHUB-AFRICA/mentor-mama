@@ -15,6 +15,7 @@ import {
 } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
 import { TablePagination } from "../../components/TablePagination";
+import { lockScroll } from "../../lib/scrollLock";
 
 export function CohortManagement({
   onError,
@@ -70,8 +71,7 @@ export function CohortManagement({
   });
   useEffect(() => {
     if (!creating && !enrollingOpen && !detailStudent) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = lockScroll();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setEnrollingOpen(false);
@@ -81,7 +81,7 @@ export function CohortManagement({
     };
     document.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      release();
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [creating, enrollingOpen, detailStudent]);

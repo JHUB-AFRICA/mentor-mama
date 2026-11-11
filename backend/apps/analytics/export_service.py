@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from datetime import timedelta
-from io import BytesIO, StringIO
+from io import StringIO
 
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -92,70 +92,9 @@ def _serialize(rows: list[dict], format: str, title: str) -> bytes:
             dataset.append([row[field] for field in EXPORT_FIELDS])
         return dataset.export("xlsx", column_width="adaptive")
     if format == "pdf":
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import landscape, letter
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import inch
-        from reportlab.graphics.charts.lineplots import LinePlot
-        from reportlab.graphics.charts.piecharts import Pie
-        from reportlab.graphics.shapes import Drawing, String
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        output = BytesIO()
-        document = SimpleDocTemplate(output, pagesize=landscape(letter), leftMargin=.35 * inch, rightMargin=.35 * inch, topMargin=.35 * inch, bottomMargin=.35 * inch)
-        styles = getSampleStyleSheet()
-        body = styles["BodyText"]
-        body.fontSize = 6
-        body.leading = 7
-        heading = styles["Heading1"]
-        heading.fontSize = 15
-        content = [Paragraph(title, heading), Paragraph(f"{len(rows)} placements in this export", body), Spacer(1, .12 * inch)]
-        states = {}
-        starts = {}
-        for row in rows:
-            states[row["state"]] = states.get(row["state"], 0) + 1
-            month = str(row["planned_start"])[:7]
-            starts[month] = starts.get(month, 0) + 1
-        chart = Drawing(700, 170)
-        donut = Pie()
-        donut.x, donut.y, donut.width, donut.height = 15, 15, 135, 135
-        donut.data = list(states.values()) or [1]
-        donut.labels = list(states.keys()) or ["No placements"]
-        donut.slices.strokeWidth = 0
-        donut.slices.strokeColor = colors.white
-        donut.slices[0].fillColor = colors.HexColor("#0b9696")
-        for index in range(1, len(donut.data)):
-            donut.slices[index].fillColor = colors.HexColor(["#e6aa38", "#7958c9", "#3479ca", "#d96a5f"][index % 5])
-        chart.add(donut)
-        chart.add(String(185, 150, "Placement starts by month", fontName="Helvetica-Bold", fontSize=9, fillColor=colors.HexColor("#10223b")))
-        plot = LinePlot()
-        plot.x, plot.y, plot.width, plot.height = 185, 15, 490, 125
-        points = [(index, value) for index, value in enumerate(starts.values())] or [(0, 0)]
-        plot.data = [points]
-        plot.lines[0].strokeColor = colors.HexColor("#0b9696")
-        plot.lines[0].strokeWidth = 2
-        plot.xValueAxis.valueMin = 0
-        plot.xValueAxis.valueMax = max(len(points) - 1, 1)
-        plot.yValueAxis.valueMin = 0
-        plot.yValueAxis.valueMax = max(max(starts.values(), default=1), 1)
-        plot.xValueAxis.visible = False
-        plot.yValueAxis.visible = True
-        chart.add(plot)
-        content.extend([chart, Spacer(1, .08 * inch)])
-        table_data = [[field.replace("_", " ").title() for field in EXPORT_FIELDS]]
-        table_data.extend([[Paragraph(str(row[field]), body) for field in EXPORT_FIELDS] for row in rows])
-        table = Table(table_data, repeatRows=1)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b9696")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("GRID", (0, 0), (-1, -1), .25, colors.HexColor("#dbe4ed")),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7fafb")]),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        content.append(table)
-        document.build(content)
-        return output.getvalue()
+        from apps.analytics.export_pdf import render_placement_pdf
+
+        return render_placement_pdf(rows, title)
     raise ValueError("unsupported export format")
 
 

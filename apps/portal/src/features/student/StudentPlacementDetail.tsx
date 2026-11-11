@@ -47,6 +47,7 @@ import { FeedbackAndSafeguardingPanel } from "../safeguarding/FeedbackAndSafegua
 import { PlacementHistory } from "../placements/PlacementHistory";
 
 import "./StudentPlacementDetail.css";
+import { lockScroll } from "../../lib/scrollLock";
 
 type DetailTab =
   | "overview"
@@ -1346,15 +1347,7 @@ function PlacementAcknowledgementModal({
   onAcknowledge: () => void;
 }) {
   useEffect(() => {
-    const originalOverflow =
-      document.body.style.overflow;
-
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow =
-        originalOverflow;
-    };
+    return lockScroll();
   }, []);
 
   const canContinue =

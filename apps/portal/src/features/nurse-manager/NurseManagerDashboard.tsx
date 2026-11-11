@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Activity, Building2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { Activity, Building2, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { BarList } from "../../components/charts";
 import { greetingFor } from "../../lib/greeting";
-import { getDashboardIndicators, getFacilities, getFacilityMentors, getPlacements, getWards, type CurrentUser } from "../../services/api";
+import { getDashboardIndicators, getFacilities, getFacilityMentors, getIncomingPlacements, getPlacements, getWards, type CurrentUser } from "../../services/api";
 import {
   AdminButton,
   AdminCard,
@@ -18,6 +19,7 @@ import {
 } from "../programme-admin/ui/AdminKit";
 import { DataTable, type ColumnDef } from "../programme-admin/ui/DataTable";
 import { placementStateLabel, placementStateTone } from "../placements/placementJourney";
+import { ArrangeStudentsModal } from "./ArrangeStudentsModal";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 import { isManagerActionablePlacement, managerPlacementAction } from "./managerPlacementLogic";
 
@@ -32,6 +34,9 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
   const placements = useQuery({ queryKey: ["facility-dashboard-placements"], queryFn: () => getPlacements({ pageSize: 50 }), staleTime: 15_000 });
   const mentors = useQuery({ queryKey: ["facility-dashboard-mentors"], queryFn: () => getFacilityMentors({ page_size: 50 }), staleTime: 15_000 });
 
+  const incoming = useQuery({ queryKey: ["facility-incoming"], queryFn: getIncomingPlacements, staleTime: 15_000 });
+  const [arranging, setArranging] = useState(false);
+  const incomingCount = incoming.data?.length ?? 0;
   const n = (key: string) => indicators.data?.indicators[key] ?? 0;
   const facilityName = facilities.data?.[0]?.name ?? "Your facility";
   const actionable = (placements.data?.results ?? []).filter(isManagerActionablePlacement);
@@ -71,12 +76,19 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
           eyebrow={facilityName}
           title={`${greetingFor(user.name)}.`}
           description={
-            actionable.length || concerns
+            incomingCount > 0
+              ? `${incomingCount} ${incomingCount === 1 ? "student is" : "students are"} waiting to be placed in your wards.`
+              : actionable.length || concerns
               ? `${actionable.length + concerns} ${actionable.length + concerns === 1 ? "item needs" : "items need"} a decision from you.`
               : "Your facility is running smoothly. Nothing needs a decision right now."
           }
           actions={
             <>
+              {incomingCount > 0 && (
+                <AdminButton size="sm" icon={<Wand2 />} onClick={() => setArranging(true)}>
+                  Arrange {incomingCount} {incomingCount === 1 ? "student" : "students"}
+                </AdminButton>
+              )}
               <AdminButton variant="secondary" size="sm" icon={<UserPlus />} onClick={() => go("/facility/mentors/invite")}>
                 Invite mentors
               </AdminButton>
@@ -177,6 +189,7 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
             )}
           </AdminCard>
         </div>
+        <ArrangeStudentsModal open={arranging} onClose={() => setArranging(false)} incomingCount={incomingCount} />
       </AdminPage>
     </FacilityWorkspaceFrame>
   );

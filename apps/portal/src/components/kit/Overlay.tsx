@@ -11,20 +11,14 @@ import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
+import { lockScroll } from "../../lib/scrollLock";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 import "./kit.css";
 
 function useScrollLock(active: boolean) {
   useEffect(() => {
     if (!active) return;
-    const { overflow, paddingRight } = document.body.style;
-    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
-    return () => {
-      document.body.style.overflow = overflow;
-      document.body.style.paddingRight = paddingRight;
-    };
+    return lockScroll();
   }, [active]);
 }
 
