@@ -438,6 +438,8 @@ Student-visible screens are out of scope here; the student receives email and in
 
 ## 6B. Notifications module audit
 
+> Status 2026-11-11: N1, N2, N3 (copy), N4, N7, N8 and N9 are fixed and covered by tests. D10 (orphaned placements) is detected and surfaced to nurse managers (selector, `GET /placements/orphaned`, `MentorUnavailableForPlacements`, dashboard card); the one-click "Reassign all (suggested)" run is not built yet.
+
 Scope read: `notifications/{models,services,email,views,serializers,urls,tasks}.py`, `management/commands/dispatch_outbox.py`, `config/celery.py`, `core/api.py` (outbox read), `core/outbox.py`, producers' `events.py` and publish sites, portal `features/notifications/NotificationPopover.tsx` and `features/auth/NotificationPreferences.tsx`. Not traced: every identity/MFA publish site, and the HTML email path (emails are plain text). No test exercises `deliver_outbox_event` preference gating for placement events (only `tests/test_email_mfa.py` and `tests/test_account_enhancements.py` reference notification code).
 
 ### 6B.1 Is the Settings page really connected?

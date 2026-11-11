@@ -33,6 +33,7 @@ EVENT_TEMPLATES = {
     "MentorReassigned": "placement.mentor_reassigned",
     "ArrangementOverridden": "placement.arrangement_overridden",
     "PlacementsDeclined": "placement.requests_declined",
+    "MentorUnavailableForPlacements": "placement.mentor_unavailable",
     "PlacementRequestsWithdrawn": "placement.requests_withdrawn",
     "PlacementProvisionalNotice": "placement.provisional_notice",
     "PlacementStartsSoon": "placement.starts_soon",
@@ -89,13 +90,23 @@ def create_for_event(event):
     return rows
 
 
-def mark_delivered(event_id, *, error: str | None = None):
+def mark_delivered(event_id, *, error: str | None = None, emailed_user_ids=None):
+    """Record the outcome per recipient.
+
+    `emailed_user_ids` is the set actually emailed for multi-recipient events; everyone else's in-app row is marked
+    "not emailed" rather than "sent" (plan §6B N4). `None` means the event has no per-recipient record.
+    """
+    rows = Notification.objects.filter(event_id=event_id)
     values = {"attempts": models.F("attempts") + 1}
     if error:
-        values.update(status=Notification.STATUS_FAILED, last_error=error[:500])
-    else:
-        values.update(status=Notification.STATUS_SENT, delivered_at=timezone.now(), last_error="")
-    Notification.objects.filter(event_id=event_id).update(**values)
+        rows.update(**values, status=Notification.STATUS_FAILED, last_error=error[:500])
+        return
+    if emailed_user_ids is None:
+        rows.update(**values, status=Notification.STATUS_SENT, delivered_at=timezone.now(), last_error="")
+        return
+    emailed = [str(user_id) for user_id in emailed_user_ids]
+    rows.filter(user_id__in=emailed).update(**values, status=Notification.STATUS_SENT, delivered_at=timezone.now(), last_error="")
+    rows.exclude(user_id__in=emailed).update(**values, status=Notification.STATUS_NOT_EMAILED, last_error="")
 
 
 @transaction.atomic

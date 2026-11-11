@@ -18,6 +18,7 @@ urlpatterns = [
     path("placements/bulk", views.BulkPlacementCreateView.as_view(), name="placement-bulk-create"),
     path("placements/batches", views.PlacementBatchListView.as_view(), name="placement-batch-list"),
     path("placements/batches/<uuid:batch_id>", views.PlacementBatchStatusView.as_view(), name="placement-batch-status"),
+    path("placements/orphaned", views.OrphanedPlacementsView.as_view(), name="placement-orphaned"),
     path("placements/incoming", views.IncomingPlacementsView.as_view(), name="placement-incoming"),
     path("placements/auto-arrange", views.AutoArrangeView.as_view(), name="placement-auto-arrange"),
     path("placements/facility-requests", views.FacilityRequestView.as_view(), name="placement-facility-requests"),

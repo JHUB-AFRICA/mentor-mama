@@ -291,7 +291,7 @@ def test_anonymous_feedback_reporting_requires_three_and_is_role_scoped(active_p
 def test_escalation_list_omits_narrative_and_detail_is_reviewer_scoped(active_placement, student, nurse_manager, coordinator):
     created = client_for(student).post(
         "/api/v1/escalations",
-        {"placement_id": str(active_placement.id), "category": "Professional conduct", "severity": "high", "description": "A private concern requiring authorised review."},
+        {"placement_id": str(active_placement.id), "category": "Professional conduct", "severity": "high", "description": "A private concern requiring authorised review.", "routed_to": "both"},
         format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
     )
     assert created.status_code == 201
@@ -320,6 +320,69 @@ def test_escalation_list_omits_narrative_and_detail_is_reviewer_scoped(active_pl
         format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
     )
     assert takeover.status_code == 404
+
+
+def _raise(user, placement, routed_to, **extra):
+    return client_for(user).post(
+        "/api/v1/escalations",
+        {"placement_id": str(placement.id), "category": "Safety concern", "severity": "high",
+         "description": "A private concern requiring authorised review.", **({"routed_to": routed_to} if routed_to else {}), **extra},
+        format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
+    )
+
+
+def test_concern_is_visible_only_to_the_reviewers_the_student_chose(active_placement, student, nurse_manager, coordinator):
+    assert _raise(student, active_placement, None).status_code == 400  # choosing who reviews is required
+    assert _raise(student, active_placement, "everyone").status_code == 400
+    to_nurse = _raise(student, active_placement, "nurse_manager").json()["data"]["id"]
+    to_coordinator = _raise(student, active_placement, "coordinator").json()["data"]["id"]
+    nurse_ids = {row["id"] for row in client_for(nurse_manager).get("/api/v1/escalations", **HEADERS).json()["data"]}
+    coordinator_ids = {row["id"] for row in client_for(coordinator).get("/api/v1/escalations", **HEADERS).json()["data"]}
+    assert nurse_ids == {to_nurse} and coordinator_ids == {to_coordinator}
+    # A reviewer who was not chosen cannot even open the summary or take the concern.
+    assert client_for(coordinator).get(f"/api/v1/escalations/{to_nurse}", **HEADERS).status_code == 404
+    claim = client_for(coordinator).post(
+        f"/api/v1/escalations/{to_nurse}/assign-reviewer", {"reviewer_id": str(coordinator.id)},
+        format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
+    )
+    assert claim.status_code == 404
+    mine = client_for(student).get("/api/v1/escalations", **HEADERS).json()["data"]
+    assert {row["routed_to"] for row in mine} == {"nurse_manager", "coordinator"}
+
+
+def test_concern_counts_follow_the_reviewers_the_student_chose(active_placement, student, nurse_manager, coordinator, mentor):
+    _raise(student, active_placement, "coordinator")
+    progress = lambda who: client_for(who).get(f"/api/v1/placements/{active_placement.id}/progress", **HEADERS).json()["data"]["safeguarding"]["open_concerns"]  # noqa: E731
+    assert progress(coordinator) == 1 and progress(student) == 1
+    # Not chosen: the nurse manager and the mentor (who may be the subject) never see it, not even as a number.
+    assert progress(nurse_manager) == 0 and progress(mentor) == 0
+
+
+def test_student_can_follow_a_concern_and_ask_for_it_to_be_reviewed_again(active_placement, student, nurse_manager, coordinator):
+    escalation_id = _raise(student, active_placement, "nurse_manager").json()["data"]["id"]
+    again = lambda who, reason="I still feel this was not fully looked into.": client_for(who).post(  # noqa: E731
+        f"/api/v1/escalations/{escalation_id}/request-rereview", {"reason": reason},
+        format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
+    )
+    assert again(student).status_code == 409  # still open: nothing to review again yet
+    manager = client_for(nurse_manager)
+    for path, body in (
+        ("assign-reviewer", {"reviewer_id": str(nurse_manager.id)}),
+        ("record-finding", {"finding": "Spoke with the ward."}),
+        ("record-action", {"action_taken": "Mentor reminded of the code of conduct.", "resolution_outcome": "internal_action"}),
+    ):
+        assert manager.post(f"/api/v1/escalations/{escalation_id}/{path}", body, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS).status_code == 200
+    followed = client_for(student).get(f"/api/v1/escalations/{escalation_id}", **HEADERS).json()["data"]
+    assert followed["state"] == "resolved" and followed["action_taken"].startswith("Mentor reminded")
+    assert again(nurse_manager).status_code == 404  # only the person who raised it may ask
+    assert again(student, "short").status_code == 400
+    reopened = again(student)
+    assert reopened.status_code == 200 and reopened.json()["data"]["state"] == "open" and reopened.json()["data"]["rereview_count"] == 1
+    assert reopened.json()["data"]["reviewer"] is None
+    # It returns to the queue of the reviewers originally chosen, and only them.
+    assert [row["id"] for row in client_for(nurse_manager).get("/api/v1/escalations", **HEADERS).json()["data"]] == [escalation_id]
+    assert client_for(coordinator).get("/api/v1/escalations", **HEADERS).json()["data"] == []
+    assert again(student).status_code == 409
 
 
 # --- idempotency (ADR 0012, T-03) -----------------------------------------

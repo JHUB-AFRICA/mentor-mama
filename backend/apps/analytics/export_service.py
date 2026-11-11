@@ -50,7 +50,7 @@ def create_export(*, actor, export_type: str, filters: dict, format: str = "csv"
     )
 
 
-def _placement_row(placement) -> dict:
+def _placement_row(placement, viewer=None) -> dict:
     student = placement.student_assignments.filter(ended_at=None).select_related("student").first()
     mentor = placement.mentor_assignments.filter(ended_at=None).select_related("mentor").first()
     ward = placement.ward_assignments.filter(ended_at=None).select_related("ward").first()
@@ -72,7 +72,7 @@ def _placement_row(placement) -> dict:
         "sessions_logged": mentorship.session_count(placement.id),
         "induction_percentage": induction_data["percentage"] if induction_data["percentage"] is not None else "",
         "final_assessment_submitted": assessments.progress(placement.id)["final_submitted"],
-        "open_safeguarding_concerns": safeguarding.open_count(placement.id),
+        "open_safeguarding_concerns": safeguarding.open_count(placement.id, viewer=viewer),
     }
 
 
@@ -122,7 +122,7 @@ def generate_export(record_id) -> ExportRecord:
             if period_start and period_end:
                 rows = rows.filter(planned_start__lte=period_end, planned_end__gte=period_start)
 
-        data = [_placement_row(placement) for placement in rows]
+        data = [_placement_row(placement, actor) for placement in rows]
         storage_key = f"{record.id}.{record.format}"
         title = "Placement report" if record.export_type == "placements" else "Cohort placement report"
         content = _serialize(data, record.format, title)

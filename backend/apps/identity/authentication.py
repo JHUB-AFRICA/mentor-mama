@@ -174,6 +174,9 @@ def change_status(*, actor: User, target: User, status: str, reason: str) -> Use
                  entity_id=target.id, scope={"program_id": str(target.program_id)},
                  changes={"from": previous, "to": status}, override_reason=reason.strip())
     outbox.publish(SecurityNotificationRequested(user_id=target.id, action=f"account_{status}"))
+    from apps.identity import ports
+
+    ports.status_changed(target, previous=previous)
     return target
 
 

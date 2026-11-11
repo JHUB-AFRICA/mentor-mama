@@ -42,8 +42,8 @@ It lets students and mentors privately raise worries about professional conduct,
 
 ## Who receives and reviews a safeguarding concern?
 
-Nurse managers at the facility are notified. For high severity, coordinators at the institution are also notified. Authorised reviewers (a nurse manager, a coordinator for high severity, or a programme administrator) assign a reviewer, record a finding and action, and close the concern. The subject of a concern cannot review it. A closed concern cannot be reopened; a recurrence is a new concern.
-<!-- source: backend/apps/safeguarding/services.py, docs/architecture/stage3-business-rules-and-invariants.md -->
+The person raising it chooses who reviews it: the nurse manager at the facility, the coordinator at the student's institution, or both. Only the chosen people are notified, and anyone not chosen does not see the concern at all, whatever its severity. A programme administrator can still oversee every concern. A reviewer takes the concern, records a finding and action, and closes it. The subject of a concern cannot review it. If the outcome does not feel right, the person who raised it can ask for another review; it returns to the same chosen reviewers with their reason.
+<!-- source: backend/apps/safeguarding/services.py, docs/decisions/0030-concern-routing-and-rereview.md -->
 
 ## Who can read what I wrote in a concern?
 

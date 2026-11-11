@@ -10,7 +10,11 @@ from apps.safeguarding.models import Escalation
 def _list_shape(row):
     return {"id": str(row.id), "category": row.category, "severity": row.severity,
             "state": row.state, "placement_id": str(row.placement_id) if row.placement_id else None,
-            "submitted_at": row.created_at.isoformat(), "reviewer": row.reviewer.full_name if row.reviewer else None}
+            "submitted_at": row.created_at.isoformat(), "reviewer": row.reviewer.full_name if row.reviewer else None,
+            "routed_to": row.routed_to, "rereview_count": row.rereview_count,
+            "rereview_requested_at": row.rereview_requested_at.isoformat() if row.rereview_requested_at else None,
+            "updated_at": row.updated_at.isoformat(),
+            "related_escalation_id": str(row.related_escalation_id) if row.related_escalation_id else None}
 
 
 class EscalationListView(APIView):
@@ -46,7 +50,7 @@ class EscalationDetailView(APIView):
         audit.record(actor=request.user, action="escalation.read_sensitive", entity_table="safeguarding_escalation", entity_id=row.id)
         return Response({"data": {**_list_shape(row), "access": "full", "can_claim": False, "description": row.description, "finding": row.finding,
                                    "action_taken": row.action_taken, "resolution_outcome": row.resolution_outcome,
-                                   "referral_note": row.referral_note, "closure_date": row.closure_date.isoformat() if row.closure_date else None,
+                                   "referral_note": row.referral_note, "rereview_reason": row.rereview_reason, "closure_date": row.closure_date.isoformat() if row.closure_date else None,
                                    "submitted_by": row.submitted_by.full_name, "reviewer_id": str(row.reviewer_id) if row.reviewer_id else None}})
 
 
@@ -104,3 +108,11 @@ class CloseEscalationView(_EscalationCommand):
 
     def run(self, escalation_id, data, actor):
         return services.close(escalation_id, data["closure_date"], actor=actor)
+
+
+class RequestRereviewView(_EscalationCommand):
+    command_type = "request_escalation_rereview"
+    serializer_class = serializers.RereviewSerializer
+
+    def run(self, escalation_id, data, actor):
+        return services.request_rereview(escalation_id, data["reason"], actor=actor)

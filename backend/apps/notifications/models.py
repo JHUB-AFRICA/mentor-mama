@@ -31,7 +31,9 @@ class Notification(BaseModel):
     STATUS_QUEUED = "queued"
     STATUS_SENT = "sent"
     STATUS_FAILED = "failed"
-    STATUS_CHOICES = [(STATUS_QUEUED, "Queued"), (STATUS_SENT, "Sent"), (STATUS_FAILED, "Failed")]
+    # In-app only: the email was skipped (preference opt-out or inactive account). Never reported as "sent".
+    STATUS_NOT_EMAILED = "not_emailed"
+    STATUS_CHOICES = [(STATUS_QUEUED, "Queued"), (STATUS_SENT, "Sent"), (STATUS_FAILED, "Failed"), (STATUS_NOT_EMAILED, "Not emailed")]
 
     user_id = models.UUIDField()
     event_id = models.UUIDField()

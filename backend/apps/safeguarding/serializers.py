@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.safeguarding.models import ResolutionOutcome, Severity
+from apps.safeguarding.models import ResolutionOutcome, ReviewRoute, Severity
 
 
 class RaiseEscalationSerializer(serializers.Serializer):
@@ -10,6 +10,7 @@ class RaiseEscalationSerializer(serializers.Serializer):
     severity = serializers.ChoiceField(choices=Severity.choices)
     description = serializers.CharField(min_length=10)
     related_escalation_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    routed_to = serializers.ChoiceField(choices=ReviewRoute.choices)
 
 
 class ReviewerSerializer(serializers.Serializer):
@@ -28,3 +29,7 @@ class ActionSerializer(serializers.Serializer):
 
 class CloseSerializer(serializers.Serializer):
     closure_date = serializers.DateField()
+
+
+class RereviewSerializer(serializers.Serializer):
+    reason = serializers.CharField(min_length=10, max_length=2000)

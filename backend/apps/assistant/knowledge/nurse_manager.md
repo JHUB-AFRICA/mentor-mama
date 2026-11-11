@@ -62,7 +62,7 @@ You can complete an Active placement once the student has submitted the final as
 
 ## How do I review a safeguarding concern?
 
-Open Safeguarding and choose a concern. Open concerns show "Assign to me". Once under review, record a finding with "Record finding", then record the action taken with an outcome (internal action, referred externally, no action required) and choose "Resolve with action". A resolved concern can be closed with "Close concern". Closed concerns cannot be reopened.
+Open Safeguarding and choose a concern. Open concerns show "Assign to me". Once under review, record a finding with "Record finding", then record the action taken with an outcome (internal action, referred externally, no action required) and choose "Resolve with action". A resolved concern can be closed with "Close concern". You only see concerns the person raising them sent to the nurse manager (or to both). If they ask for another review, the concern comes back to your queue as Open with their reason, and the earlier outcome stays on the record.
 <!-- source: apps/portal/src/features/safeguarding/SafeguardingReviewPanel.tsx, docs/architecture/stage3-business-rules-and-invariants.md -->
 
 ## Who can read the text of a safeguarding concern?

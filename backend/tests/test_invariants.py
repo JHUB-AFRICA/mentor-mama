@@ -776,3 +776,37 @@ def test_facility_can_decline_with_a_reason_and_coordinator_can_ask_another_or_w
     assert withdrawn.status_code == 200 and withdrawn.json()["data"]["withdrawn"] == 1
     assert Placement.objects.get(id=ids[1]).requested_facility_id is None
     assert len(manager.get("/api/v1/placements/incoming").json()["data"]) == 0
+
+
+def test_activity_feed_tolerates_unusual_audit_shapes(student):
+    import uuid
+
+    from apps.core import audit
+    from apps.core.activity_feed import describe_many
+    from apps.core.models import AuditEntry
+
+    for changes in ({"state": "paused"}, {"state": None}, ["not", "a", "dict"], None):
+        audit.record(actor=student, action="placement.pause", entity_table="placements_placement", entity_id=uuid.uuid4(), scope={}, changes=changes)
+    rows = describe_many(AuditEntry.objects.filter(actor=student), student)
+    assert len(rows) == 4 and all(row["title"] for row in rows)
+
+
+def test_suspending_a_mentor_flags_their_open_placements_for_the_nurse_manager(active_placement, mentor, nurse_manager):
+    """Plan §5.1 / D10: an active placement whose mentor leaves must not go unnoticed."""
+    from rest_framework.test import APIClient
+
+    from apps.core.models import OutboxEvent
+    from apps.identity import authentication
+
+    manager = APIClient()
+    manager.force_authenticate(nurse_manager)
+    assert manager.get("/api/v1/placements/orphaned", HTTP_ACCEPT="application/json").json()["data"] == []
+    assert authentication.change_status(actor=nurse_manager, target=mentor, status="suspended", reason="On leave") is not None
+    event = OutboxEvent.objects.filter(event_type="MentorUnavailableForPlacements").latest("occurred_at")
+    assert event.payload["count"] == 1 and event.payload["active_count"] == 1
+    assert set(event.payload["recipient_user_ids"]) == {str(nurse_manager.id)}
+    rows = manager.get("/api/v1/placements/orphaned", HTTP_ACCEPT="application/json").json()["data"]
+    assert [row["placement_id"] for row in rows] == [str(active_placement.id)] and rows[0]["urgent"] is True
+    student = APIClient()
+    student.force_authenticate(active_placement.student_assignments.get().student)
+    assert student.get("/api/v1/placements/orphaned", HTTP_ACCEPT="application/json").status_code in (403, 404)

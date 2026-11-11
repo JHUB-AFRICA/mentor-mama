@@ -67,8 +67,18 @@ Open your placement, go to the Support tab, and use "Share placement feedback". 
 
 ## How do I raise a safeguarding concern?
 
-Open your placement, go to the Support tab (or go to More and choose "Open safeguarding"), and use "Raise a private concern". Pick a category and severity, describe what happened without naming any patient, and choose "Submit private concern". It goes to authorised reviewers. It is confidential, not anonymous. For an urgent risk to someone right now, tell a senior person at the facility straight away.
-<!-- source: apps/portal/src/features/safeguarding/FeedbackAndSafeguardingPanel.tsx, apps/portal/src/features/student/StudentMore.tsx -->
+Open Concerns in the sidebar and choose "Raise a concern" (or use "Raise a private concern" on a placement's Support tab). Choose who should look into it: the nurse manager at your hospital, your university coordinator, or both. Only the people you choose can see it at all. Pick a category and severity, describe what happened without naming any patient, and choose "Submit private concern". It is confidential, not anonymous. For an urgent risk to someone right now, tell a senior person at the facility straight away.
+<!-- source: apps/portal/src/features/safeguarding/RaiseConcernForm.tsx, apps/portal/src/features/student/StudentConcerns.tsx -->
+
+## How do I follow a concern I raised?
+
+Open Concerns in the sidebar. Each concern shows who can see it and a progress line: Received, In review, Outcome, Closed. Open a concern to read what you reported and the outcome the reviewer recorded.
+<!-- source: apps/portal/src/features/safeguarding/MyConcerns.tsx -->
+
+## Can I ask for a concern to be reviewed again?
+
+Yes. When a concern shows "Outcome recorded" or "Closed" and it does not feel resolved, open it on the Concerns page and choose "Ask for another review". Say what is still not right (at least 10 characters). It goes back to the same reviewers you chose, waiting for one of them to take it, and the earlier outcome stays on the record.
+<!-- source: apps/portal/src/features/safeguarding/MyConcerns.tsx, backend/apps/safeguarding/services.py -->
 
 ## What is in the Library?
 

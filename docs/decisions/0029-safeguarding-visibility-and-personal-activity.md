@@ -18,7 +18,7 @@ Rules:
 2. **Take, don't browse.** An in-scope person who is not the reviewer opens a summary with a "Take this concern" action; the earlier build returned an error here, which is why nurse managers saw "We couldn't load this page".
 3. **No silent takeover.** A concern held by one reviewer cannot be taken by another reviewer; only a programme admin may reassign.
 4. The raiser can never review their own concern.
-5. High-severity concerns notify the facility's nurse managers and the institution's coordinators; others notify nurse managers only.
+5. ~~High-severity concerns notify the facility's nurse managers and the institution's coordinators; others notify nurse managers only.~~ Superseded by ADR 0030: the person raising the concern chooses the nurse manager, the coordinator or both, and only they are notified or can see it.
 
 Open: whether the coordinator or nurse manager should be the default reviewer when the concern is about the other party (conflict of interest) — currently resolved by the admin reassigning.
 

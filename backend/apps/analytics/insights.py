@@ -64,8 +64,8 @@ def _escalations(scope, actor):
     if scope.role == Role.PROGRAM_ADMIN:
         return rows.filter(facility__program_id=scope.program_id)
     if scope.role == Role.COORDINATOR:
-        return rows.filter(placement__institution_id=scope.institution_id)
-    return rows.filter(facility_id=scope.facility_id)
+        return rows.filter(placement__institution_id=scope.institution_id, routed_to__in=["coordinator", "both"])
+    return rows.filter(facility_id=scope.facility_id, routed_to__in=["nurse_manager", "both"])
 
 
 def insights(*, actor, start: date, end: date, cohort_id=None, facility_id=None) -> dict:

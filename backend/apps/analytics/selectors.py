@@ -189,7 +189,7 @@ def placement_progress(*, actor, placement_id) -> dict:
         "mentorship": mentorship_data,
         "assessment": assessment_data,
         "orientation": {"acknowledged": induction.orientation_acknowledged(placement.id)},
-        "safeguarding": {"open_concerns": safeguarding.open_count(placement.id), "severity": safeguarding.open_severity_counts(placement.id)},
+        "safeguarding": {"open_concerns": safeguarding.open_count(placement.id, viewer=actor), "severity": safeguarding.open_severity_counts(placement.id, viewer=actor)},
         "overall_percentage": round(sum(available) / len(available)) if available else None,
     }
 

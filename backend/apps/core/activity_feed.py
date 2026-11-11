@@ -78,6 +78,7 @@ TITLES = {
     "escalation.assign_reviewer": ("safeguarding", "Concern assigned to a reviewer", "You took a concern for review"),
     "escalation.record_finding": ("safeguarding", "Concern reviewed", "You recorded a review finding"),
     "escalation.record_action": ("safeguarding", "Concern resolved", "You resolved a concern"),
+    "escalation.request_rereview": ("safeguarding", "Another review requested", "You asked for another review"),
     "escalation.close": ("safeguarding", "Concern closed", "You closed a concern"),
     "export.download": ("reports", "Report downloaded", "You downloaded a report"),
     "export.requested": ("reports", "Report requested", "You requested a report"),
@@ -111,8 +112,12 @@ TRANSITION_TITLES = {
 
 
 def _transition(entry):
-    change = (entry.changes or {}).get("state") or {}
-    return change.get("from"), change.get("to")
+    """(from, to) when the audit entry recorded a stage change; tolerant of other shapes of "state"."""
+    changes = entry.changes if isinstance(entry.changes, dict) else {}
+    change = changes.get("state")
+    if isinstance(change, dict):
+        return change.get("from"), change.get("to")
+    return None, None
 
 
 def _category(action):

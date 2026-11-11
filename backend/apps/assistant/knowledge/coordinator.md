@@ -7,7 +7,7 @@ The Coordinator menu has: Overview, Cohorts & students, Placements, Reports and 
 
 ## What can a coordinator do?
 
-Within your institution you can invite students, manage cohorts and enrolment, create placements, release them to students, pause, resume or withdraw placements, monitor progress, read approved feedback, review high-severity safeguarding concerns from your institution, and view reports and exports.
+Within your institution you can invite students, manage cohorts and enrolment, create placements, release them to students, pause, resume or withdraw placements, monitor progress, read approved feedback, review safeguarding concerns that students or mentors sent to the coordinator, and view reports and exports.
 <!-- source: docs/architecture/stage3-business-rules-and-invariants.md, backend/apps/identity/capabilities.py -->
 
 ## What can a coordinator NOT do?
@@ -87,5 +87,5 @@ Go to Reports. Choose your filters and "Request export" (CSV, Excel, JSON or PDF
 
 ## What feedback and safeguarding information do I see?
 
-You can read confidential feedback linked to placements in your institution (each read is logged) and grouped anonymous ratings only when three or more students responded. For safeguarding you see counts and severity, and you may review high-severity concerns from your own institution.
+You can read confidential feedback linked to placements in your institution (each read is logged) and grouped anonymous ratings only when three or more students responded. For safeguarding you see only the concerns that were sent to the coordinator (or to both the coordinator and the nurse manager). You may take and review those.
 <!-- source: docs/architecture/stage3-business-rules-and-invariants.md, docs/verification/anonymous-feedback-implementation-2026-11-09.md -->

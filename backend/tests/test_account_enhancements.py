@@ -184,3 +184,49 @@ def test_mentor_profile_is_owned_by_the_mentor_and_validated(mentor, student):
     other = APIClient()
     other.force_authenticate(student)
     assert other.get("/api/v1/mentor/profile").status_code == 404
+
+
+def test_recipients_who_were_not_emailed_are_not_recorded_as_sent(active_placement, student, coordinator, nurse_manager):
+    """Plan §6B N4: only people actually emailed are 'sent'; the rest keep the in-app item as 'not emailed'."""
+    from django.core.management import call_command
+
+    from apps.identity.models import Status
+    from apps.notifications.models import Notification
+    from apps.safeguarding import services as safeguarding_services
+
+    safeguarding_services.raise_concern(
+        safeguarding_services.RaiseConcern(
+            placement_id=active_placement.id, facility_id=None, category="Wellbeing", severity="medium",
+            description="Restricted concern narrative for the reviewer.", routed_to="both",
+        ),
+        actor=student,
+    )
+    event = OutboxEvent.objects.filter(event_type="EscalationRaised").latest("occurred_at")
+    type(coordinator).objects.filter(id=coordinator.id).update(status=Status.SUSPENDED)  # skipped by the email loop
+    call_command("dispatch_outbox", verbosity=0)
+    statuses = dict(Notification.objects.filter(event_id=event.id).values_list("user_id", "status"))
+    assert statuses[nurse_manager.id] == Notification.STATUS_SENT
+    assert statuses[coordinator.id] == Notification.STATUS_NOT_EMAILED
+
+
+def test_outgoing_email_carries_only_the_notification_id_for_provider_callbacks(active_placement, student, nurse_manager):
+    """Plan §6B N9: provider delivery/bounce callbacks need a correlation id; it must be opaque."""
+    from django.core import mail
+    from django.core.management import call_command
+
+    from apps.notifications.models import Notification
+    from apps.safeguarding import services as safeguarding_services
+
+    safeguarding_services.raise_concern(
+        safeguarding_services.RaiseConcern(
+            placement_id=active_placement.id, facility_id=None, category="Wellbeing", severity="low",
+            description="Restricted concern narrative for the reviewer.", routed_to="nurse_manager",
+        ),
+        actor=student,
+    )
+    call_command("dispatch_outbox", verbosity=0)
+    sent = [message for message in mail.outbox if nurse_manager.email in message.to]
+    assert len(sent) == 1
+    notification = Notification.objects.get(user_id=nurse_manager.id, event_type="EscalationRaised")
+    assert sent[0].extra_headers["X-MentorMAMA-Notification"] == str(notification.id)
+    assert "Restricted concern narrative" not in sent[0].body

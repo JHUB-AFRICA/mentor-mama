@@ -48,6 +48,7 @@ class Command(BaseCommand):
                     event.dispatched_at = timezone.now()
                     event.attempts += 1
                     event.save(update_fields=["dispatched_at", "attempts"])
-                    services.mark_delivered(event.id)
+                    multi = "recipient_user_ids" in (event.payload or {})
+                    services.mark_delivered(event.id, emailed_user_ids=(event.delivered_to or []) if multi else None)
                     delivered += 1
         self.stdout.write(self.style.SUCCESS(f"Delivered {delivered}; failed {failed}."))

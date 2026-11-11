@@ -25,6 +25,14 @@ class ResolutionOutcome(models.TextChoices):
     NO_ACTION_REQUIRED = "no_action_required", "No action required"
 
 
+class ReviewRoute(models.TextChoices):
+    """Who the person raising a concern chose to look into it (nobody else can read it)."""
+
+    COORDINATOR = "coordinator", "University coordinator"
+    NURSE_MANAGER = "nurse_manager", "Nurse manager"
+    BOTH = "both", "Both"
+
+
 class Escalation(BaseModel):
     placement = models.ForeignKey(
         "placements.Placement", on_delete=models.PROTECT, null=True, blank=True, related_name="escalations"
@@ -44,6 +52,11 @@ class Escalation(BaseModel):
     closure_date = models.DateField(null=True, blank=True)
     resolution_outcome = models.CharField(max_length=32, choices=ResolutionOutcome.choices, null=True, blank=True)
     referral_note = models.TextField(null=True, blank=True)  # RESTRICTED
+    routed_to = models.CharField(max_length=20, choices=ReviewRoute.choices, default=ReviewRoute.BOTH)
+    # RESTRICTED: the submitter's reason for asking for another look after a concern was resolved or closed.
+    rereview_reason = models.TextField(null=True, blank=True)
+    rereview_requested_at = models.DateTimeField(null=True, blank=True)
+    rereview_count = models.PositiveSmallIntegerField(default=0)
     related_escalation = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="recurrences"
     )

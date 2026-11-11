@@ -43,6 +43,21 @@ MANDATORY_EVENTS = {
 }
 
 
+def _send(subject: str, text: str, sender: str, recipient, event) -> None:
+    """Send one email, tagged with the recipient's in-app notification id so provider callbacks can be matched
+    (plan §6B N9). The tag is an opaque UUID: it carries no personal or concern content."""
+    from django.core.mail import EmailMultiAlternatives
+
+    from apps.notifications.models import Notification
+
+    message = EmailMultiAlternatives(subject, text, sender, [recipient.email])
+    notification_id = Notification.objects.filter(event_id=event.id, user_id=recipient.id).values_list("id", flat=True).first()
+    if notification_id:
+        message.extra_headers["X-MentorMAMA-Notification"] = str(notification_id)
+        message.metadata = {"notification_id": str(notification_id)}  # read by django-anymail (Mailtrap)
+    message.send()
+
+
 def _optional_email_enabled(*, user_id, event_type: str) -> bool:
     """Respect the user's email-only preferences for non-mandatory updates."""
     from apps.notifications.models import NotificationPreference
@@ -52,7 +67,7 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
         return True
     if event_type in MANDATORY_EVENTS:
         return True
-    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden", "MentorUnavailableForPlacements", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
     if event_type in {"SessionLogged"}:
         return preference.account_activity
@@ -76,7 +91,7 @@ def deliver_outbox_event(event) -> None:
             detail=f"Your code is {device.token}.",
             expiry="This code expires in five minutes and can be used once.", accent="#2a6fa8",
         )
-        send_mail("Your MentorMAMA verification code", text, settings.OTP_EMAIL_SENDER, [user.email])
+        _send("Your MentorMAMA verification code", text, settings.OTP_EMAIL_SENDER, user, event)
     elif event.event_type == "PlacementInvitationIssued" and user and user.status == identity.STATUSES.ACTIVE:
         text = _email_content(
             eyebrow="Placement invitation", title="Your placement is ready to review",
@@ -85,7 +100,7 @@ def deliver_outbox_event(event) -> None:
             detail="Sign in to confirm that you recognise the placement and continue to orientation.",
             expiry="Please review this placement as soon as you can.",
         )
-        send_mail("Your MentorMAMA placement is ready", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send("Your MentorMAMA placement is ready", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type == "PlacementAcknowledgementReminderRequested" and user and user.status == identity.STATUSES.ACTIVE:
         if not _optional_email_enabled(user_id=user.id, event_type=event.event_type):
             return
@@ -96,7 +111,7 @@ def deliver_outbox_event(event) -> None:
             detail="Please sign in to review the placement details and acknowledge the orientation step so induction can continue.",
             expiry="Please review this reminder when you are able.",
         )
-        send_mail("Reminder: acknowledge your MentorMAMA placement", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send("Reminder: acknowledge your MentorMAMA placement", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type == "EmailVerificationRequested" and user and user.status == identity.STATUSES.ACTIVE:
         code = cache.get(f"identity:email-verification:{user.email_verification_nonce}")
         if not code:
@@ -107,7 +122,7 @@ def deliver_outbox_event(event) -> None:
             action_label="Verification code", action_url="#",
             detail=f"Your code is {code}.", expiry="This code expires in 15 minutes.",
         )
-        send_mail("Confirm your MentorMAMA email", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send("Confirm your MentorMAMA email", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type == "IdentityInvitationRequested" and user and user.status == identity.STATUSES.INVITED:
         link = _activation_link(user)
         role_copy = {
@@ -142,7 +157,7 @@ def deliver_outbox_event(event) -> None:
             detail=role_detail,
             expiry="This invitation link expires in 48 hours.",
         )
-        send_mail("You’re invited to MentorMAMA", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send("You’re invited to MentorMAMA", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type == "PasswordResetRequested" and user and user.status == identity.STATUSES.ACTIVE:
         link = _reset_link(user)
         text = _email_content(
@@ -152,7 +167,7 @@ def deliver_outbox_event(event) -> None:
             detail="If you made this request, use the button below to continue. If not, your account remains safe and you can ignore this email.",
             expiry="This reset link expires automatically and can be used only once.",
         )
-        send_mail("Reset your MentorMAMA password", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send("Reset your MentorMAMA password", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type == "SecurityNotificationRequested" and user:
         # Suspension/deactivation changes the account status before the
         # committed outbox event is dispatched. Those security emails must
@@ -182,7 +197,7 @@ def deliver_outbox_event(event) -> None:
             action_label="Open account", action_url=f"{settings.FRONTEND_BASE_URL}/settings",
             detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
         )
-        send_mail(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+        _send(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, user, event)
     elif event.event_type in {"PlacementProvisionalNotice", "PlacementStartsSoon"}:
         from apps.placements import api as placements_api
 
@@ -215,11 +230,11 @@ def deliver_outbox_event(event) -> None:
                 eyebrow="Placement update", title=title, intro=intro, action_label="Open MentorMAMA",
                 action_url=f"{settings.FRONTEND_BASE_URL}/", detail=detail, expiry="",
             )
-            send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+            _send(subject, text, settings.DEFAULT_FROM_EMAIL, recipient, event)
             event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
             event.save(update_fields=["delivered_to"])
     elif event.event_type in {
-        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden",
+        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden", "MentorUnavailableForPlacements",
         "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",
         "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted",
         "PlacementScheduled", "OrientationAcknowledged", "InductionCompleted", "EscalationStatusChanged",
@@ -244,6 +259,11 @@ def deliver_outbox_event(event) -> None:
                 "Students are waiting to be placed at your facility", "Placement update",
                 "New students are waiting for your facility", "A university coordinator has asked your facility to host students.",
                 "Sign in and use Arrange students to place them into your wards in one step.",
+            ),
+            "MentorUnavailableForPlacements": (
+                "Some placements need a new mentor", "Placement update",
+                "A mentor is no longer available", "A mentor at your facility can no longer take students, so their placements need reassigning.",
+                "Sign in and use Change mentor on each affected placement. Sessions cannot be logged until a new mentor is assigned.",
             ),
             "PlacementsDeclined": (
                 "A facility could not host some of your students", "Placement update",
@@ -335,6 +355,11 @@ def deliver_outbox_event(event) -> None:
             intro = f"A partner facility has placed {plural(int(payload['arranged']), 'student')} from your institution into wards and mentors." + (
                 f" {plural(left, 'student')} could not be placed and still need attention." if left else ""
             )
+        elif event.event_type == "MentorUnavailableForPlacements" and payload.get("count"):
+            active = int(payload.get("active_count", 0))
+            intro = f"A mentor at your facility can no longer take students. {plural(int(payload['count']), 'placement')} need a new mentor" + (
+                f", {active} of them active and unable to log sessions until reassigned." if active else "."
+            )
         elif event.event_type == "PlacementsRequested" and payload.get("count"):
             intro = f"A university coordinator has asked your facility to host {plural(int(payload['count']), 'student')}."
         for recipient_id in event.payload.get("recipient_user_ids", []):
@@ -350,7 +375,7 @@ def deliver_outbox_event(event) -> None:
                 action_label="Open MentorMAMA", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
                 detail=detail, expiry="Please review this notification when you are able.",
             )
-            send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+            _send(subject, text, settings.DEFAULT_FROM_EMAIL, recipient, event)
             event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
             event.save(update_fields=["delivered_to"])
 

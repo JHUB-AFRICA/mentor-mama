@@ -150,3 +150,13 @@ class PlacementRequestsWithdrawn:
     facility_id: UUID
     count: int
     recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class MentorUnavailableForPlacements:
+    """A mentor with open placements can no longer act (suspended or deactivated). Counts only."""
+
+    facility_id: UUID
+    count: int
+    active_count: int
+    recipient_user_ids: tuple[UUID, ...] = ()

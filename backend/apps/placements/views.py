@@ -521,6 +521,17 @@ class IncomingPlacementsView(APIView):
         return Response({"data": serializers.PlacementSerializer(rows, many=True).data})
 
 
+class OrphanedPlacementsView(APIView):
+    """Open placements whose mentor is suspended or deactivated and need reassigning."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.placements import orphans
+
+        return Response({"data": orphans.orphaned(actor=request.user, facility_id=request.query_params.get("facility_id") or None)})
+
+
 class AutoArrangeView(APIView):
     """Preview or apply an automatic arrangement of incoming students into wards and mentors."""
 

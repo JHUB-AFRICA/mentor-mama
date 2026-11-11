@@ -4,13 +4,14 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core import audit, errors, outbox
 from apps.identity import api as identity
 from apps.identity.models import Role, Status, User
 from apps.placements import api as placements
 from apps.safeguarding import events
-from apps.safeguarding.models import Escalation, EscalationState
+from apps.safeguarding.models import Escalation, EscalationState, ReviewRoute
 from apps.facilities.models import Facility
 
 
@@ -22,6 +23,7 @@ class RaiseConcern:
     severity: str
     description: str
     related_escalation_id: UUID | None = None
+    routed_to: str = ReviewRoute.BOTH
 
 
 def _scope_for(row):
@@ -50,6 +52,12 @@ def raise_concern(cmd: RaiseConcern, *, actor):
             raise errors.UnauthorizedFacilityAccess()
     if not facility_id:
         raise errors.UnauthorizedFacilityAccess()
+    routed_to = cmd.routed_to
+    if routed_to not in ReviewRoute.values:
+        raise errors.UnauthorizedFacilityAccess()
+    if placement is None:
+        # No placement means no university coordinator in scope: the facility's nurse manager is the only reviewer.
+        routed_to = ReviewRoute.NURSE_MANAGER
     if cmd.related_escalation_id:
         related = Escalation.objects.select_related(
             "placement__cohort__institution", "facility",
@@ -60,25 +68,38 @@ def raise_concern(cmd: RaiseConcern, *, actor):
         placement=placement, facility_id=facility_id, submitted_by=actor,
         category=cmd.category.strip(), severity=cmd.severity,
         description=cmd.description.strip(), related_escalation_id=cmd.related_escalation_id,
+        routed_to=routed_to,
     )
     audit.record(actor=actor, action="escalation.raise", entity_table="safeguarding_escalation",
-                 entity_id=row.id, scope=_scope_for(row), changes={"state": EscalationState.OPEN, "severity": row.severity})
-    recipients = list(identity.users(
-        role=Role.NURSE_MANAGER, status=Status.ACTIVE, facility_id=row.facility_id,
-    ).values_list("id", flat=True))
-    if row.severity == "high":
-        if placement:
-            coordinator_filter = {"institution_id": placement.institution_id}
-        else:
-            coordinator_filter = {"program_id": row.facility.program_id}
-        recipients.extend(identity.users(
-            role=Role.COORDINATOR, status=Status.ACTIVE, **coordinator_filter,
-        ).values_list("id", flat=True))
+                 entity_id=row.id, scope=_scope_for(row), changes={"state": EscalationState.OPEN, "severity": row.severity, "routed_to": row.routed_to})
+    recipients = _reviewer_recipients(row, placement)
     outbox.publish(events.EscalationRaised(
         escalation_id=row.id, placement_id=row.placement_id, severity=row.severity,
         recipient_user_ids=tuple(dict.fromkeys(recipients)),
     ))
     return row
+
+
+def _reviewer_recipients(row, placement) -> list:
+    """Only the reviewers the submitter chose are told. High severity no longer widens the audience."""
+    recipients = []
+    if row.routed_to in {ReviewRoute.NURSE_MANAGER, ReviewRoute.BOTH}:
+        recipients.extend(identity.users(
+            role=Role.NURSE_MANAGER, status=Status.ACTIVE, facility_id=row.facility_id,
+        ).values_list("id", flat=True))
+    if placement and row.routed_to in {ReviewRoute.COORDINATOR, ReviewRoute.BOTH}:
+        recipients.extend(identity.users(
+            role=Role.COORDINATOR, status=Status.ACTIVE, institution_id=placement.institution_id,
+        ).values_list("id", flat=True))
+    return recipients
+
+
+def _routed_to_role(row, role) -> bool:
+    if role == Role.NURSE_MANAGER:
+        return row.routed_to in {ReviewRoute.NURSE_MANAGER, ReviewRoute.BOTH}
+    if role == Role.COORDINATOR:
+        return row.routed_to in {ReviewRoute.COORDINATOR, ReviewRoute.BOTH}
+    return True
 
 
 def can_review(actor, row) -> bool:
@@ -88,6 +109,8 @@ def can_review(actor, row) -> bool:
         return (row.placement_id and actor.program_id == row.placement.cohort.institution.program_id) or (
             not row.placement_id and actor.program_id == row.facility.program_id
         )
+    if not _routed_to_role(row, actor.role):
+        return False
     if actor.role == Role.NURSE_MANAGER:
         return actor.program_id == row.facility.program_id and actor.facility_id == row.facility_id
     return (row.placement_id is not None
@@ -112,9 +135,9 @@ def list_for(actor):
     if actor.role == Role.PROGRAM_ADMIN:
         rows = rows.filter(placement__cohort__institution__program_id=actor.program_id) | rows.filter(facility__program_id=actor.program_id)
     elif actor.role == Role.NURSE_MANAGER:
-        rows = rows.filter(facility_id=actor.facility_id)
+        rows = rows.filter(facility_id=actor.facility_id, routed_to__in=[ReviewRoute.NURSE_MANAGER, ReviewRoute.BOTH])
     elif actor.role == Role.COORDINATOR:
-        rows = rows.filter(placement__institution_id=actor.institution_id)
+        rows = rows.filter(placement__institution_id=actor.institution_id, routed_to__in=[ReviewRoute.COORDINATOR, ReviewRoute.BOTH])
     elif actor.role in {Role.STUDENT, Role.MENTOR}:
         rows = rows.filter(submitted_by=actor)
     else:
@@ -132,6 +155,8 @@ def assign_reviewer(row_id: UUID, reviewer_id: UUID, *, actor):
     if row.reviewer_id and row.reviewer_id != actor.id and actor.role != Role.PROGRAM_ADMIN:
         raise errors.EscalationAccessDenied()
     if reviewer.role not in {Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN} or reviewer.program_id != actor.program_id:
+        raise errors.EscalationAccessDenied()
+    if reviewer.role in {Role.NURSE_MANAGER, Role.COORDINATOR} and not _routed_to_role(row, reviewer.role):
         raise errors.EscalationAccessDenied()
     if reviewer.role == Role.NURSE_MANAGER and reviewer.facility_id != row.facility_id:
         raise errors.EscalationAccessDenied()
@@ -192,4 +217,33 @@ def close(row_id: UUID, closure_date, *, actor):
     row.save(update_fields=["state", "closure_date", "updated_at"])
     audit.record(actor=actor, action="escalation.close", entity_table="safeguarding_escalation", entity_id=row.id, changes={"state": row.state, "closure_date": str(closure_date)})
     outbox.publish(events.EscalationStatusChanged(escalation_id=row.id, state=row.state, recipient_user_ids=(row.submitted_by_id,)))
+    return row
+
+
+@transaction.atomic
+def request_rereview(row_id: UUID, reason: str, *, actor):
+    """The person who raised a concern asks for another look after it was resolved or closed.
+
+    The concern returns to the queue of the same chosen reviewers, with the reason attached. Earlier findings stay
+    on the record; the audit trail keeps every round.
+    """
+    row = Escalation.objects.select_for_update(of=("self",)).select_related("placement__cohort__institution", "facility").filter(id=row_id).first()
+    if not row or row.submitted_by_id != actor.id or actor.status != Status.ACTIVE:
+        raise errors.EscalationAccessDenied()
+    reason = (reason or "").strip()
+    if row.state not in {EscalationState.RESOLVED, EscalationState.CLOSED} or len(reason) < 10:
+        raise errors.InvalidEscalationTransition()
+    row.state = EscalationState.OPEN
+    row.reviewer = None
+    row.closure_date = None
+    row.rereview_reason = reason
+    row.rereview_requested_at = timezone.now()
+    row.rereview_count += 1
+    row.save(update_fields=["state", "reviewer", "closure_date", "rereview_reason", "rereview_requested_at", "rereview_count", "updated_at"])
+    audit.record(actor=actor, action="escalation.request_rereview", entity_table="safeguarding_escalation", entity_id=row.id,
+                 scope=_scope_for(row), changes={"state": row.state, "rereview_count": row.rereview_count})
+    outbox.publish(events.EscalationRaised(
+        escalation_id=row.id, placement_id=row.placement_id, severity=row.severity,
+        recipient_user_ids=tuple(dict.fromkeys(_reviewer_recipients(row, row.placement))),
+    ))
     return row
