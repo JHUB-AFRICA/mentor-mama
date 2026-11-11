@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, ClipboardList, Inbox, RefreshCw, UserCog, Wand2 } from "lucide-react";
+import { Check, ClipboardList, Download, Inbox, RefreshCw, UserCog, Wand2 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { Field, Modal, SelectInput, TextArea } from "../../components/kit";
 import { PortalErrorState } from "../../components/PortalErrorState";
@@ -18,6 +18,7 @@ import {
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptyState, ListRow, Notice, SearchField, SelectField, StatCard, StatGrid, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
 import { ServerPager } from "../programme-admin/ui/DataTable";
 import { isPlacementClosed, placementStateLabel, placementStateTone } from "../placements/placementJourney";
+import { AllocationListModal } from "../placements/AllocationListModal";
 import { ArrangeStudentsModal } from "./ArrangeStudentsModal";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 import { isManagerActionablePlacement, managerPlacementAction } from "./managerPlacementLogic";
@@ -84,6 +85,7 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
   const needDecision = rows.filter(isManagerActionablePlacement).length;
 
   const [arranging, setArranging] = useState(false);
+  const [listing, setListing] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [replacement, setReplacement] = useState("");
@@ -139,6 +141,9 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
             <>
               <AdminButton variant="ghost" size="sm" icon={<RefreshCw />} disabled={list.isFetching} onClick={() => void list.refetch()}>
                 Refresh
+              </AdminButton>
+              <AdminButton variant="secondary" size="sm" icon={<Download />} onClick={() => setListing(true)}>
+                Allocation list
               </AdminButton>
               {selected.length > 0 && user.capabilities.reassign_mentor !== false && (
                 <AdminButton variant="secondary" size="sm" icon={<UserCog />} onClick={() => setReassignOpen(true)}>
@@ -254,6 +259,7 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
           </div>
         )}
 
+        <AllocationListModal open={listing} onClose={() => setListing(false)} cohorts={(options.data?.cohorts ?? []).map((item) => ({ id: item.id, name: item.name }))} />
         <ArrangeStudentsModal open={arranging} onClose={() => setArranging(false)} incomingCount={incomingCount} />
 
         <Modal

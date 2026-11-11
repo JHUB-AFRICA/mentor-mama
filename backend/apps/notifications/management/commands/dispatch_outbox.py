@@ -4,6 +4,8 @@ Run this command from a worker/cron process. It is intentionally separate from
 request handling so provider failures cannot roll back identity transactions.
 """
 
+from datetime import timedelta
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -11,6 +13,8 @@ from django.utils import timezone
 from apps.core import api as core
 from apps.notifications import services
 from apps.notifications.email import deliver_outbox_event
+
+MAX_ATTEMPTS = 8
 
 
 class Command(BaseCommand):
@@ -33,7 +37,11 @@ class Command(BaseCommand):
                 except Exception as exc:  # provider failures must remain retryable
                     event.attempts += 1
                     event.last_error = str(exc)[:2000]
-                    event.save(update_fields=["attempts", "last_error"])
+                    if event.attempts >= MAX_ATTEMPTS:
+                        event.dead_at = timezone.now()  # stop retrying; visible for support, no longer blocks the queue
+                    else:
+                        event.next_attempt_at = timezone.now() + timedelta(seconds=min(60 * 2 ** event.attempts, 6 * 3600))
+                    event.save(update_fields=["attempts", "last_error", "dead_at", "next_attempt_at"])
                     services.mark_delivered(event.id, error=str(exc))
                     failed += 1
                 else:

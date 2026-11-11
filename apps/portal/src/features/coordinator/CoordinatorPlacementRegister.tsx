@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, ClipboardList, Layers, Plus } from "lucide-react";
+import { Building2, ClipboardList, Download, Layers, Plus } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { getPlacementOptions, getPlacements, type CurrentUser, type Placement } from "../../services/api";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { AdminButton, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { AllocationListModal } from "../placements/AllocationListModal";
 import { RequestFacilitiesModal } from "./RequestFacilitiesModal";
 import { ServerPager } from "../programme-admin/ui/DataTable";
 import { placementStateLabel, placementStateTone } from "../placements/placementJourney";
@@ -79,6 +80,7 @@ export function CoordinatorPlacementRegister({
   const rows: Placement[] = list.data?.results ?? [];
   const [picked, setPicked] = useState<string[]>([]);
   const [requesting, setRequesting] = useState(false);
+  const [listing, setListing] = useState(false);
   const canRequest = Boolean(user.capabilities.request_facility);
   const requestable = (row: Placement) => row.state === "draft" && !row.facility_id && !row.requested_facility_id;
   const requestableRows = rows.filter(requestable);
@@ -92,6 +94,9 @@ export function CoordinatorPlacementRegister({
         description="Follow each student from cohort preparation to active placement. Open a row for its full record."
         actions={
           <>
+            <AdminButton variant="secondary" size="sm" icon={<Download />} onClick={() => setListing(true)}>
+              Allocation list
+            </AdminButton>
             {onOpenBatches && (
               <AdminButton variant="secondary" size="sm" icon={<Layers />} onClick={onOpenBatches}>
                 Batch activity
@@ -223,6 +228,7 @@ export function CoordinatorPlacementRegister({
           {list.data && <ServerPager pagination={list.data.pagination} onPage={(next) => patch({ page: String(next) })} noun="placements" />}
         </div>
       )}
+      <AllocationListModal open={listing} onClose={() => setListing(false)} cohorts={(options.data?.cohorts ?? []).map((item) => ({ id: item.id, name: item.name }))} />
       <RequestFacilitiesModal
         open={requesting}
         onClose={() => { setRequesting(false); setPicked([]); }}

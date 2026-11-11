@@ -152,6 +152,17 @@ class WithdrawalSerializer(serializers.Serializer):
     reason = serializers.ChoiceField(choices=WithdrawalReason.choices)
 
 
+class OverrideArrangementSerializer(serializers.Serializer):
+    ward_id = serializers.UUIDField(required=False)
+    mentor_id = serializers.UUIDField(required=False)
+    reason = serializers.CharField(min_length=5, max_length=500)
+
+    def validate(self, attrs):
+        if not attrs.get("ward_id") and not attrs.get("mentor_id"):
+            raise serializers.ValidationError("Choose a ward, a mentor, or both.")
+        return attrs
+
+
 class AutoArrangeSerializer(serializers.Serializer):
     facility_id = serializers.UUIDField(required=False)
     placement_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False, max_length=500)

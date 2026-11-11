@@ -109,3 +109,12 @@ class PlacementsRequested:
     facility_id: UUID
     count: int
     recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class ArrangementOverridden:
+    """A coordinator changed a facility's ward or mentor arrangement."""
+
+    placement_id: UUID
+    what: str
+    recipient_user_ids: tuple[UUID, ...] = ()

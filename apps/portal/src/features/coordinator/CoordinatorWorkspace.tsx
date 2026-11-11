@@ -114,7 +114,7 @@ export function CoordinatorWorkspace({
     if (placementId)
       return {
         nav: "placements", title: "Placement", crumbs: ["Placements"],
-        render: () => <CoordinatorPlacementDetail id={placementId} onBack={() => go("/coordinator/placements")} onError={onError} />,
+        render: () => <CoordinatorPlacementDetail id={placementId} onBack={() => go("/coordinator/placements")} onError={onError} canOverride={Boolean(user.capabilities.override_arrangement)} />,
       };
     if (path === "/coordinator/placements")
       return {

@@ -3,6 +3,8 @@ from django.urls import path
 from apps.placements import views
 
 urlpatterns = [
+    path("placements/<uuid:placement_id>/override", views.OverrideArrangementView.as_view(), name="override-arrangement"),
+    path("placements/allocation-list", views.AllocationListView.as_view(), name="allocation-list"),
     path("wards", views.ProgrammeWardDirectoryView.as_view(), name="programme-ward-directory"),
     path("wards/<uuid:ward_id>", views.ProgrammeWardConfigurationView.as_view(), name="programme-ward-configuration"),
     path("directory-review", views.ProgrammeDirectoryReviewView.as_view(), name="programme-directory-review"),

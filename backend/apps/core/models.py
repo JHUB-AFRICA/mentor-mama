@@ -63,6 +63,11 @@ class OutboxEvent(models.Model):
     dispatched_at = models.DateTimeField(null=True, blank=True)
     attempts = models.SmallIntegerField(default=0)
     last_error = models.TextField(null=True, blank=True)
+    # Retry with back-off; give up (dead-letter) instead of blocking newer events forever.
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    dead_at = models.DateTimeField(null=True, blank=True)
+    # Recipients already emailed, so a retry never sends to the same person twice.
+    delivered_to = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "core_outbox_event"

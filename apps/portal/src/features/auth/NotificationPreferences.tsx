@@ -10,14 +10,14 @@ type PreferenceKey = keyof Omit<Preferences, "security_alerts">;
 
 const groups: Array<{ title: string; fields: Array<{ key: PreferenceKey; title: string; detail: string }> }> = [
   {
-    title: "Account",
-    fields: [{ key: "account_activity", title: "Account activity", detail: "Password, sign-in, and access changes." }],
+    title: "Mentoring",
+    fields: [{ key: "account_activity", title: "Session follow-ups", detail: "Reminders when a mentoring session needs a follow-up." }],
   },
   {
     title: "Programme",
     fields: [
-      { key: "programme_updates", title: "Programme updates", detail: "Important messages from your programme team." },
-      { key: "placement_updates", title: "Placement updates", detail: "Changes to placements, facilities, or assignments." },
+      { key: "programme_updates", title: "Feedback and programme messages", detail: "Feedback received, final assessments and messages from your programme team." },
+      { key: "placement_updates", title: "Placement updates", detail: "New placements, ward and mentor assignments, pauses, and completion." },
     ],
   },
   {
@@ -94,6 +94,10 @@ export function NotificationPreferences({ onError }: { onError: (message: string
         </div>
       ) : (
         <div className="acct-stack">
+          <p className="acct-group-title" style={{ textTransform: "none", letterSpacing: 0 }}>
+            <ShieldCheck size={14} aria-hidden="true" style={{ display: "inline", verticalAlign: "-2px", marginRight: 6 }} />
+            Safeguarding updates and sign-in, password and invitation emails are always sent. They cannot be turned off.
+          </p>
           {groups.map((group) => (
             <section key={group.title} aria-label={`${group.title} notifications`}>
               <p className="acct-group-title">{group.title}</p>

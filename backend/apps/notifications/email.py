@@ -36,6 +36,13 @@ def _email_content(*, eyebrow: str, title: str, intro: str, action_label: str,
     return "\n\n".join(part.strip() for part in sections if part and part.strip())
 
 
+# Safety, security and access messages are never switchable off.
+MANDATORY_EVENTS = {
+    "EscalationRaised", "EscalationStatusChanged", "SecurityNotificationRequested", "PasswordResetRequested",
+    "IdentityInvitationRequested", "EmailVerificationRequested", "EmailMFAChallengeRequested", "PlacementInvitationIssued",
+}
+
+
 def _optional_email_enabled(*, user_id, event_type: str) -> bool:
     """Respect the user's email-only preferences for non-mandatory updates."""
     from apps.notifications.models import NotificationPreference
@@ -43,7 +50,9 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
     preference = NotificationPreference.objects.filter(user_id=user_id).first()
     if preference is None:
         return True
-    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+    if event_type in MANDATORY_EVENTS:
+        return True
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
     if event_type in {"SessionLogged"}:
         return preference.account_activity
@@ -175,7 +184,7 @@ def deliver_outbox_event(event) -> None:
         )
         send_mail(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, [user.email])
     elif event.event_type in {
-        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested",
+        "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden",
         "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",
         "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted",
         "PlacementScheduled", "OrientationAcknowledged", "InductionCompleted", "EscalationStatusChanged",
@@ -200,6 +209,11 @@ def deliver_outbox_event(event) -> None:
                 "Students are waiting to be placed at your facility", "Placement update",
                 "New students are waiting for your facility", "A university coordinator has asked your facility to host students.",
                 "Sign in and use Arrange students to place them into your wards in one step.",
+            ),
+            "ArrangementOverridden": (
+                "A coordinator changed a placement arrangement", "Placement update",
+                "A placement arrangement was changed", "The university coordinator changed the ward or mentor for a student at your facility.",
+                "Sign in to see what changed and the reason given.",
             ),
             "MentorReassigned": (
                 "Your MentorMAMA placement assignment changed", "Placement update",
@@ -267,7 +281,20 @@ def deliver_outbox_event(event) -> None:
                 "Sign in to review it through the restricted safeguarding workspace. No report details are included in this email.",
             ),
         }[event.event_type]
+        payload = event.payload
+        plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
+        if event.event_type == "MentorPlacementsAssigned" and payload.get("count"):
+            intro = f"Your facility has arranged {plural(int(payload['count']), 'new student')} under your mentorship."
+        elif event.event_type == "PlacementsArranged" and "arranged" in payload:
+            left = int(payload.get("unplaced", 0))
+            intro = f"A partner facility has placed {plural(int(payload['arranged']), 'student')} from your institution into wards and mentors." + (
+                f" {plural(left, 'student')} could not be placed and still need attention." if left else ""
+            )
+        elif event.event_type == "PlacementsRequested" and payload.get("count"):
+            intro = f"A university coordinator has asked your facility to host {plural(int(payload['count']), 'student')}."
         for recipient_id in event.payload.get("recipient_user_ids", []):
+            if str(recipient_id) in (event.delivered_to or []):
+                continue  # already emailed on an earlier attempt
             recipient = identity.user_of(recipient_id)
             if not recipient or recipient.status != identity.STATUSES.ACTIVE:
                 continue
@@ -279,6 +306,8 @@ def deliver_outbox_event(event) -> None:
                 detail=detail, expiry="Please review this notification when you are able.",
             )
             send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+            event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
+            event.save(update_fields=["delivered_to"])
 
 
 def send_digest_email(*, user, unread_count: int) -> None:

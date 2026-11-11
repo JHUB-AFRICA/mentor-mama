@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CalendarDays, CheckCircle2, MapPin, Pause, Play, Send, UserRound, XCircle } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
-import { DetailList, Field, Modal, SelectInput } from "../../components/kit";
+import { DetailList, Field, Modal, SelectInput, TextArea } from "../../components/kit";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
-import { ApiError, getPlacement, getTransitions, releasePlacement, updatePlacementLifecycle } from "../../services/api";
+import { ApiError, getPlacement, getPlacementOptions, getTransitions, overrideArrangement, releasePlacement, updatePlacementLifecycle } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, Notice, StatusPill } from "../programme-admin/ui/AdminKit";
 import { JourneyStepper } from "../placements/JourneyStepper";
 import { PlacementProgressSummary } from "../placements/PlacementProgressSummary";
@@ -16,11 +16,28 @@ const WITHDRAW_REASONS: Array<[string, string]> = [["student_withdrew", "Student
 const fmt = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** One placement from the coordinator's side: where it is, what it needs, what is permitted next. */
-export function CoordinatorPlacementDetail({ id, onBack, onError }: { id: string; onBack: () => void; onError: (message: string) => void }) {
+export function CoordinatorPlacementDetail({ id, onBack, onError, canOverride = false }: { id: string; onBack: () => void; onError: (message: string) => void; canOverride?: boolean }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [confirming, setConfirming] = useState<"pause" | "withdraw" | null>(null);
   const [reason, setReason] = useState("");
+  const [overriding, setOverriding] = useState(false);
+  const [ovWard, setOvWard] = useState("");
+  const [ovMentor, setOvMentor] = useState("");
+  const [ovReason, setOvReason] = useState("");
+  const options = useQuery({ queryKey: ["placement-options"], queryFn: getPlacementOptions, staleTime: 5 * 60_000, enabled: canOverride });
+  const override = useMutation({
+    mutationFn: () => overrideArrangement(id, { ...(ovWard ? { ward_id: ovWard } : {}), ...(ovMentor ? { mentor_id: ovMentor } : {}), reason: ovReason.trim() }),
+    onSuccess: () => {
+      pushToast({ kind: "success", title: "Arrangement changed", message: "The facility's nurse manager has been told and can see your reason." });
+      setOverriding(false);
+      setOvWard("");
+      setOvMentor("");
+      setOvReason("");
+      void queryClient.invalidateQueries({ queryKey: ["coordinator-placement", id] });
+    },
+    onError: (cause) => onError(cause instanceof ApiError ? cause.message : "We could not change the arrangement."),
+  });
   const placement = useQuery({ queryKey: ["coordinator-placement", id], queryFn: () => getPlacement(id) });
   const transitions = useQuery({ queryKey: ["coordinator-placement-transitions", id, placement.data?.state], queryFn: () => getTransitions(id), enabled: Boolean(placement.data) });
 
@@ -124,6 +141,54 @@ export function CoordinatorPlacementDetail({ id, onBack, onError }: { id: string
       ) : (
         <Notice icon={<CheckCircle2 />}>No coordinator blockers are recorded for this placement.</Notice>
       )}
+
+      {canOverride && !closed && (
+        <AdminCard
+          title="Change the arrangement"
+          description="Normally the facility's nurse manager places students. Override only when the programme needs a different ward or mentor. They are told, with your reason."
+          action={<AdminButton variant="secondary" size="sm" onClick={() => setOverriding(true)}>Override</AdminButton>}
+        >
+          <p className="pa-sub">Current: {item.ward?.name ?? "no ward"} · {item.mentor?.name ?? "no mentor"}</p>
+        </AdminCard>
+      )}
+
+      <Modal
+        open={overriding}
+        onClose={() => setOverriding(false)}
+        dismissible={!override.isPending}
+        size="sm"
+        icon={<UserRound />}
+        title="Override the facility's arrangement"
+        description="Choose a new ward, a new mentor, or both. A reason is required."
+        footer={
+          <>
+            <AdminButton variant="secondary" size="sm" onClick={() => setOverriding(false)} disabled={override.isPending}>Cancel</AdminButton>
+            <AdminButton size="sm" disabled={override.isPending || ovReason.trim().length < 5 || (!ovWard && !ovMentor)} onClick={() => override.mutate()}>
+              {override.isPending ? "Saving…" : "Apply override"}
+            </AdminButton>
+          </>
+        }
+      >
+        <Field label="Ward">
+          <SelectInput value={ovWard} onChange={(event) => setOvWard(event.target.value)}>
+            <option value="">Keep current ward</option>
+            {(options.data?.wards ?? []).filter((w) => !item.facility_id || w.facility_id === item.facility_id).map((w) => (
+              <option key={w.id} value={w.id}>{w.name} · {w.facility_name}</option>
+            ))}
+          </SelectInput>
+        </Field>
+        <Field label="Mentor">
+          <SelectInput value={ovMentor} onChange={(event) => setOvMentor(event.target.value)}>
+            <option value="">Keep current mentor</option>
+            {(options.data?.mentors ?? []).filter((m) => (!item.facility_id || m.facility_id === item.facility_id) && m.accepting_students && m.active_placements < m.max_active_placements).map((m) => (
+              <option key={m.id} value={m.id}>{m.name} · {m.active_placements}/{m.max_active_placements}</option>
+            ))}
+          </SelectInput>
+        </Field>
+        <Field label="Reason" required hint="Visible to the facility and recorded in the audit trail.">
+          <TextArea rows={3} value={ovReason} onChange={(event) => setOvReason(event.target.value)} />
+        </Field>
+      </Modal>
 
       <Modal
         open={Boolean(confirming)}

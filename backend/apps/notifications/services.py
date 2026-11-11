@@ -31,6 +31,7 @@ EVENT_TEMPLATES = {
     "PlacementsArranged": "placement.arranged",
     "PlacementsRequested": "placement.requested",
     "MentorReassigned": "placement.mentor_reassigned",
+    "ArrangementOverridden": "placement.arrangement_overridden",
     "EscalationRaised": "safeguarding.concern_raised",
     "FeedbackSubmitted": "feedback.received",
     "SessionLogged": "mentorship.follow_up",

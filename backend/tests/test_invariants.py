@@ -614,3 +614,41 @@ def test_finished_placements_do_not_count_against_mentor_capacity(active_placeme
     from django.utils import timezone
     Placement.objects.filter(id=active_placement.id).update(state="completed", completed_at=timezone.now())
     assert identity.active_mentors(program_id=mentor.program_id).get(id=mentor.id).active_placement_count == 0
+
+
+def test_failing_outbox_events_back_off_then_stop_blocking_the_queue(monkeypatch):
+    from django.core.management import call_command
+
+    from apps.core.models import OutboxEvent
+
+    bad = OutboxEvent.objects.create(event_type="PlacementPaused", payload={})
+    good = OutboxEvent.objects.create(event_type="PlacementResumed", payload={})
+    calls = []
+
+    def fake_deliver(event):
+        calls.append(event.event_type)
+        if event.event_type == "PlacementPaused":
+            raise RuntimeError("provider down")
+
+    monkeypatch.setattr("apps.notifications.management.commands.dispatch_outbox.deliver_outbox_event", fake_deliver)
+    call_command("dispatch_outbox")
+    bad.refresh_from_db()
+    good.refresh_from_db()
+    assert good.dispatched_at is not None  # a failing event does not hold up later ones
+    assert bad.attempts == 1 and bad.next_attempt_at is not None and bad.dead_at is None
+    call_command("dispatch_outbox")  # backed off: not retried immediately
+    assert calls.count("PlacementPaused") == 1
+    OutboxEvent.objects.filter(id=bad.id).update(attempts=7, next_attempt_at=None)
+    call_command("dispatch_outbox")
+    bad.refresh_from_db()
+    assert bad.dead_at is not None  # given up after the cap
+
+
+def test_safety_and_security_emails_ignore_notification_opt_outs(student):
+    from apps.notifications.email import _optional_email_enabled
+    from apps.notifications.models import NotificationPreference
+
+    NotificationPreference.objects.create(user_id=student.id, account_activity=False, programme_updates=False, placement_updates=False)
+    for mandatory in ("EscalationRaised", "EscalationStatusChanged", "PasswordResetRequested", "SecurityNotificationRequested"):
+        assert _optional_email_enabled(user_id=student.id, event_type=mandatory) is True
+    assert _optional_email_enabled(user_id=student.id, event_type="PlacementPaused") is False

@@ -2687,6 +2687,8 @@ export interface PlacementActivityEntry {
   occurred_at: string;
   changes: Record<string, unknown>;
   override_reason: string | null;
+  summary?: string;
+  details?: Array<{ label: string; value: string }>;
 }
 
 export async function getPlacementActivity(
@@ -2870,5 +2872,32 @@ export async function getReportInsights(params: { from: string; to: string; coho
   if (params.cohort_id) query.set("cohort_id", params.cohort_id);
   if (params.facility_id) query.set("facility_id", params.facility_id);
   const response = await request<{ data: ReportInsights }>(`/api/v1/reports/insights?${query.toString()}`);
+  return response.data;
+}
+
+/** Download the allocation list (where each student is placed) as CSV, XLSX or PDF. */
+export async function downloadAllocationList(file: "csv" | "xlsx" | "pdf", cohortId?: string): Promise<Blob> {
+  const query = new URLSearchParams({ file });
+  if (cohortId) query.set("cohort_id", cohortId);
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/placements/allocation-list?${query.toString()}`, { credentials: "include" });
+  } catch {
+    throw new ApiError("We couldn’t reach MentorMAMA. Check your connection and try again.", 0, { retryable: true });
+  }
+  if (!response.ok) throw new ApiError(safeStatusMessage(response.status), response.status);
+  return response.blob();
+}
+
+/** Coordinator override: change a placement's ward and/or mentor. The facility is told and sees the reason. */
+export async function overrideArrangement(
+  placementId: string,
+  input: { ward_id?: string; mentor_id?: string; reason: string },
+): Promise<Placement> {
+  const response = await request<{ data: Placement }>(`/api/v1/placements/${placementId}/override`, {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
   return response.data;
 }

@@ -1045,3 +1045,36 @@ def test_activity_shows_only_the_signed_in_persons_related_activity(active_place
     assert any(row["title"] == "Ward allocated" for row in student_feed)  # done to the student's placement
     assert not any("concern" in row["title"].lower() for row in student_feed)  # safeguarding never leaks
     assert "Secret cohort" not in str(student_feed)
+
+
+def test_coordinator_downloads_allocation_list_in_every_format(active_placement, coordinator, student, mentor):
+    client = client_for(coordinator)
+    csv_response = client.get("/api/v1/placements/allocation-list?file=csv", **HEADERS)
+    assert csv_response.status_code == 200
+    text = csv_response.content.decode("utf-8-sig")
+    assert "Student" in text.splitlines()[0] and student.full_name in text and mentor.full_name in text
+    assert "induction" not in text.lower() and "safeguarding" not in text.lower()
+    assert client.get("/api/v1/placements/allocation-list?file=xlsx", **HEADERS).content[:2] == b"PK"
+    assert client.get("/api/v1/placements/allocation-list?file=pdf", **HEADERS).content.startswith(b"%PDF")
+    assert client_for(student).get("/api/v1/placements/allocation-list?file=csv", **HEADERS).status_code in {403, 404}
+
+
+def test_coordinator_override_needs_a_reason_and_tells_the_facility(active_placement, coordinator, nurse_manager, facility):
+    from apps.facilities.models import Ward
+
+    other = Ward.objects.create(facility=facility, name="Override Ward", max_students=3)
+    client = client_for(coordinator)
+
+    def post(body):
+        return client.post(f"/api/v1/placements/{active_placement.id}/override", body, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS)
+
+    assert post({"ward_id": str(other.id), "reason": "x"}).status_code == 400  # reason too short
+    assert client_for(nurse_manager).post(
+        f"/api/v1/placements/{active_placement.id}/override", {"ward_id": str(other.id), "reason": "Not allowed here"},
+        format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), **HEADERS,
+    ).status_code in {403, 404}
+    done = post({"ward_id": str(other.id), "reason": "Cohort needs a surgical ward"})
+    assert done.status_code == 200
+    audit_row = AuditEntry.objects.filter(action="placement.change_ward", entity_id=active_placement.id).latest("occurred_at")
+    assert audit_row.is_override and audit_row.override_reason == "Cohort needs a surgical ward"
+    assert OutboxEvent.objects.filter(event_type="ArrangementOverridden").exists()

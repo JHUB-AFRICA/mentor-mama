@@ -10,12 +10,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import transaction
 
+from apps.core import errors
 from apps.core.errors import UnauthorizedFacilityAccess
 from apps.core.http import IdempotentCommand
 from apps.core.models import IdempotencyKey
 from apps.identity import api as identity
 from apps.placements import api as placements_api, events, selectors, serializers, services
-from apps.placements.models import Placement, PlacementBatch, State
+from apps.placements.models import MentorAssignment, Placement, PlacementBatch, State
 
 
 class PlacementListView(APIView):
@@ -568,3 +569,50 @@ class FacilityRequestView(APIView):
                 result = allocation.apply_facility_split(actor=request.user, **data)
             command.record(UUID(int=0))
         return Response({"data": result}, status=status.HTTP_201_CREATED)
+
+
+class AllocationListView(APIView):
+    """Download where each student is placed (csv, xlsx or pdf)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.placements import allocation_list
+
+        fmt = request.query_params.get("file", "csv").lower()
+        if fmt not in allocation_list.FORMATS:
+            raise errors.InvalidTransition("Choose CSV, XLSX or PDF.")
+        rows = allocation_list.rows_for(request.user, cohort_id=request.query_params.get("cohort_id") or None)
+        content = allocation_list.render(rows, fmt)
+        response = HttpResponse(content, content_type=allocation_list.FORMATS[fmt])
+        response["Content-Disposition"] = f'attachment; filename="mentormama-allocation-list.{fmt}"'
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class OverrideArrangementView(APIView):
+    """A coordinator changes the ward and/or mentor of a placement, with a reason the facility can see."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, placement_id):
+        payload = serializers.OverrideArrangementSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        with IdempotentCommand(request, "override_arrangement") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            with transaction.atomic():
+                if data.get("ward_id"):
+                    services.allocate_ward(placement_id, data["ward_id"], actor=request.user, override_reason=data["reason"])
+                if data.get("mentor_id"):
+                    has_mentor = MentorAssignment.objects.filter(placement_id=placement_id, ended_at=None).exists()
+                    if has_mentor:
+                        services.reassign_mentor(placement_id, data["mentor_id"], actor=request.user, reason=data["reason"], override=True)
+                    else:
+                        services.assign_mentor(placement_id, data["mentor_id"], actor=request.user, override_reason=data["reason"])
+            command.record(placement_id)
+        placement = _get_in_scope(request, placement_id)
+        return Response({"data": serializers.PlacementSerializer(placement).data}, status=status.HTTP_200_OK)

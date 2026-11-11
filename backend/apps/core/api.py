@@ -9,7 +9,14 @@ from apps.core.models import AuditEntry
 
 def pending_outbox_events(*, limit: int = 50) -> QuerySet:
     """Read pending events for a dispatcher without exposing the core model."""
-    return OutboxEvent.objects.filter(dispatched_at__isnull=True).order_by("occurred_at")[:limit]
+    from django.db.models import Q
+    from django.utils import timezone
+
+    return (
+        OutboxEvent.objects.filter(dispatched_at__isnull=True, dead_at__isnull=True)
+        .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=timezone.now()))
+        .order_by("occurred_at")[:limit]
+    )
 
 
 def lock_outbox_event(event_id):

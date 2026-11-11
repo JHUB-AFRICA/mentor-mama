@@ -252,8 +252,28 @@ def bulk_create_placements(cmd: BulkCreatePlacements, *, actor) -> dict:
     return {"created": created, "skipped": skipped}
 
 
-def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor) -> Placement:
-    identity.require_capability(actor, "allocate_ward")
+def _override_reason(reason: str | None) -> str | None:
+    """A coordinator override needs a real reason; None means an ordinary facility action."""
+    if reason is None:
+        return None
+    reason = reason.strip()
+    if len(reason) < 5:
+        raise errors.InvalidTransition("Give a short reason for overriding the facility's arrangement.")
+    return reason
+
+
+def _announce_override(placement, *, what: str, actor, reason: str) -> None:
+    """Tell the facility's nurse managers that the coordinator changed their arrangement, and why."""
+    if not placement.facility_id:
+        return
+    managers = tuple(identity.users(role=identity.ROLES.NURSE_MANAGER, status=identity.STATUSES.ACTIVE, facility_id=placement.facility_id).values_list("id", flat=True))
+    if managers:
+        outbox.publish(events.ArrangementOverridden(placement_id=placement.id, what=what, recipient_user_ids=managers))
+
+
+def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor, override_reason: str | None = None) -> Placement:
+    override_reason = _override_reason(override_reason)
+    identity.require_capability(actor, "allocate_ward" if override_reason is None else "override_arrangement")
     with transaction.atomic():
         placement = _lock(placement_id)
         _reject_closed(placement)
@@ -286,7 +306,9 @@ def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor) -> Placement:
         placement.save(update_fields=["facility_id", "updated_at"])
 
         audit.record(actor=actor, action="placement.change_ward" if current else "placement.allocate_ward",
-                     entity_table=TABLE, entity_id=placement.id, scope=_facility_scope(placement))
+                     entity_table=TABLE, entity_id=placement.id, scope=_facility_scope(placement), override_reason=override_reason)
+        if override_reason:
+            _announce_override(placement, what="ward", actor=actor, reason=override_reason)
         outbox.publish(events.WardAllocated(placement_id=placement.id, ward_id=ward_id))
         _maybe_schedule(placement, actor=actor)
     placement.refresh_from_db()
@@ -399,8 +421,9 @@ def quiet_notifications():
         _QUIET.reset(token)
 
 
-def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
-    identity.require_capability(actor, "assign_mentor")
+def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, override_reason: str | None = None) -> Placement:
+    override_reason = _override_reason(override_reason)
+    identity.require_capability(actor, "assign_mentor" if override_reason is None else "override_arrangement")
     with transaction.atomic():
         placement = _lock(placement_id)
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=placement.facility_id)
@@ -410,7 +433,9 @@ def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
             raise errors.InvalidTransition(policy["reason"])
         MentorAssignment.objects.create(placement=placement, mentor_id=mentor_id, created_by=actor)
         audit.record(actor=actor, action="placement.assign_mentor", entity_table=TABLE, entity_id=placement.id,
-                     scope=_facility_scope(placement))
+                     scope=_facility_scope(placement), override_reason=override_reason)
+        if override_reason:
+            _announce_override(placement, what="mentor", actor=actor, reason=override_reason)
         if not _QUIET.get():
             outbox.publish(events.MentorAssigned(placement_id=placement.id, mentor_id=mentor_id, recipient_user_ids=(mentor_id,)))
         _maybe_schedule(placement, actor=actor)
@@ -418,13 +443,15 @@ def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor) -> Placement:
     return placement
 
 
-def reassign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, reason: str = "") -> Placement:
+def reassign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, reason: str = "", override: bool = False) -> Placement:
     """Closes the current assignment and opens a new one (POL-005, INV-12).
 
     Sessions, induction and feedback are untouched: they belong to the placement,
     and the outgoing mentor's entries stay attributed to them (Stage 3.5 §5.3).
     """
-    identity.require_capability(actor, "assign_mentor")
+    identity.require_capability(actor, "override_arrangement" if override else "assign_mentor")
+    if override:
+        reason = _override_reason(reason) or ""
     with transaction.atomic():
         placement = _lock(placement_id)
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=placement.facility_id)
@@ -449,7 +476,10 @@ def reassign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, reason: str =
             actor=actor, action="placement.reassign_mentor", entity_table=TABLE, entity_id=placement.id,
             scope=_facility_scope(placement),
             changes={"mentor_id": {"from": str(previous_mentor_id), "to": str(mentor_id)}},
+            override_reason=reason if override else None,
         )
+        if override:
+            _announce_override(placement, what="mentor", actor=actor, reason=reason)
         outbox.publish(events.MentorReassigned(
             placement_id=placement.id, mentor_id=mentor_id, previous_mentor_id=previous_mentor_id,
             recipient_user_ids=(mentor_id, previous_mentor_id),

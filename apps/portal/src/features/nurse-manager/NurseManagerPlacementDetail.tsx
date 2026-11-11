@@ -204,7 +204,7 @@ export function NurseManagerPlacementDetail({ user, onError }: { user: CurrentUs
                     icon={<Clock3 />}
                     tone="slate"
                     title={entry.action}
-                    meta={`${entry.actor} · ${new Date(entry.occurred_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                    meta={`${entry.actor} · ${new Date(entry.occurred_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${(entry.details ?? []).find((d) => d.label === "Reason") ? ` · Reason: ${(entry.details ?? []).find((d) => d.label === "Reason")?.value}` : ""}`}
                   />
                 ))}
               </div>
