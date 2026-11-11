@@ -6,15 +6,28 @@ DEBUG = False
 
 SECRET_KEY = env("SECRET_KEY")
 
-ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+ALLOWED_HOSTS = list(env("ALLOWED_HOSTS"))
 
-CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = list(env("CSRF_TRUSTED_ORIGINS"))
 
 DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
 
-CORS_ALLOWED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+# One variable names the portal's public domain (for Render, where the portal's static site proxies /api to this
+# service). It is added to the allowed hosts and trusted origins, and becomes the base for links in emails.
+PORTAL_DOMAIN = env("PORTAL_DOMAIN", default="").strip()
+if PORTAL_DOMAIN:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, PORTAL_DOMAIN]
+    CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, f"https://{PORTAL_DOMAIN}"]
+    if not env("FRONTEND_BASE_URL", default=""):
+        FRONTEND_BASE_URL = f"https://{PORTAL_DOMAIN}"
+# Render sets this to the service's own *.onrender.com host, which health checks and the portal proxy use.
+_render_host = env("RENDER_EXTERNAL_HOSTNAME", default="").strip()
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, _render_host]
+
+CORS_ALLOWED_ORIGINS = list(CSRF_TRUSTED_ORIGINS)
 
 PROMETHEUS_METRICS_ENABLED = env.bool("PROMETHEUS_METRICS_ENABLED", default=True)
 if PROMETHEUS_METRICS_ENABLED and "django_prometheus" not in INSTALLED_APPS:
@@ -39,6 +52,8 @@ SECURE_HSTS_PRELOAD = False
 
 # Security headers
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+# Platform health checks arrive over plain HTTP on the private network; they must not be redirected.
+SECURE_REDIRECT_EXEMPT = [r"^health/"]
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_BROWSER_XSS_FILTER = True

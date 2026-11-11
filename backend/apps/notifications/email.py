@@ -54,8 +54,16 @@ def _send(subject: str, text: str, sender: str, recipient, event) -> None:
     notification_id = Notification.objects.filter(event_id=event.id, user_id=recipient.id).values_list("id", flat=True).first()
     if notification_id:
         message.extra_headers["X-MentorMAMA-Notification"] = str(notification_id)
-        message.metadata = {"notification_id": str(notification_id)}  # read by django-anymail (Mailtrap)
+        message.metadata = {"notification_id": str(notification_id)}  # read by django-anymail (Resend, Mailtrap)
     message.send()
+    if notification_id:
+        # Remember the provider's id so a later delivered/bounced callback can find this notification.
+        status = getattr(message, "anymail_status", None)
+        provider_id = ""
+        if status is not None and status.message_id:
+            provider_id = status.message_id if isinstance(status.message_id, str) else next(iter(status.message_id), "")
+        if provider_id:
+            Notification.objects.filter(id=notification_id).update(provider_message_id=str(provider_id)[:120])
 
 
 def _optional_email_enabled(*, user_id, event_type: str) -> bool:

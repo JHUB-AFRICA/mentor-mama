@@ -20,13 +20,11 @@ import {
   Link2,
   List,
   ListOrdered,
-  Download,
   Plus,
   Quote,
   Redo2,
   Save,
   Send,
-  Trash2,
   Undo2,
   Upload,
 } from "lucide-react";
@@ -45,7 +43,15 @@ import {
 } from "../../services/api";
 import type { LessonType } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
-import { isGuideBodyEmpty } from "./ContentReader";
+import "./authoring-layout.css";
+import { Modal } from "../../components/kit";
+import { Callout } from "./lessonExtensions";
+import { PublishingExtras } from "./PublishingExtras";
+import { QuizEditor } from "./QuizEditor";
+import { fromQuestion, questionProblem, toPayload, type QuizDraft } from "./quizDraft";
+import { LessonToolbar } from "./LessonToolbar";
+import { AdminButton } from "../programme-admin/ui/AdminKit";
+import { GuideReader, isGuideBodyEmpty, parseGuideBody } from "./ContentReader";
 import { audienceOptions, groupsFromRoles, rolesFromGroups, type AudienceGroup } from "./contentMeta";
 import "./content-detail.css";
 
@@ -294,6 +300,8 @@ function GuideAuthoring({
   const [summary, setSummary] = useState("");
   const [audience, setAudience] = useState<AudienceGroup[]>(["mentor"]);
   const [category, setCategory] = useState("onboarding");
+  const [tags, setTags] = useState<string[]>([]);
+  const [facilityIds, setFacilityIds] = useState<string[]>([]);
   const [contentId, setContentId] = useState<string | null>(null);
   const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -315,7 +323,7 @@ function GuideAuthoring({
   useEffect(() => {
     const item = existing.data;
     if (!item || !editor) return;
-    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "onboarding");
+    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "onboarding"); setTags(item.tags ?? []); setFacilityIds(item.facility_ids ?? []);
     setExistingStatus(item.status ?? (item.published ? "published" : "draft"));
     if (item.cover_image) setCoverPreview(item.cover_image);
     try { editor.commands.setContent(JSON.parse(item.body), { emitUpdate: false }); } catch { editor.commands.clearContent(); }
@@ -332,6 +340,8 @@ function GuideAuthoring({
         content_type: "guide",
         category,
         visible_roles: rolesFromGroups(audience),
+        tags,
+        facility_ids: facilityIds,
         cover_image: coverFile,
         keep_published: keepLive,
       };
@@ -592,6 +602,7 @@ function GuideAuthoring({
           setAudience={setAudience}
           category={category}
           setCategory={setCategory}
+          extras={<PublishingExtras tags={tags} setTags={setTags} facilityIds={facilityIds} setFacilityIds={setFacilityIds} />}
           coverInputRef={coverInputRef}
           coverPreview={coverPreview}
           onCoverChange={selectCover}
@@ -615,13 +626,17 @@ function ModuleAuthoring({
   const [category, setCategory] = useState("clinical_care");
   const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const [required, setRequired] = useState(false);
+  const [certificate, setCertificate] = useState(true);
   const [includeQuiz, setIncludeQuiz] = useState(false);
   const [passMark, setPassMark] = useState(70);
   const [selectedLesson, setSelectedLesson] = useState(0);
-  const [lessons, setLessons] = useState([
-    { title: "", body: "", lesson_type: "reading" as LessonType, duration_minutes: 5 },
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [changeKind, setChangeKind] = useState<"minor" | "major">("minor");
+  const [changeNote, setChangeNote] = useState("");
+  const [lessons, setLessons] = useState<Array<{ title: string; body: string; lesson_type: LessonType; duration_minutes: number; video_url?: string; id?: string; section?: string }>>([
+    { id: crypto.randomUUID(), title: "", body: "", lesson_type: "reading" as LessonType, duration_minutes: 5 },
   ]);
-  const [quiz, setQuiz] = useState<QuizQuestionDraft[]>([]);
+  const [quiz, setQuiz] = useState<QuizDraft[]>([]);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -629,11 +644,11 @@ function ModuleAuthoring({
   useEffect(() => {
     const module = existing.data?.find((row) => row.id === editId);
     if (!module) return;
-    setTitle(module.title); setSummary(module.description); setAudience(groupsFromRoles(module.visible_roles)); setCategory(module.category); setRequired(module.is_required); setPassMark(module.pass_mark);
+    setTitle(module.title); setSummary(module.description); setAudience(groupsFromRoles(module.visible_roles)); setCategory(module.category); setRequired(module.is_required); setCertificate(module.certificate_enabled !== false); setPassMark(module.pass_mark);
     setExistingStatus(module.status);
-    setLessons(module.lessons.map((lesson) => ({ title: lesson.title, body: lesson.body, lesson_type: lesson.lesson_type, duration_minutes: lesson.duration_minutes })));
+    setLessons(module.lessons.map((lesson) => ({ title: lesson.title, body: lesson.body, lesson_type: lesson.lesson_type, duration_minutes: lesson.duration_minutes, video_url: lesson.video_url ?? "", id: lesson.id, section: lesson.section ?? "" })));
     setSelectedLesson(0); setIncludeQuiz(module.quiz.length > 0);
-    if (module.quiz.length > 0) setQuiz(module.quiz.map((question) => ({ prompt: question.prompt, options: question.options, correct_option: question.correct_option ?? "" })));
+    setQuiz([...module.quiz, ...(module.checks ?? [])].map(fromQuestion));
     if (module.cover_image) setCoverPreview(module.cover_image);
   }, [editId, existing.data]);
   const buildInput = (keepLive: boolean) => ({
@@ -641,19 +656,21 @@ function ModuleAuthoring({
     description: summary,
     pass_mark: passMark,
     is_required: required,
+    certificate_enabled: certificate,
     visible_roles: rolesFromGroups(audience),
     category,
     lessons,
-    quiz: includeQuiz ? quiz : [],
+    // Lesson checks are always kept; the final knowledge check only when switched on.
+    quiz: quiz.filter((question) => (question.lesson_id ? true : includeQuiz)).map(toPayload),
     cover_image: coverFile,
     keep_published: keepLive,
   });
   const save = useMutation({
-    mutationFn: async ({ publish, keepLive = false }: { publish: boolean; keepLive?: boolean }) => {
+    mutationFn: async ({ publish, keepLive = false, change }: { publish: boolean; keepLive?: boolean; change?: { kind: "minor" | "major"; note: string } }) => {
       const module = editId
         ? await reviseTrainingModule(editId, buildInput(keepLive))
         : await createTrainingModule(buildInput(false));
-      if (publish) await publishTrainingModule(module.id);
+      if (publish) await publishTrainingModule(module.id, change);
       return module;
     },
     onSuccess: (result, variables) => { pushToast(savedToast(variables)); onSaved({ kind: "module", id: result.id }); },
@@ -693,7 +710,10 @@ function ModuleAuthoring({
     reader.readAsDataURL(file);
   }
   const lessonsComplete = lessons.length > 0 && lessons.every((lesson) => lesson.title.trim() && lesson.body.trim());
-  const quizComplete = !includeQuiz || (quiz.length > 0 && quiz.every((question) => question.prompt.trim() && question.options.filter(Boolean).length >= 2 && question.correct_option));
+  const finalQuiz = quiz.filter((question) => !question.lesson_id);
+  const quizComplete =
+    quiz.filter((question) => question.lesson_id).every((question) => !questionProblem(question)) &&
+    (!includeQuiz || (finalQuiz.length > 0 && finalQuiz.every((question) => !questionProblem(question))));
   function publishProblem(): string | null {
     if (!title.trim()) return "Add a title to this module.";
     if (!summary.trim()) return "Add a description so learners know what the module covers.";
@@ -727,18 +747,62 @@ function ModuleAuthoring({
       onError(problem);
       return;
     }
-    if (existingStatus === "published") void save.mutate({ publish: false, keepLive: true });
+    if (existingStatus === "published") setPublishOpen(true);
     else void save.mutate({ publish: true });
   }
   const activeLesson = lessons[selectedLesson];
   function removeLesson(index: number) {
     if (lessons.length === 1) return;
+    const removedId = lessons[index]?.id;
+    // A lesson's practice questions go with it.
+    if (removedId) setQuiz((current) => current.filter((question) => question.lesson_id !== removedId));
     setLessons((current) =>
       current.filter((_, itemIndex) => itemIndex !== index),
     );
     setSelectedLesson((current) => Math.min(current, lessons.length - 2));
   }
+  const publishDialog = (
+    <Modal
+      open={publishOpen}
+      onClose={() => setPublishOpen(false)}
+      dismissible={!save.isPending}
+      size="sm"
+      title="Publish this update"
+      description="Learners who already started keep the version they are on. Choose how the change affects people who finished it."
+      footer={
+        <>
+          <AdminButton variant="secondary" size="sm" disabled={save.isPending} onClick={() => setPublishOpen(false)}>Cancel</AdminButton>
+          <AdminButton
+            size="sm"
+            disabled={save.isPending || (changeKind === "major" && !changeNote.trim())}
+            onClick={() => {
+              setPublishOpen(false);
+              void save.mutate({ publish: true, keepLive: true, change: { kind: changeKind, note: changeNote } });
+            }}
+          >
+            {save.isPending ? "Publishing…" : "Publish update"}
+          </AdminButton>
+        </>
+      }
+    >
+      <fieldset className="content-authoring-field">
+        <legend>What kind of change is this?</legend>
+        <label>
+          <input type="radio" name="change-kind" checked={changeKind === "minor"} onChange={() => setChangeKind("minor")} /> Minor — wording or typo. Existing completions stay complete.
+        </label>
+        <label>
+          <input type="radio" name="change-kind" checked={changeKind === "major"} onChange={() => setChangeKind("major")} /> Major — the content changed. Required learners must refresh after 30 days.
+        </label>
+      </fieldset>
+      <label className="content-authoring-field">
+        {changeKind === "major" ? "What changed? (required)" : "What changed? (optional)"}
+        <input value={changeNote} maxLength={500} onChange={(event) => setChangeNote(event.target.value)} />
+      </label>
+    </Modal>
+  );
   return (
+    <>
+    {publishDialog}
     <AuthoringShell
       kind="module"
       mode={editId ? "edit" : "create"}
@@ -765,14 +829,26 @@ function ModuleAuthoring({
           onAdd={() =>
             setLessons((current) => [
               ...current,
-              { title: "", body: "", lesson_type: "reading" as LessonType, duration_minutes: 5 },
+              { id: crypto.randomUUID(), title: "", body: "", lesson_type: "reading" as LessonType, duration_minutes: 5 },
             ])
           }
         />
         {preview ? (
-          <ModulePreview title={title} summary={summary} lessons={lessons} includeQuiz={includeQuiz} quiz={quiz} passMark={passMark} />
+          <ModulePreview title={title} summary={summary} lessons={lessons} includeQuiz={includeQuiz} quiz={quiz.filter((question) => !question.lesson_id)} passMark={passMark} />
         ) : (
           <ModuleLessonEditor
+            checksSlot={
+              activeLesson?.id ? (
+                <QuizEditor
+                  heading="Check your understanding"
+                  compact
+                  lessonId={activeLesson.id}
+                  questions={quiz.filter((question) => question.lesson_id === activeLesson.id)}
+                  onChange={(next) => setQuiz([...quiz.filter((question) => question.lesson_id !== activeLesson.id), ...next])}
+                  onError={onError}
+                />
+              ) : null
+            }
             lesson={activeLesson}
             index={selectedLesson}
             onTitleChange={(value) =>
@@ -797,6 +873,22 @@ function ModuleAuthoring({
               setLessons((current) =>
                 current.map((item, itemIndex) =>
                   itemIndex === selectedLesson ? { ...item, lesson_type: value } : item,
+                ),
+              )
+            }
+            sections={Array.from(new Set(lessons.map((item) => item.section ?? "").filter(Boolean)))}
+            onError={onError}
+            onSectionChange={(value) =>
+              setLessons((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === selectedLesson ? { ...item, section: value } : item,
+                ),
+              )
+            }
+            onVideoChange={(value) =>
+              setLessons((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === selectedLesson ? { ...item, video_url: value } : item,
                 ),
               )
             }
@@ -844,7 +936,15 @@ function ModuleAuthoring({
               <span className={required ? "is-checked" : ""}>
                 <Check size={13} />
               </span>
-              <strong>Required for mentors before placement</strong>
+              <strong>Required for everyone in the audience</strong>
+            </label>
+            <small className="content-authoring-field-help">Mentors must finish required modules before they can take placements.</small>
+            <label className="content-authoring-check">
+              <input type="checkbox" checked={certificate} onChange={(event) => setCertificate(event.target.checked)} />
+              <span className={certificate ? "is-checked" : ""}>
+                <Check size={13} />
+              </span>
+              <strong>Give a certificate of completion</strong>
             </label>
             <label className="content-authoring-check">
               <input
@@ -862,7 +962,7 @@ function ModuleAuthoring({
             </label>
             {!includeQuiz && (
               <small className="content-authoring-field-help">
-                Without a knowledge check, mentors complete this module by marking it as read after the last lesson.
+                Without a knowledge check, learners complete this module by marking it as read after the last lesson.
               </small>
             )}
             {includeQuiz && (
@@ -878,7 +978,13 @@ function ModuleAuthoring({
                 <span>%</span>
               </label>
             )}
-            {includeQuiz && <QuizManager questions={quiz} onChange={setQuiz} onError={onError} />}
+            {includeQuiz && (
+              <QuizEditor
+                questions={finalQuiz}
+                onChange={(next) => setQuiz([...quiz.filter((question) => question.lesson_id), ...next])}
+                onError={onError}
+              />
+            )}
           </div>
           <ReadinessChecklist
             items={[
@@ -900,63 +1006,21 @@ function ModuleAuthoring({
         </aside>
       </form>
     </AuthoringShell>
+    </>
   );
 }
 
-type QuizQuestionDraft = { prompt: string; options: string[]; correct_option: string };
-
-function QuizManager({
-  questions,
-  onChange,
-  onError,
-}: {
-  questions: QuizQuestionDraft[];
-  onChange: (questions: QuizQuestionDraft[]) => void;
-  onError: (message: string) => void;
-}) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState<QuizQuestionDraft>({ prompt: "", options: ["", "", ""], correct_option: "" });
-  const csvInputRef = useRef<HTMLInputElement>(null);
-  function openQuestion(index?: number) {
-    setEditing(index ?? null);
-    setDraft(index === undefined ? { prompt: "", options: ["", "", ""], correct_option: "" } : { ...questions[index], options: [...questions[index].options] });
-    setModalOpen(true);
-  }
-  function saveQuestion() {
-    const options = draft.options.map((option) => option.trim()).filter(Boolean);
-    if (!draft.prompt.trim() || options.length < 2 || !options.includes(draft.correct_option.trim())) {
-      onError("Add a question, at least two answers, and select the correct answer.");
-      return;
-    }
-    const question = { ...draft, prompt: draft.prompt.trim(), options, correct_option: draft.correct_option.trim() };
-    onChange(editing === null ? [...questions, question] : questions.map((item, index) => index === editing ? question : item));
-    setModalOpen(false);
-  }
-  function downloadTemplate() {
-    const csv = "prompt,option_1,option_2,option_3,correct_option\n\"What is the first step?\",\"Answer A\",\"Answer B\",\"Answer C\",\"Answer A\"\n";
-    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); link.download = "mentormama-quiz-template.csv"; link.click(); URL.revokeObjectURL(link.href);
-  }
-  function importCsv(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const rows = String(reader.result ?? "").split(/\r?\n/).filter(Boolean).slice(1).map(parseCsvRow).map((row) => ({ prompt: row[0] ?? "", options: row.slice(1, 4), correct_option: row[4] ?? "" })).filter((row) => row.prompt && row.options.filter(Boolean).length >= 2 && row.options.includes(row.correct_option));
-      if (!rows.length) { onError("No valid quiz questions found. Use the downloaded CSV template."); return; }
-      onChange([...questions, ...rows]);
-    };
-    reader.readAsText(file);
-  }
-  return <div className="content-authoring-quiz-manager"><div className="content-authoring-quiz-manager-heading"><div><strong>Knowledge check questions</strong><small>{questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} added` : "Add questions manually or import them in bulk."}</small></div><button type="button" className="content-authoring-quiz-add" onClick={() => openQuestion()}><Plus size={15} /> Add question</button></div><div className="content-authoring-quiz-tools"><button type="button" onClick={downloadTemplate}><Download size={14} /> Download CSV template</button><button type="button" onClick={() => csvInputRef.current?.click()}><Upload size={14} /> Import CSV</button><input ref={csvInputRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) importCsv(file); event.currentTarget.value = ""; }} /></div>{questions.length > 0 && <div className="content-authoring-quiz-list">{questions.map((question, index) => <div className="content-authoring-quiz-row" key={`${question.prompt}-${index}`}><span>{index + 1}</span><div><strong>{question.prompt || "Untitled question"}</strong><small>{question.options.filter(Boolean).length} answers · Correct answer selected</small></div><button type="button" aria-label={`Edit question ${index + 1}`} onClick={() => openQuestion(index)}>Edit</button><button type="button" aria-label={`Delete question ${index + 1}`} onClick={() => onChange(questions.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={15} /></button></div>)}</div>}{modalOpen && <QuizQuestionModal draft={draft} onChange={setDraft} onClose={() => setModalOpen(false)} onSave={saveQuestion} />}</div>;
-}
-
-function QuizQuestionModal({ draft, onChange, onClose, onSave }: { draft: QuizQuestionDraft; onChange: (draft: QuizQuestionDraft) => void; onClose: () => void; onSave: () => void }) {
-  return <div className="content-authoring-modal-backdrop"><section className="content-authoring-quiz-modal" role="dialog" aria-modal="true" aria-labelledby="quiz-modal-title"><div className="content-authoring-quiz-modal-heading"><div><p>Knowledge check</p><h2 id="quiz-modal-title">Add a question</h2></div><button type="button" onClick={onClose} aria-label="Close question dialog">×</button></div><label className="content-authoring-field"><span>Question</span><textarea autoFocus value={draft.prompt} onChange={(event) => onChange({ ...draft, prompt: event.target.value })} placeholder="Write the question learners should answer" /></label>{draft.options.map((option, index) => <label className="content-authoring-field" key={index}><span>Answer option {index + 1}</span><input value={option} onChange={(event) => { const options = [...draft.options]; options[index] = event.target.value; onChange({ ...draft, options, correct_option: draft.correct_option === option ? event.target.value : draft.correct_option }); }} placeholder={`Option ${index + 1}`} /></label>)}<label className="content-authoring-field"><span>Correct answer</span><select value={draft.correct_option} onChange={(event) => onChange({ ...draft, correct_option: event.target.value })}><option value="">Select an answer</option>{draft.options.filter(Boolean).map((option) => <option value={option} key={option}>{option}</option>)}</select></label><div className="content-authoring-modal-actions"><Button type="button" variant="tertiary" onClick={onClose}>Cancel</Button><Button type="button" onClick={onSave}>Save question</Button></div></section></div>;
-}
-
-function parseCsvRow(line: string) {
-  const values: string[] = []; const pattern = /("(?:[^"]|"")*"|[^,]*)(?:,|$)/g; let match: RegExpExecArray | null;
-  while ((match = pattern.exec(line)) && match[0] !== "") values.push(match[1].replace(/^"|"$/g, "").replace(/""/g, '"'));
-  return values;
+/** Lesson bodies are editor documents (JSON); older lessons are plain text and become paragraphs. */
+function bodyToDoc(body: string) {
+  const doc = parseGuideBody(body);
+  if (doc) return doc;
+  const paragraphs = body.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  return {
+    type: "doc",
+    content: paragraphs.length
+      ? paragraphs.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] }))
+      : [{ type: "paragraph" }],
+  };
 }
 
 function ModuleStructure({
@@ -968,7 +1032,7 @@ function ModuleStructure({
   onMove,
   onDelete,
 }: {
-  lessons: Array<{ title: string; body: string; lesson_type: LessonType; duration_minutes: number }>;
+  lessons: Array<{ title: string; body: string; lesson_type: LessonType; duration_minutes: number; video_url?: string; id?: string; section?: string }>;
   selected: number;
   includeQuiz: boolean;
   onSelect: (index: number) => void;
@@ -1055,34 +1119,51 @@ function ModuleLessonEditor({
   onBodyChange,
   onTypeChange,
   onDurationChange,
+  onVideoChange,
+  onSectionChange,
+  onError,
+  sections,
+  checksSlot,
   onMove,
   onDelete,
 }: {
-  lesson: { title: string; body: string; lesson_type: LessonType; duration_minutes: number } | undefined;
+  lesson: { title: string; body: string; lesson_type: LessonType; duration_minutes: number; video_url?: string; id?: string; section?: string } | undefined;
   index: number;
   onTitleChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onTypeChange: (value: LessonType) => void;
   onDurationChange: (value: number) => void;
+  onVideoChange: (value: string) => void;
+  onSectionChange: (value: string) => void;
+  onError: (message: string) => void;
+  sections: string[];
+  checksSlot?: React.ReactNode;
   onMove: (index: number, direction: -1 | 1) => void;
   onDelete: (index: number) => void;
 }) {
+  const lastEmitted = useRef<string>(lesson?.body ?? "");
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ link: { openOnClick: false } }),
+      Callout,
+      Image.configure({ HTMLAttributes: { loading: "lazy" } }),
       Placeholder.configure({ placeholder: "Write the lesson content..." }),
     ],
-    content: lesson?.body || "",
+    content: bodyToDoc(lesson?.body ?? ""),
     onUpdate: ({ editor: nextEditor }) => {
       if (!nextEditor.isDestroyed && nextEditor.schema) {
-        onBodyChange(nextEditor.getText());
+        // Keep the formatting: store the editor document, not its plain text.
+        const next = nextEditor.isEmpty ? "" : JSON.stringify(nextEditor.getJSON());
+        lastEmitted.current = next;
+        onBodyChange(next);
       }
     },
   });
   useEffect(() => {
     if (!editor || editor.isDestroyed || !editor.schema || !lesson) return;
-    if (editor.getText() !== lesson.body) {
-      editor.commands.setContent(lesson.body || "", { emitUpdate: false });
+    if (lesson.body !== lastEmitted.current) {
+      lastEmitted.current = lesson.body;
+      editor.commands.setContent(bodyToDoc(lesson.body), { emitUpdate: false });
     }
   }, [editor, lesson]);
   if (!lesson) return null;
@@ -1108,7 +1189,7 @@ function ModuleLessonEditor({
         </button>
       </div>
       <label className="content-authoring-field">
-        Lesson title <span className="content-authoring-required">*</span>
+        <span>Lesson title <span className="content-authoring-required">*</span></span>
         <input
           value={lesson.title}
           onChange={(event) => onTitleChange(event.target.value)}
@@ -1118,7 +1199,7 @@ function ModuleLessonEditor({
         <label className="content-authoring-field">
           Lesson type{" "}
           <select value={lesson.lesson_type} onChange={(event) => onTypeChange(event.target.value as LessonType)}>
-            <option value="reading">Reading (text and media)</option>
+            <option value="reading">Reading</option>
             <option value="video">Video</option>
             <option value="checklist">Checklist</option>
           </select>
@@ -1128,53 +1209,47 @@ function ModuleLessonEditor({
           <input type="number" min="1" max="600" value={lesson.duration_minutes} onChange={(event) => onDurationChange(Number(event.target.value))} />
         </label>
       </div>
+      <label className="content-authoring-field">
+        Section (optional)
+        <input
+          list="lesson-sections"
+          maxLength={120}
+          placeholder="e.g. Before the first shift"
+          value={lesson.section ?? ""}
+          onChange={(event) => onSectionChange(event.target.value)}
+        />
+        <datalist id="lesson-sections">
+          {sections.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <small className="content-authoring-field-help">Lessons with the same section name are grouped together for learners.</small>
+      </label>
+      {lesson.lesson_type === "video" && (
+        <label className="content-authoring-field">
+          <span>
+            Video link <span className="content-authoring-required">*</span>
+          </span>
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="https://www.youtube.com/watch?v=…"
+            value={lesson.video_url ?? ""}
+            onChange={(event) => onVideoChange(event.target.value)}
+          />
+          <small>Paste a YouTube or Vimeo link. It plays inside MentorMAMA only when the learner taps play. Use the content box below for a short summary or transcript, which learners without video access can read.</small>
+        </label>
+      )}
       <div className="content-authoring-field">
         <span>
           Lesson content <span className="content-authoring-required">*</span>
         </span>
         <div className="content-authoring-editor content-module-editor">
-          <div className="content-editor-toolbar">
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleBold().run()}
-            >
-              <Bold size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleItalic().run()}
-            >
-              <Italic size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleBulletList().run()}
-            >
-              <List size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-            >
-              <Quote size={16} />
-            </button>
-            <span className="content-editor-toolbar-spacer" />
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().undo().run()}
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().redo().run()}
-            >
-              <Redo2 size={16} />
-            </button>
-          </div>
+          <LessonToolbar editor={editor} onError={onError} />
           <EditorContent editor={editor} />
         </div>
       </div>
+      {checksSlot && <div className="content-module-checks">{checksSlot}</div>}
       <div className="content-module-note">
         <Check size={17} />
         <span>
@@ -1218,7 +1293,7 @@ function ModuleDetails({
         </div>
       </div>
       <label className="content-authoring-field">
-        Title <span className="content-authoring-required">*</span>
+        <span>Title <span className="content-authoring-required">*</span></span>
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -1227,7 +1302,7 @@ function ModuleDetails({
         />
       </label>
       <label className="content-authoring-field">
-        Description <span className="content-authoring-required">*</span>
+        <span>Description <span className="content-authoring-required">*</span></span>
         <textarea
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
@@ -1237,7 +1312,7 @@ function ModuleDetails({
       </label>
       <AudiencePicker value={audience} onChange={setAudience} />
       <label className="content-authoring-field">
-        Category <span className="content-authoring-required">*</span>
+        <span>Category <span className="content-authoring-required">*</span></span>
         <select
           value={category}
           onChange={(event) => setCategory(event.target.value)}
@@ -1283,7 +1358,7 @@ function ModulePreview({
   summary: string;
   lessons: Array<{ title: string; body: string }>;
   includeQuiz: boolean;
-  quiz: Array<{ prompt: string; options: string[]; correct_option: string }>;
+  quiz: QuizDraft[];
   passMark: number;
 }) {
   return (
@@ -1296,7 +1371,7 @@ function ModulePreview({
           <span>{index + 1}</span>
           <div>
             <h3>{lesson.title}</h3>
-            <p>{lesson.body}</p>
+            <GuideReader body={lesson.body} />
           </div>
         </section>
       ))}
@@ -1310,12 +1385,14 @@ function ModulePreview({
           </div>
           {quiz.map((question, questionIndex) => (
             <div key={`preview-question-${questionIndex}`}>
+              {question.scenario && <p><em>{question.scenario}</em></p>}
               <h3>
                 {questionIndex + 1}. {question.prompt || "Your question will appear here."}
               </h3>
+              {question.kind === "multi" && <p>Select all that apply.</p>}
               <ul>
                 {question.options.map((option, index) => (
-                  <li key={`preview-option-${questionIndex}-${index}`}>{option || `Answer option ${index + 1}`}</li>
+                  <li key={`preview-option-${questionIndex}-${index}`}>{option.text || `Answer option ${index + 1}`}</li>
                 ))}
               </ul>
             </div>
@@ -1341,6 +1418,8 @@ function ResourceAuthoring({
   const [summary, setSummary] = useState("");
   const [audience, setAudience] = useState<AudienceGroup[]>(["mentor"]);
   const [category, setCategory] = useState("reference");
+  const [tags, setTags] = useState<string[]>([]);
+  const [facilityIds, setFacilityIds] = useState<string[]>([]);
   const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const [resourceUrl, setResourceUrl] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -1358,7 +1437,7 @@ function ResourceAuthoring({
   useEffect(() => {
     const item = existing.data;
     if (!item) return;
-    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setResourceUrl(item.resource_url.startsWith("/api/v1/content/") ? "" : item.resource_url); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "reference");
+    setContentId(item.id); setTitle(item.title); setSummary(item.summary); setResourceUrl(item.resource_url.startsWith("/api/v1/content/") ? "" : item.resource_url); setAudience(groupsFromRoles(item.visible_roles)); setCategory(item.category ?? "reference"); setTags(item.tags ?? []); setFacilityIds(item.facility_ids ?? []);
     setExistingStatus(item.status ?? (item.published ? "published" : "draft"));
   }, [existing.data]);
   const save = useMutation({
@@ -1373,6 +1452,8 @@ function ResourceAuthoring({
         content_type: kind,
         category,
         visible_roles: rolesFromGroups(audience),
+        tags,
+        facility_ids: facilityIds,
         keep_published: keepLive,
       };
       const item = contentId
@@ -1449,6 +1530,9 @@ function ResourceAuthoring({
             category={category}
             setCategory={setCategory}
           />
+          <section className="content-authoring-section">
+            <PublishingExtras tags={tags} setTags={setTags} facilityIds={facilityIds} setFacilityIds={setFacilityIds} />
+          </section>
           <section className="content-authoring-section">
             <div className="content-authoring-section-heading">
               <div>
@@ -1556,7 +1640,7 @@ function GuideDetails({
   return (
     <section className="content-authoring-section content-authoring-guide-details">
       <label className="content-authoring-field content-authoring-field--wide">
-        Title <span className="content-authoring-required">*</span>
+        <span>Title <span className="content-authoring-required">*</span></span>
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -1565,7 +1649,7 @@ function GuideDetails({
         />
       </label>
       <label className="content-authoring-field content-authoring-field--wide">
-        Summary <span className="content-authoring-required">*</span>
+        <span>Summary <span className="content-authoring-required">*</span></span>
         <textarea
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
@@ -1586,10 +1670,12 @@ function GuideSettings({
   setAudience,
   category,
   setCategory,
+  extras,
   coverInputRef,
   coverPreview,
   onCoverChange,
 }: {
+  extras?: React.ReactNode;
   checklist: Array<{ label: string; done: boolean }>;
   audience: AudienceGroup[];
   setAudience: (value: AudienceGroup[]) => void;
@@ -1615,7 +1701,7 @@ function GuideSettings({
         </div>
         <AudiencePicker value={audience} onChange={setAudience} />
         <label className="content-authoring-field">
-          Category <span className="content-authoring-required">*</span>
+          <span>Category <span className="content-authoring-required">*</span></span>
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
@@ -1627,6 +1713,7 @@ function GuideSettings({
             <option value="reference">Reference</option>
           </select>
         </label>
+        {extras}
         <div className="content-authoring-cover">
           <strong>Cover image</strong>
           <button type="button" onClick={() => coverInputRef.current?.click()}>

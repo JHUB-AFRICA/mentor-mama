@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock,
+  Award,
   GraduationCap,
   ListChecks,
   PlayCircle,
@@ -15,12 +16,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
+import { datedFilename, saveBlob } from "../../lib/download";
+import { VideoPlayer } from "./VideoPlayer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
+  checkLesson,
   completeTrainingModule,
+  downloadCertificate,
   explainTrainingLesson,
   getAIStatus,
+  recordLessonVisit,
   getTrainingModules,
   getTrainingProgress,
   submitTrainingAttempt,
@@ -36,7 +42,7 @@ import {
   EmptyState,
   StatusPill,
 } from "../programme-admin/ui/AdminKit";
-import { PlainText } from "../content/ContentReader";
+import { GuideReader } from "../content/ContentReader";
 import { categoryLabel, formatMinutes } from "../content/contentMeta";
 import "../content/content-detail.css";
 import "./training.css";
@@ -51,13 +57,110 @@ function moduleState(module: TrainingModule): "completed" | "in_progress" | "not
 function visitedKey(moduleId: string) {
   return `mm.training.visited.${moduleId}`;
 }
-function readVisited(moduleId: string): number[] {
+/** Lessons already opened: the server record first (follows the person across devices), then this tab. */
+function readVisited(module: TrainingModule): number[] {
+  const seen = new Set<number>();
+  const saved = new Set(module.visited_lesson_ids ?? []);
+  module.lessons.forEach((lesson, index) => {
+    if (saved.has(lesson.id)) seen.add(index);
+  });
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(visitedKey(moduleId)) ?? "[]") as unknown;
-    return Array.isArray(parsed) ? parsed.filter((value): value is number => Number.isInteger(value)) : [];
+    const parsed = JSON.parse(sessionStorage.getItem(visitedKey(module.id)) ?? "[]") as unknown;
+    if (Array.isArray(parsed)) parsed.forEach((value) => Number.isInteger(value) && seen.add(value as number));
   } catch {
-    return [];
+    /* ignore a damaged session value */
   }
+  return [...seen];
+}
+
+function shuffleQuiz<T extends { choices: unknown[] }>(questions: T[]): T[] {
+  const mix = <U,>(items: U[]) => {
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+  return mix(questions).map((question) => ({ ...question, choices: mix(question.choices) }));
+}
+
+/** Practice questions under a lesson: instant feedback, nothing recorded, never blocks completion. */
+function LessonChecks({
+  moduleId,
+  lessonId,
+  questions,
+  onError,
+}: {
+  moduleId: string;
+  lessonId: string;
+  questions: TrainingModule["quiz"];
+  onError: (message: string) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const check = useMutation({
+    mutationFn: () => checkLesson(moduleId, lessonId, answers),
+    onError: (cause) => onError(cause instanceof ApiError ? cause.message : "We could not check your answers. Please try again."),
+  });
+  const answered = questions.every((question) => {
+    const value = answers[question.id];
+    return Array.isArray(value) ? value.length > 0 : Boolean(value);
+  });
+  return (
+    <section className="tr-checks" aria-label="Check your understanding">
+      <h3>Check your understanding</h3>
+      <p className="tr-multi-hint">Practice only. Your answers are not recorded.</p>
+      {questions.map((question, index) => {
+        const multi = question.kind === "multi";
+        const selected = answers[question.id];
+        const isChosen = (id: string) => (Array.isArray(selected) ? selected.includes(id) : selected === id);
+        const result = check.data?.find((row) => row.question_id === question.id);
+        return (
+          <fieldset key={question.id} className="tr-question">
+            {question.scenario && <p className="tr-scenario">{question.scenario}</p>}
+            <legend>
+              {index + 1}. {question.prompt}
+              {multi && <small className="tr-multi-hint"> (select all that apply)</small>}
+            </legend>
+            <div className="tr-options">
+              {question.choices.map((choice) => {
+                const isRight = result?.correct_option_ids?.includes(choice.id);
+                return (
+                  <label key={choice.id} className={isChosen(choice.id) ? "is-selected" : undefined}>
+                    <input
+                      type={multi ? "checkbox" : "radio"}
+                      name={`check-${question.id}`}
+                      checked={isChosen(choice.id)}
+                      onChange={(event) => {
+                        check.reset();
+                        setAnswers((current) => {
+                          if (!multi) return { ...current, [question.id]: choice.id };
+                          const existing = Array.isArray(current[question.id]) ? (current[question.id] as string[]) : [];
+                          return { ...current, [question.id]: event.target.checked ? [...existing, choice.id] : existing.filter((id) => id !== choice.id) };
+                        });
+                      }}
+                    />
+                    <span>
+                      {choice.text}
+                      {result && isRight && <strong className="tr-right"> ✓ Correct answer</strong>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {result && (
+              <p className={`tr-feedback ${result.correct ? "is-correct" : "is-wrong"}`} role="status">
+                <strong>{result.correct ? "Correct." : "Not quite."}</strong> {result.feedback.join(" ")} {result.explanation}
+              </p>
+            )}
+          </fieldset>
+        );
+      })}
+      <AdminButton size="sm" variant="secondary" disabled={!answered || check.isPending} onClick={() => check.mutate()}>
+        {check.isPending ? "Checking…" : "Check my answers"}
+      </AdminButton>
+    </section>
+  );
 }
 
 function LessonExplainer({ moduleId, lessonId }: { moduleId: string; lessonId: string }) {
@@ -86,7 +189,29 @@ function LessonExplainer({ moduleId, lessonId }: { moduleId: string; lessonId: s
   );
 }
 
-export function TrainingWorkspace({ onError }: { onError: (message: string) => void }) {
+const COPY: Record<string, { eyebrow: string; title: string; description: string; gate: string }> = {
+  mentor: {
+    eyebrow: "Mentor development",
+    title: "Training",
+    description: "Short lessons and knowledge checks that build practical mentoring confidence. Your completion record follows you across placements.",
+    gate: "still to finish before you can take placements.",
+  },
+  student: {
+    eyebrow: "Student learning",
+    title: "Learning",
+    description: "Short lessons and knowledge checks to prepare you for your clinical placements. Your progress is saved on any device.",
+    gate: "still to finish.",
+  },
+  staff: {
+    eyebrow: "Programme learning",
+    title: "Learning",
+    description: "Guidance and short knowledge checks shared with coordinators and nurse managers. Your progress is saved on any device.",
+    gate: "still to finish.",
+  },
+};
+
+export function TrainingWorkspace({ onError, role = "mentor" }: { onError: (message: string) => void; role?: string }) {
+  const copy = COPY[role] ?? COPY.staff;
   const [params, setParams] = useSearchParams();
   const selected = params.get("module");
   const modules = useQuery({ queryKey: ["training-modules"], queryFn: getTrainingModules });
@@ -160,12 +285,12 @@ export function TrainingWorkspace({ onError }: { onError: (message: string) => v
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Mentor development"
-        title="Training"
-        description="Short lessons and knowledge checks that build practical mentoring confidence. Your completion record follows you across placements."
+        eyebrow={copy.eyebrow}
+        title={copy.title}
+        description={copy.description}
       />
       {list.length > 0 && (
-        <section className="tr-summary" aria-label="Your training progress">
+        <section className="tr-summary" aria-label="Your progress">
           <div className="tr-summary__ring" role="img" aria-label={`${percent}% complete`} style={{ ["--tr-pct" as string]: `${percent * 3.6}deg` }}>
             <strong>{percent}%</strong>
           </div>
@@ -178,7 +303,7 @@ export function TrainingWorkspace({ onError }: { onError: (message: string) => v
                 ? "No modules are required right now."
                 : requiredLeft === 0
                   ? "You have finished every required module."
-                  : `${requiredLeft} required ${requiredLeft === 1 ? "module" : "modules"} still to finish before you can take placements.`}
+                  : `${requiredLeft} required ${requiredLeft === 1 ? "module" : "modules"} ${copy.gate}`}
             </p>
           </div>
         </section>
@@ -186,13 +311,13 @@ export function TrainingWorkspace({ onError }: { onError: (message: string) => v
       {list.length === 0 ? (
         <EmptyState
           icon={<BookOpen />}
-          title="No training is published yet"
+          title={`No ${copy.title.toLowerCase()} is published yet`}
           text="Your programme team will make modules available here."
         />
       ) : (
         <>
           <AdminTabs
-            label="Filter training"
+            label={`Filter ${copy.title.toLowerCase()}`}
             value={filter}
             onChange={setFilter}
             tabs={[
@@ -272,13 +397,15 @@ function ModuleRunner({
   const lessons = module.lessons;
   const hasQuiz = module.quiz.length > 0;
   const finalStep = lessons.length;
-  const [visited, setVisited] = useState<number[]>(() => readVisited(module.id));
+  const [visited, setVisited] = useState<number[]>(() => readVisited(module));
   const [step, setStep] = useState(() => {
-    const seen = new Set(readVisited(module.id));
+    const seen = new Set(readVisited(module));
     const first = lessons.findIndex((_, index) => !seen.has(index));
     return module.completed || first === -1 ? 0 : first;
   });
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [round, setRound] = useState(0);
+  const sentVisits = useRef(new Set<string>());
   const [retaking, setRetaking] = useState(false);
 
   useEffect(() => {
@@ -292,6 +419,12 @@ function ModuleRunner({
       sessionStorage.setItem(visitedKey(module.id), JSON.stringify(next));
       return next;
     });
+    const lessonId = lessons[step]?.id;
+    if (lessonId && !(module.visited_lesson_ids ?? []).includes(lessonId) && !sentVisits.current.has(lessonId)) {
+      sentVisits.current.add(lessonId);
+      // Best effort: previews by admins and offline moments must never interrupt reading.
+      void recordLessonVisit(module.id, lessonId).catch(() => undefined);
+    }
   }, [step, finalStep, module.id]);
 
   const refresh = () => {
@@ -307,7 +440,13 @@ function ModuleRunner({
     onSuccess: (result) => {
       refresh();
       if (result.passed) setRetaking(false);
+      else setRound((value) => value + 1);
     },
+    onError: fail,
+  });
+  const certificate = useMutation({
+    mutationFn: () => downloadCertificate(module.id),
+    onSuccess: (blob) => saveBlob(blob, datedFilename(`mentormama-certificate-${module.slug || "module"}`, "pdf")),
     onError: fail,
   });
   const finish = useMutation({ mutationFn: () => completeTrainingModule(module.id), onSuccess: refresh, onError: fail });
@@ -318,7 +457,12 @@ function ModuleRunner({
     () => all.find((item) => item.id !== module.id && item.is_required && !item.completed),
     [all, module.id],
   );
-  const answeredAll = module.quiz.every((question) => answers[question.id]);
+  const answeredAll = module.quiz.every((question) => {
+    const value = answers[question.id];
+    return Array.isArray(value) ? value.length > 0 : Boolean(value);
+  });
+  // First attempt shows the author's order; every retry reshuffles questions and answers.
+  const quizOrder = useMemo(() => (round === 0 ? module.quiz : shuffleQuiz(module.quiz)), [module.quiz, round]);
   const passedNow = attempt.data?.passed === true;
   const showQuiz = hasQuiz && (!module.completed || retaking) && !passedNow;
   const lesson = step < finalStep ? lessons[step] : null;
@@ -368,8 +512,15 @@ function ModuleRunner({
           <ol>
             {lessons.map((item, index) => {
               const done = visited.includes(index);
+              const startsSection = Boolean(item.section) && item.section !== lessons[index - 1]?.section;
               return (
-                <li key={item.id}>
+                <Fragment key={item.id}>
+                {startsSection && (
+                  <li className="tr-outline__section">
+                    {item.section}
+                  </li>
+                )}
+                <li>
                   <button
                     type="button"
                     className={`tr-outline__item${step === index ? " is-current" : ""}${done ? " is-done" : ""}`}
@@ -383,6 +534,7 @@ function ModuleRunner({
                     <small>{item.duration_minutes} min</small>
                   </button>
                 </li>
+                </Fragment>
               );
             })}
             <li>
@@ -414,7 +566,17 @@ function ModuleRunner({
                 Lesson {step + 1} of {lessons.length} · {lesson.lesson_type} · {lesson.duration_minutes} min
               </p>
               <h2 className="tr-stage__title">{lesson.title}</h2>
-              <PlainText text={lesson.body} />
+              {lesson.video && <VideoPlayer key={lesson.id} video={lesson.video} title={lesson.title} />}
+              <GuideReader body={lesson.body} />
+              {(module.checks ?? []).some((check) => check.lesson_id === lesson.id) && (
+                <LessonChecks
+                  key={lesson.id}
+                  moduleId={module.id}
+                  lessonId={lesson.id}
+                  questions={(module.checks ?? []).filter((check) => check.lesson_id === lesson.id)}
+                  onError={onError}
+                />
+              )}
               {aiStatus.data?.lesson_explanations && <LessonExplainer key={lesson.id} moduleId={module.id} lessonId={lesson.id} />}
               <div className="tr-stage__nav">
                 <AdminButton variant="secondary" size="sm" icon={<ArrowLeft />} disabled={step === 0} onClick={() => setStep(step - 1)}>
@@ -432,10 +594,36 @@ function ModuleRunner({
                   <CheckCircle2 aria-hidden="true" />
                   <div>
                     <strong>Module complete{(passedNow ? attempt.data?.score : module.score) != null ? ` — ${passedNow ? attempt.data?.score : module.score}%` : ""}</strong>
-                    <p>This is now on your training record.</p>
+                    <p>This is now on your record.</p>
+                    {module.certificate_enabled !== false && (
+                      <AdminButton variant="secondary" size="sm" icon={<Award />} disabled={certificate.isPending} onClick={() => certificate.mutate()}>
+                        {certificate.isPending ? "Preparing…" : "Download certificate"}
+                      </AdminButton>
+                    )}
                   </div>
                 </div>
               ) : null}
+              {module.needs_refresh && (
+                <p className="tr-refresh" role="status">
+                  This module changed substantially after you completed it. Please review the new version and finish it again to keep your record current.
+                </p>
+              )}
+              {passedNow && attempt.data?.results && (
+                <details className="tr-review">
+                  <summary>Review your answers</summary>
+                  <ol>
+                    {quizOrder.map((question) => {
+                      const row = attempt.data?.results?.find((item) => item.question_id === question.id);
+                      return (
+                        <li key={question.id}>
+                          <strong>{question.prompt}</strong>
+                          <p>{[...(row?.feedback ?? []), row?.explanation ?? ""].filter(Boolean).join(" ") || "Well done."}</p>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              )}
               {showQuiz ? (
                 <form
                   onSubmit={(event) => {
@@ -443,27 +631,49 @@ function ModuleRunner({
                     if (answeredAll) attempt.mutate();
                   }}
                 >
-                  {module.quiz.map((question, index) => (
-                    <fieldset key={question.id} className="tr-question">
-                      <legend>
-                        {index + 1}. {question.prompt}
-                      </legend>
-                      <div className="tr-options">
-                        {question.options.map((option) => (
-                          <label key={option} className={answers[question.id] === option ? "is-selected" : undefined}>
-                            <input
-                              type="radio"
-                              name={question.id}
-                              value={option}
-                              checked={answers[question.id] === option}
-                              onChange={() => setAnswers((current) => ({ ...current, [question.id]: option }))}
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
-                  ))}
+                  {quizOrder.map((question, index) => {
+                    const multi = question.kind === "multi";
+                    const selected = answers[question.id];
+                    const isChosen = (id: string) => (Array.isArray(selected) ? selected.includes(id) : selected === id);
+                    const result = attempt.data?.results?.find((row) => row.question_id === question.id);
+                    return (
+                      <fieldset key={question.id} className="tr-question">
+                        {question.scenario && <p className="tr-scenario">{question.scenario}</p>}
+                        <legend>
+                          {index + 1}. {question.prompt}
+                          {multi && <small className="tr-multi-hint"> (select all that apply)</small>}
+                        </legend>
+                        <div className="tr-options">
+                          {question.choices.map((choice) => (
+                            <label key={choice.id} className={isChosen(choice.id) ? "is-selected" : undefined}>
+                              <input
+                                type={multi ? "checkbox" : "radio"}
+                                name={question.id}
+                                value={choice.id}
+                                checked={isChosen(choice.id)}
+                                onChange={(event) =>
+                                  setAnswers((current) => {
+                                    if (!multi) return { ...current, [question.id]: choice.id };
+                                    const existing = Array.isArray(current[question.id]) ? (current[question.id] as string[]) : [];
+                                    return {
+                                      ...current,
+                                      [question.id]: event.target.checked ? [...existing, choice.id] : existing.filter((id) => id !== choice.id),
+                                    };
+                                  })
+                                }
+                              />
+                              <span>{choice.text}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {result && round > 0 && !attempt.isPending && (
+                          <p className={`tr-feedback ${result.correct ? "is-correct" : "is-wrong"}`} role="status">
+                            <strong>{result.correct ? "Correct." : "Not quite."}</strong> {result.feedback.join(" ")} {result.explanation}
+                          </p>
+                        )}
+                      </fieldset>
+                    );
+                  })}
                   {attempt.data && !attempt.data.passed && (
                     <div className="tr-result tr-result--fail" role="status">
                       <CircleAlert aria-hidden="true" />
@@ -502,7 +712,7 @@ function ModuleRunner({
               ) : (
                 <div className="tr-stage__nav">
                   {hasQuiz && !retaking && !passedNow && (
-                    <AdminButton variant="secondary" size="sm" icon={<RotateCcw />} onClick={() => { setAnswers({}); attempt.reset(); setRetaking(true); }}>
+                    <AdminButton variant="secondary" size="sm" icon={<RotateCcw />} onClick={() => { setAnswers({}); attempt.reset(); setRound((value) => value + 1); setRetaking(true); }}>
                       Retake knowledge check
                     </AdminButton>
                   )}

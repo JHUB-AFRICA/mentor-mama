@@ -164,3 +164,26 @@
 @media (prefers-reduced-motion: reduce) {
   .cd-progress span { transition: none; }
 }
+
+/* Lesson callouts and images (shared by the editor, preview and reader) */
+.lesson-callout { border-left: 4px solid var(--pa-teal, #0f766e); background: #f0f9f8; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+.lesson-callout::before { display: block; font-weight: 700; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.lesson-callout--info::before { content: "Good to know"; }
+.lesson-callout--tip { border-left-color: #2563eb; background: #eff6ff; }
+.lesson-callout--tip::before { content: "Tip"; }
+.lesson-callout--safety { border-left-color: #b91c1c; background: #fef2f2; }
+.lesson-callout--safety::before { content: "Safety"; color: #991b1b; }
+.lesson-callout > :last-child { margin-bottom: 0; }
+.cd-reader img, .content-module-editor img { max-width: 100%; height: auto; border-radius: 8px; }
+
+/* Tags and facility limits */
+.cx-tags { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid #dbe4ed; border-radius: 0.65rem; padding: 6px 8px; background: #fff; }
+.cx-tags input { flex: 1; min-width: 8rem; border: 0 !important; padding: 4px !important; box-shadow: none !important; width: auto !important; }
+.cx-tag { display: inline-flex; align-items: center; gap: 4px; background: #e8f7f5; color: #0f5f78; border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 0.75rem; }
+.cx-tag button { background: none; border: 0; cursor: pointer; color: inherit; display: grid; place-items: center; padding: 2px; }
+.cx-facility-list { display: grid; gap: 6px; max-height: 12rem; overflow: auto; border: 1px solid #dbe4ed; border-radius: 0.65rem; padding: 8px 10px; }
+.cx-facility-list label { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.cx-facilities { border: 0; padding: 0; margin: 0; }
+.cx-facilities legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.cd-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cd-pdf { width: 100%; height: min(75vh, 46rem); border: 1px solid #dbe4ed; border-radius: 10px; background: #f4f7fa; }

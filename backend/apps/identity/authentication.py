@@ -37,7 +37,6 @@ MFA_REQUIRED_ROLES = frozenset({
     Role.COORDINATOR,
     Role.NURSE_MANAGER,
 })
-MFA_SETUP_SESSION_KEY = "identity.mfa.setup_secret"
 MFA_VERIFIED_SESSION_KEY = "identity.mfa.verified"
 
 
@@ -893,9 +892,26 @@ def verify_email_mfa(*, request, user: User, code: str) -> bool:
     return True
 
 
-def begin_mfa_setup(*, request, user: User) -> dict[str, str]:
-    secret = generate_totp_secret()
-    request.session[MFA_SETUP_SESSION_KEY] = secret
+MFA_SETUP_TTL = 15 * 60
+
+
+def _setup_cache_key(user: User) -> str:
+    return f"identity:mfa-setup:{user.pk}"
+
+
+def begin_mfa_setup(*, request, user: User, regenerate: bool = False) -> dict[str, str]:
+    """Return the pending authenticator secret, creating it once.
+
+    The pending secret lives in the shared cache (atomic `add`) rather than in the session. Two
+    overlapping setup calls (React StrictMode runs effects twice in development, and people open the
+    page in two tabs) used to each write a different secret to the session, so the QR code on screen
+    and the secret the server checked could differ and every code was rejected.
+    """
+    key = _setup_cache_key(user)
+    if regenerate:
+        cache.delete(key)
+    cache.add(key, generate_totp_secret(), MFA_SETUP_TTL)
+    secret = cache.get(key) or generate_totp_secret()
     issuer = "MentorMAMA"
     label = f"{issuer}:{user.email}"
     uri = (
@@ -907,7 +923,7 @@ def begin_mfa_setup(*, request, user: User) -> dict[str, str]:
 
 @transaction.atomic
 def complete_mfa_setup(*, request, user: User, code: str) -> list[str] | None:
-    secret = request.session.get(MFA_SETUP_SESSION_KEY)
+    secret = cache.get(_setup_cache_key(user))
     if not secret or not validate_totp_code(secret, code):
         audit.record(
             actor=user, action="account.mfa_setup_failed",
@@ -916,13 +932,13 @@ def complete_mfa_setup(*, request, user: User, code: str) -> list[str] | None:
         )
         return None
     if mfa_is_enabled(user):
-        request.session.pop(MFA_SETUP_SESSION_KEY, None)
+        cache.delete(_setup_cache_key(user))
         _mark_mfa_verified(request=request, user=user)
         return []
     TOTP.activate(user, secret)
     recovery = RecoveryCodes.activate(user)
     codes = recovery.get_unused_codes()
-    request.session.pop(MFA_SETUP_SESSION_KEY, None)
+    cache.delete(_setup_cache_key(user))
     _mark_mfa_verified(request=request, user=user)
     audit.record(actor=user, action="account.mfa_enabled", entity_table="identity_user",
                  entity_id=user.id, scope={"program_id": str(user.program_id)})

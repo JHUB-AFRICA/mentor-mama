@@ -3,6 +3,8 @@ import {
   Activity,
   BarChart3,
   Bell,
+  BookOpen,
+  Library,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
@@ -21,6 +23,8 @@ export type CoordinatorNav =
   | "placements"
   | "safeguarding"
   | "reports"
+  | "learning"
+  | "library"
   | "activity"
   | "account";
 
@@ -97,6 +101,8 @@ export function CoordinatorFrame({
             items: [
               { id: "safeguarding", label: "Safeguarding", icon: <ShieldAlert />, onSelect: () => go("safeguarding") },
               { id: "reports", label: "Reports", icon: <BarChart3 />, onSelect: () => go("reports") },
+              { id: "library", label: "Library", icon: <Library />, onSelect: () => go("library") },
+              { id: "learning", label: "Learning", icon: <BookOpen />, onSelect: () => go("learning") },
               { id: "activity", label: "Activity", icon: <Activity />, onSelect: () => go("activity") },
             ],
           },

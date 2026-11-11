@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { saveBlob } from "../../lib/download";
 import type { FormEvent, ReactNode } from "react";
 import {
   CheckCircle2,
@@ -114,7 +115,7 @@ export function AccountSecurity({ user, onSignedOut, onError, view = "all" }: { 
 
   async function startMfaSetup() {
     setMfaBusy(true);
-    try { setMfaSetup(await beginMfaSetup()); setRecoveryCodes(null); pushToast({ kind: "success", title: "Authenticator setup started", message: "Scan the MentorMAMA code and confirm it with a sign-in code." }); }
+    try { setMfaSetup(await beginMfaSetup(true)); setRecoveryCodes(null); pushToast({ kind: "success", title: "Authenticator setup started", message: "Scan the MentorMAMA code and confirm it with a sign-in code." }); }
     catch (cause) { onError(cause instanceof Error ? cause.message : "Authenticator setup could not start."); }
     finally { setMfaBusy(false); }
   }
@@ -161,8 +162,7 @@ export function AccountSecurity({ user, onSignedOut, onError, view = "all" }: { 
 
   function downloadRecoveryCodes() {
     if (!recoveryCodes) return;
-    const url = URL.createObjectURL(new Blob([recoveryCodes.join("\n")], { type: "text/plain" }));
-    const link = document.createElement("a"); link.href = url; link.download = "mentormama-recovery-codes.txt"; link.click(); URL.revokeObjectURL(url);
+    saveBlob(new Blob([recoveryCodes.join("\n")], { type: "text/plain" }), "mentormama-recovery-codes.txt");
   }
 
   async function signOut() {

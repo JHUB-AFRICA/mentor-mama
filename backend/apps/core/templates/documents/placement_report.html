@@ -1,0 +1,77 @@
+{% extends "documents/base.html" %}
+{% block header_scope %}{% if scope %}<span>{{ scope }}</span>{% endif %}{% endblock %}
+{% block eyebrow %}Placement report{% endblock %}
+{% block description %}<p class="description">{{ description }}</p>{% endblock %}
+{% block meta %}
+<dl class="meta">
+  {% for item in meta %}<div><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>{% endfor %}
+</dl>
+{% endblock %}
+{% block body %}
+<div class="kpis">
+  {% for kpi in kpis %}
+  <div class="kpi{% if kpi.tone %} kpi--{{ kpi.tone }}{% endif %}">
+    <div class="kpi__label">{{ kpi.label }}</div>
+    <div class="kpi__value">{{ kpi.value }}</div>
+    {% if kpi.hint %}<div class="kpi__hint">{{ kpi.hint }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if rows %}
+<section class="section insights">
+  <div class="panel">
+    <h2>Placements by stage</h2>
+    <div class="panel__body">{{ stage_chart|safe }}</div>
+  </div>
+  <div class="panel">
+    <h2>Induction progress</h2>
+    <div class="panel__body">
+      {{ induction_chart|safe }}
+      <table class="legend">
+        {% for item in induction_legend %}
+        <tr><td><span class="swatch" style="background: {{ item.colour }}"></span>{{ item.label }}</td><td class="num">{{ item.value }}</td><td class="share">{{ item.share }}%</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <h2>Placement register</h2>
+  <p class="section__lead">One row per placement, ordered by cohort and start date. The full field list is in the CSV and Excel exports.</p>
+  {% for chunk in row_chunks %}
+  <table class="data{% if not forloop.first %} data--continued{% endif %}">
+    <thead>
+      <tr>
+        <th style="width: 15%">Student</th><th style="width: 13%">Cohort</th><th style="width: 17%">Facility · ward</th>
+        <th style="width: 12%">Mentor</th><th style="width: 9%">Stage</th><th style="width: 13%">Dates</th>
+        <th class="num" style="width: 6%">Sessions</th><th class="num" style="width: 6%">Induction</th>
+        <th style="width: 4%">Final</th><th class="num" style="width: 5%">Concerns</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in chunk %}
+      <tr>
+        <td><span class="strong">{{ row.student }}</span>{% if row.registration_number %}<span class="sub">{{ row.registration_number }}</span>{% endif %}</td>
+        <td>{{ row.cohort }}</td>
+        <td>{% if row.facility %}{{ row.facility }}{% if row.ward %}<span class="sub">{{ row.ward }}</span>{% endif %}{% else %}<span class="dash">Not allocated</span>{% endif %}</td>
+        <td>{{ row.mentor|default:"—" }}</td>
+        <td><span class="pill pill--{{ row.stage_tone }}">{{ row.stage }}</span></td>
+        <td>{{ row.dates }}</td>
+        <td class="num">{{ row.sessions }}</td>
+        <td class="num">{% if row.induction %}{{ row.induction }}{% else %}<span class="dash">—</span>{% endif %}</td>
+        <td>{{ row.final }}</td>
+        <td class="num">{% if row.concerns %}<span class="attention">{{ row.concerns }}</span>{% else %}<span class="dash">0</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% empty %}
+  <table class="data"><tbody><tr class="empty"><td>No placements match this export.</td></tr></tbody></table>
+  {% endfor %}
+</section>
+
+<div class="handling"><strong>Handling.</strong> This report holds names and registration numbers. Share it only with people who need it for the placement programme, and delete local copies when you no longer need them. Concern counts show only concerns you are allowed to see; the content of any concern is never included.</div>
+{% endblock %}

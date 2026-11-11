@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { csvBlob, datedFilename, saveBlob } from "../../lib/download";
+import { useToast } from "../../components/ToastProvider";
 import {
   Activity,
   ArrowRight,
@@ -61,6 +63,7 @@ export function MentorStudents({
   const [state, setState] = useState<PlacementState>("all");
 
   const [loading, setLoading] = useState(true);
+  const { pushToast } = useToast();
   const [exporting, setExporting] = useState(false);
   const [failed, setFailed] = useState(false);
   const [progressFailed, setProgressFailed] = useState(false);
@@ -205,10 +208,17 @@ export function MentorStudents({
         exportPage += 1;
       }
 
-      const progressEntries = await Promise.all(allPlacements.map(async (placement) => {
-        try { return [placement.id, await getPlacementProgress(placement.id)] as const; }
-        catch { return [placement.id, undefined] as const; }
-      }));
+      const progressEntries: Array<readonly [string, PlacementProgress | undefined]> = new Array(allPlacements.length);
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < allPlacements.length) {
+          const index = cursor++;
+          const placement = allPlacements[index];
+          try { progressEntries[index] = [placement.id, await getPlacementProgress(placement.id)] as const; }
+          catch { progressEntries[index] = [placement.id, undefined] as const; }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, allPlacements.length) }, worker));
       const exportProgress = Object.fromEntries(progressEntries.filter((entry): entry is readonly [string, PlacementProgress] => entry[1] !== undefined));
       const headers = [
       "Student",
@@ -231,29 +241,15 @@ export function MentorStudents({
         placement.planned_start,
         placement.planned_end,
         stateLabel(placement.state),
-        String(studentProgress?.mentorship.sessions_logged ?? ""),
+        studentProgress?.mentorship.sessions_logged ?? "",
         studentProgress?.mentorship.last_session_date ?? "",
       ];
       });
 
-      const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-          .join(","),
-      )
-      .join("\n");
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-
-      anchor.href = url;
-      anchor.download = "mentor-students.csv";
-      anchor.click();
-
-      URL.revokeObjectURL(url);
+      saveBlob(csvBlob([headers, ...rows]), datedFilename("students", "csv"));
+      pushToast({ kind: "success", title: "Students exported", message: `${rows.length} student${rows.length === 1 ? "" : "s"} saved to CSV.` });
+    } catch {
+      pushToast({ kind: "error", title: "Could not export", message: "We couldn’t prepare the students file. Try again." });
     } finally {
       setExporting(false);
     }

@@ -15,11 +15,34 @@
   .rp-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Print / save as PDF: report content only. */
+/* Print / save as PDF: report content only, under the shared branded frame
+   (header, footer, watermark come from PrintFrame / print-documents.css). */
 @media print {
-  .portal-sidebar, .portal-header, .pa-tabs, .pa-toolbar, .pa-header__actions, .pa-table-toolbar, .pa-pager { display: none !important; }
+  .portal-sidebar, .portal-header, .pa-tabs, .pa-toolbar, .pa-header__actions, .pa-table-toolbar, .pa-pager,
+  .rp .pa-header { display: none !important; }
   [class*="lg:pl-"], .workspace-main { padding-left: 0 !important; margin-left: 0 !important; }
-  body { background: #fff !important; }
-  .rp .pa-card, .rp .pa-stat { break-inside: avoid; box-shadow: none; }
+  /* Clear the app surfaces between the page and the report so the
+     watermark (z-index:-1, see print-documents.css) shows through. */
+  body, body *:has(.rp), .rp { background: transparent !important; }
+  .rp {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .rp .pa-card, .rp .pa-stat, .rp .pa-table tr, .rp svg { break-inside: avoid; box-shadow: none; }
+  /* Let the watermark show through; borders keep the structure. */
+  .rp .pa-card { background: transparent; border: 0.4pt solid #e4e8ee; }
+  .rp-body { opacity: 1 !important; }
+  .rp-stack, .rp-grid-2, .rp-grid-4 { gap: 4mm; }
+  .rp-scope { display: none; }
 }
 .rp .pa-tabs { gap: 1.25rem; }
+
+/* Print-only title block on the first page (the on-screen page header is hidden on paper). */
+.rp-print-cover { display: none; }
+@media print {
+  .rp-print-cover { display: block; margin: 0 0 6mm; break-after: avoid; }
+  .rp-print-cover p { margin: 0 0 2mm; color: #1d8c8c; font: 600 7pt/1 "Inter", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
+  .rp-print-cover h1 { margin: 0; color: #0d1b33; font: 700 21pt/1.12 "Manrope", "Inter", sans-serif; letter-spacing: -0.01em; }
+  .rp-print-cover span { display: block; margin-top: 2mm; color: #5e6c81; font: 500 8.5pt/1.4 "Inter", sans-serif; }
+}
+.rp-muted { color: #52616f; margin: 0; }

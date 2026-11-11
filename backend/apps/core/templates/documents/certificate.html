@@ -1,0 +1,53 @@
+<!doctype html>
+{% comment %}Standalone certificate layout (does not use the report frame). Master logo files only.{% endcomment %}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ page.title }}</title>
+<meta name="author" content="MentorMAMA">
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("fonts/Inter-Regular.ttf"); }
+  @font-face { font-family: "Inter"; font-weight: 600; src: url("fonts/Inter-SemiBold.ttf"); }
+  @font-face { font-family: "Manrope"; font-weight: 700; src: url("fonts/Manrope-Bold.ttf"); }
+  @font-face { font-family: "Manrope"; font-weight: 800; src: url("fonts/Manrope-ExtraBold.ttf"); }
+  :root { --navy: #0D1B33; --muted: #5E6C81; --teal: #1D8C8C; --stone: #E4E8EE; }
+  @page { size: A4 landscape; margin: 0; }
+  html { font-family: "Inter"; color: var(--navy); }
+  body { margin: 0; }
+  .sheet { position: relative; width: 297mm; height: 209mm; padding: 14mm; box-sizing: border-box; overflow: hidden; }
+  .frame { position: relative; height: 181mm; border: 0.8pt solid var(--stone); border-top: 3pt solid var(--teal); border-radius: 3mm; padding: 14mm 22mm;
+    box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .watermark { position: absolute; left: 50%; top: 52%; width: 60%; transform: translate(-50%, -50%); opacity: 0.035; }
+  .watermark img { width: 100%; }
+  .logo { height: 16mm; }
+  .eyebrow { margin: 14mm 0 0; font: 600 9pt/1 "Inter"; letter-spacing: 0.22em; text-transform: uppercase; color: var(--teal); }
+  h1 { margin: 4mm 0 0; font: 800 30pt/1.1 "Manrope"; }
+  .lead { margin: 12mm 0 0; font-size: 11pt; color: var(--muted); }
+  .name { margin: 3mm 0 0; font: 700 26pt/1.15 "Manrope"; color: var(--navy); }
+  .module { margin: 4mm 0 0; font: 700 16pt/1.3 "Manrope"; color: var(--teal); max-width: 190mm; }
+  .detail { margin: 6mm 0 0; font-size: 10pt; color: var(--muted); }
+  .foot { position: absolute; left: 22mm; right: 22mm; bottom: 12mm; display: flex; justify-content: space-between; font-size: 8pt; color: var(--muted);
+    border-top: 0.5pt solid var(--stone); padding-top: 4mm; }
+  .foot strong { color: var(--navy); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="watermark"><img src="{{ page.watermark }}" alt=""></div>
+  <div class="frame">
+    <img class="logo" src="{{ page.logo }}" alt="MentorMAMA">
+    <p class="eyebrow">Certificate of completion</p>
+    <h1>Well done</h1>
+    <p class="lead">This certifies that</p>
+    <p class="name">{{ name }}</p>
+    <p class="lead">has completed the learning module</p>
+    <p class="module">{{ module }}</p>
+    <p class="detail">Completed {{ completed|date:"j F Y" }} · Score {{ score }}%{% if version > 1 %} · Version {{ version }}{% endif %}</p>
+    <div class="foot">
+      <span>Certificate number <strong>{{ number }}</strong></span>
+      <span>Issued {{ issued|date:"j F Y" }} by MentorMAMA</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

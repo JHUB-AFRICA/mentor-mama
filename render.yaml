@@ -1,15 +1,258 @@
+# MentorMAMA on Render — the public website, the portal, the API, background jobs, Postgres and Redis-compatible
+# stores in one Blueprint.
+#
+#   mentormama-website   static   public site                       apps/web
+#   mentormama-portal    static   the signed-in app; proxies /api   apps/portal
+#   mentormama-api       web      Django API (Docker, gunicorn)      backend/
+#   mentormama-worker    worker   Celery worker (emails, sign-in codes, exports)
+#   mentormama-beat      worker   Celery scheduler (reminders, digests); keep at one instance
+#   mentormama-db        Postgres
+#   mentormama-cache     Key Value (cache, may evict)
+#   mentormama-broker    Key Value (Celery queue, never evicts)
+#
+# BEFORE THE FIRST DEPLOY — create the secrets group once (Dashboard > Env Groups > New), named exactly
+# `mentormama-secrets`. Blueprints cannot hold secrets in a group, and the API and the worker must share the same
+# SECRET_KEY (invitation and reset links are signed with it). Keys:
+#   SECRET_KEY               openssl rand -hex 32
+#   RESEND_API_KEY           Resend > API keys (sending access, domain sinapstechnology.tech)
+#   RESEND_SIGNING_SECRET    Resend > Webhooks > the endpoint below > Signing secret (starts with whsec_)
+#   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   for the private export bucket (any S3-compatible store)
+#   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION
+#
+# AFTER THE FIRST DEPLOY
+#   1. Resend > Webhooks > Add endpoint: https://mentormama-api.onrender.com/anymail/resend/tracking/
+#      with events email.sent, email.delivered, email.delivery_delayed, email.bounced, email.complained.
+#      Paste its signing secret into `mentormama-secrets` as RESEND_SIGNING_SECRET and redeploy the API.
+#   2. Custom domains: add them in each service (or under `domains:` below). Set PORTAL_DOMAIN to the portal's
+#      domain, and update the rewrite destination below if you give the API its own domain.
+#   3. Create the first programme admin once: Render shell on mentormama-api ->
+#      python manage.py bootstrap_program_admin   (see docs/operations)
+#
+# Sender: every message — sign-in codes, invitations, reminders, digests — goes out as
+# "MentorMAMA <mentormama@sinapstechnology.tech>" through Resend (Forge enabled on that domain).
+# Plans below are the smallest that run this stack reliably; the free tier cannot run workers, pre-deploy
+# commands or persistent disks.
+
+envVarGroups:
+  - name: mentormama-config
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: DEBUG
+        value: "false"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Domains. PORTAL_DOMAIN feeds ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS and the links inside emails.
+      - key: PORTAL_DOMAIN
+        value: app.sinapstechnology.tech # TODO: set to the portal's real domain
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://app.sinapstechnology.tech # keep in step with PORTAL_DOMAIN
+      # Email: Resend, one sender for the whole product.
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: DEFAULT_FROM_EMAIL
+        value: MentorMAMA <mentormama@sinapstechnology.tech>
+      - key: OTP_EMAIL_SENDER
+        value: MentorMAMA <mentormama@sinapstechnology.tech>
+      # Sign-in with an authenticator app: accept the codes just before and after the current one.
+      - key: MFA_TOTP_TOLERANCE
+        value: "1"
+      # Exports are written by the worker and downloaded through the API, so they live in object storage.
+      - key: EXPORT_STORAGE_BACKEND
+        value: s3
+      - key: USE_REDIS
+        value: "true"
+      - key: SECURE_SSL_REDIRECT
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: AI_ENABLED
+        value: "false"
+
 services:
+  # ---------------------------------------------------------------- public website
   - type: web
     name: mentormama-website
-    env: static
-    # Render's free tier is perfect for static React/Vite builds.
-    # Render's free tier automatically installs pnpm v11 natively
-    # We only need to tell it which workspace to build.
-    buildCommand: pnpm --filter @mentormama/web build
-    # Vite outputs the production build to the dist folder
+    runtime: static
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @mentormama/web build
     staticPublishPath: apps/web/dist
-    # React uses client-side routing, so all paths must redirect to index.html
+    # domains:
+    #   - mentormama.sinapstechnology.tech
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
     routes:
+      # React uses client-side routing, so every unknown path serves index.html.
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # ---------------------------------------------------------------- the portal (signed-in app)
+  - type: web
+    name: mentormama-portal
+    runtime: static
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @mentormama/portal build
+    staticPublishPath: apps/portal/dist
+    # domains:
+    #   - app.sinapstechnology.tech
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # Lesson videos play in YouTube's privacy-enhanced player or Vimeo's, and PDFs preview from this origin.
+      - path: /*
+        name: Content-Security-Policy
+        value: "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'self'"
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      # The portal calls relative /api URLs and relies on session + CSRF cookies. Proxying /api through the
+      # portal's own domain keeps those cookies first-party. Rules run top to bottom.
+      - type: rewrite
+        source: /api/*
+        destination: https://mentormama-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # ---------------------------------------------------------------- API
+  - type: web
+    name: mentormama-api
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./docker/backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    # Runs after the build and before the new version takes traffic.
+    preDeployCommand: python manage.py migrate --noinput
+    # Uploaded documents, covers and lesson images live on this disk (the worker does not need them).
+    disk:
+      name: mentormama-data
+      mountPath: /var/lib/mentormama
+      sizeGB: 5
+    envVars:
+      - fromGroup: mentormama-config
+      - fromGroup: mentormama-secrets
+      # Render mounts disks owned by root. Render passes env vars to the Docker build as build args, so this selects the
+      # image variant that starts as root only to fix that ownership, then drops to uid 10001 (docker/backend/Dockerfile).
+      - key: PRIVILEGES
+        value: root
+      # gunicorn listens on 8000 (docker/backend/gunicorn.conf.py).
+      - key: PORT
+        value: "8000"
+      - key: GUNICORN_WORKERS
+        value: "2"
+      - key: GUNICORN_THREADS
+        value: "4"
+      - key: PRIVATE_CONTENT_ROOT
+        value: /var/lib/mentormama/content-documents
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mentormama-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-cache
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-broker
+          property: connectionString
+
+  # ---------------------------------------------------------------- background jobs
+  # The worker runs the queue: welcome and reset emails, sign-in codes, exports, reminders and digests.
+  - type: worker
+    name: mentormama-worker
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    numInstances: 1
+    dockerfilePath: ./docker/backend/Dockerfile
+    dockerContext: .
+    dockerCommand: celery -A config.celery worker --loglevel=INFO --concurrency=2
+    maxShutdownDelaySeconds: 120 # let a running export finish on deploy
+    envVars:
+      - fromGroup: mentormama-config
+      - fromGroup: mentormama-secrets
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mentormama-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-cache
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-broker
+          property: connectionString
+
+  # The scheduler is its own worker and must stay at exactly one instance, or every reminder would be sent twice.
+  - type: worker
+    name: mentormama-beat
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    numInstances: 1
+    dockerfilePath: ./docker/backend/Dockerfile
+    dockerContext: .
+    dockerCommand: celery -A config.celery beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
+    envVars:
+      - fromGroup: mentormama-config
+      - fromGroup: mentormama-secrets
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mentormama-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-cache
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: mentormama-broker
+          property: connectionString
+
+  # ---------------------------------------------------------------- Redis-compatible stores
+  # Two instances, as in docker-compose.prod.yml: the cache may evict old keys, the broker must not.
+  - type: keyvalue
+    name: mentormama-cache
+    region: frankfurt
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # private network only
+
+  - type: keyvalue
+    name: mentormama-broker
+    region: frankfurt
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # private network only
+
+databases:
+  - name: mentormama-db
+    region: frankfurt
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    databaseName: mentormama
+    user: mentormama
+    ipAllowList: [] # private network only

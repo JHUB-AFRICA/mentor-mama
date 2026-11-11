@@ -4,10 +4,13 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "@fontsource/inter/800.css";
+import "@fontsource/manrope/600.css";
+import "@fontsource/manrope/700.css";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./app/App";
 import "./styles/index.css";
+import "./styles/print-documents.css";
 // These shared workspace surfaces are also used by Student, Mentor, and
 // Coordinator routes; keep their library and settings styling available
 // independently of the Programme Admin route.

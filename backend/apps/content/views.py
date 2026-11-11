@@ -1,7 +1,9 @@
+from pathlib import Path
 import mimetypes
 
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 from django.http import FileResponse
@@ -15,7 +17,7 @@ from apps.core.http import IdempotentCommand
 from apps.identity import capabilities
 from apps.content.models import ContentItem, ContentRevision
 from apps.content.serializers import ContentItemWriteSerializer
-from apps.learning.models import TrainingModule
+from apps.learning.models import ModuleCompletion, TrainingModule
 
 
 def _unique_slug(program_id, wanted, exclude_id=None):
@@ -30,12 +32,30 @@ def _unique_slug(program_id, wanted, exclude_id=None):
     return slug
 
 
+def _in_facility_scope(queryset, user):
+    """Items limited to certain facilities are visible only to people at those facilities."""
+    if user.role == "program_admin":
+        return queryset
+    scope = Q(facility_ids=[])
+    if user.facility_id:
+        scope |= Q(facility_ids__contains=[str(user.facility_id)])
+    return queryset.filter(scope)
+
+
+def _can_see(item, user) -> bool:
+    if user.role == "program_admin":
+        return True
+    if item.archived_at or not item.is_published or user.role not in item.visible_roles:
+        return False
+    return not item.facility_ids or (user.facility_id is not None and str(user.facility_id) in item.facility_ids)
+
+
 def _row(item):
     resource_url = f"/api/v1/content/{item.id}/document" if item.document_file else item.resource_url
     return {"id": str(item.id), "title": item.title, "slug": item.slug, "summary": item.summary,
             "body": item.body, "resource_url": resource_url, "cover_image": f"/api/v1/content/{item.id}/cover" if item.cover_image else "", "content_type": item.content_type,
             "category": item.category, "status": "archived" if item.archived_at else "published" if item.is_published else "draft",
-            "visible_roles": item.visible_roles, "published": item.is_published,
+            "visible_roles": item.visible_roles, "tags": item.tags, "facility_ids": item.facility_ids, "published": item.is_published,
             "document_name": item.document_file.name.rsplit("/", 1)[-1] if item.document_file else "",
             "published_at": item.published_at, "archived_at": item.archived_at, "updated_at": item.updated_at,
             "version": item.revisions.count() + 1}
@@ -44,18 +64,18 @@ def _row(item):
 def _library_content_row(item):
     resource_url = f"/api/v1/content/{item.id}/document" if item.document_file else item.resource_url
     return {"id": str(item.id), "source_id": str(item.id), "kind": item.content_type, "title": item.title,
-            "summary": item.summary, "audience": item.visible_roles, "category": item.category,
+            "summary": item.summary, "audience": item.visible_roles, "category": item.category, "tags": item.tags,
             "status": "archived" if item.archived_at else "published" if item.is_published else "draft",
-            "required": False, "updated_at": item.updated_at, "updated_by": item.created_by.get_full_name() or item.created_by.email,
+            "required": False, "updated_at": item.updated_at, "updated_by": item.created_by.full_name or item.created_by.email,
             "resource_url": resource_url, "cover_image": f"/api/v1/content/{item.id}/cover" if item.cover_image else "", "lessons": 0, "completed": False}
 
 
-def _library_module_row(module):
+def _library_module_row(module, done=frozenset()):
     return {"id": f"module:{module.id}", "source_id": str(module.id), "kind": "module", "title": module.title,
-            "summary": module.description, "audience": module.visible_roles, "category": module.category,
+            "summary": module.description, "audience": module.visible_roles, "category": module.category, "tags": [],
             "status": "archived" if module.archived_at else "published" if module.is_published else "draft", "required": module.is_required,
             "updated_at": module.updated_at, "updated_by": "Programme team", "resource_url": "",
-            "lessons": module.lessons.count(), "completed": False}
+            "lessons": module.lessons.count(), "completed": module.id in done}
 
 
 class LibraryView(APIView):
@@ -65,7 +85,7 @@ class LibraryView(APIView):
         content = ContentItem.objects.filter(program_id=request.user.program_id).select_related("created_by")
         modules = TrainingModule.objects.filter(program_id=request.user.program_id)
         if request.user.role != "program_admin":
-            content = content.filter(is_published=True, archived_at=None, visible_roles__contains=[request.user.role])
+            content = _in_facility_scope(content.filter(is_published=True, archived_at=None, visible_roles__contains=[request.user.role]), request.user)
             modules = modules.filter(is_published=True, archived_at=None, visible_roles__contains=[request.user.role])
         kind = request.query_params.get("kind")
         audience = request.query_params.get("audience")
@@ -75,6 +95,7 @@ class LibraryView(APIView):
         search = request.query_params.get("search", "").strip()
         visible_content = content
         visible_modules = modules
+        done = set(ModuleCompletion.objects.filter(user=request.user).values_list("module_id", flat=True))
         if kind and kind != "all":
             if kind == "module":
                 content = content.none()
@@ -98,16 +119,20 @@ class LibraryView(APIView):
                 content = content.filter(archived_at__isnull=False)
                 modules = modules.filter(archived_at__isnull=False)
         if search:
-            from django.db.models import Q
-            content = content.filter(Q(title__icontains=search) | Q(summary__icontains=search) | Q(body__icontains=search))
+            content = content.filter(Q(title__icontains=search) | Q(summary__icontains=search) | Q(search_text__icontains=search) | Q(tags__icontains=search.lower()))
             modules = modules.filter(Q(title__icontains=search) | Q(description__icontains=search))
+        tag = request.query_params.get("tag", "").strip().lower()
+        if tag:
+            content = content.filter(tags__contains=[tag])
+            modules = modules.none()
         if required:
             content = content.none()
             modules = modules.filter(is_required=True)
-        count_rows = [_library_content_row(item) for item in visible_content] + [_library_module_row(module) for module in visible_modules]
-        rows = [_library_content_row(item) for item in content] + [_library_module_row(module) for module in modules]
+        count_rows = [_library_content_row(item) for item in visible_content] + [_library_module_row(module, done) for module in visible_modules]
+        rows = [_library_content_row(item) for item in content] + [_library_module_row(module, done) for module in modules]
         rows.sort(key=lambda row: row["updated_at"], reverse=True)
-        return Response({"data": rows, "meta": {"total": len(rows), "counts": {
+        all_tags = sorted({t for item in visible_content for t in item.tags})
+        return Response({"data": rows, "meta": {"total": len(rows), "tags": all_tags, "counts": {
             "all": len(count_rows), "guide": sum(row["kind"] == "guide" for row in count_rows), "module": sum(row["kind"] == "module" for row in count_rows),
             "document": sum(row["kind"] == "document" for row in count_rows), "external": sum(row["kind"] == "external" for row in count_rows),
         }}})
@@ -119,7 +144,7 @@ class ContentListView(APIView):
     def get(self, request):
         rows = ContentItem.objects.filter(program_id=request.user.program_id, archived_at=None)
         if request.user.role != "program_admin":
-            rows = rows.filter(is_published=True).filter(visible_roles__contains=[request.user.role])
+            rows = _in_facility_scope(rows.filter(is_published=True).filter(visible_roles__contains=[request.user.role]), request.user)
         rows = rows.order_by("title")
         return Response({"data": [_row(item) for item in rows]})
 
@@ -145,7 +170,7 @@ class ContentDetailView(APIView):
 
     def get(self, request, content_id):
         item = ContentItem.objects.filter(id=content_id, program_id=request.user.program_id).first()
-        if item and request.user.role != "program_admin" and (not item.is_published or request.user.role not in item.visible_roles):
+        if item and not _can_see(item, request.user):
             item = None
         if item is None:
             return Response({"error": {"code": "not_found", "message": "Content item not found."}}, status=404)
@@ -180,13 +205,18 @@ class ContentDocumentDownloadView(APIView):
 
     def get(self, request, content_id):
         item = ContentItem.objects.filter(id=content_id, program_id=request.user.program_id).first()
-        if (item is None or not item.document_file or
-                (request.user.role != "program_admin" and
-                 (item.archived_at or not item.is_published or request.user.role not in item.visible_roles))):
+        if item is None or not item.document_file or not _can_see(item, request.user):
             return Response({"error": {"code": "not_found", "message": "Document not found."}}, status=404)
-        response = FileResponse(item.document_file.open("rb"), as_attachment=True,
-                                filename=item.document_file.name.rsplit("/", 1)[-1],
-                                content_type="application/octet-stream")
+        # Named after the item, not the stored file (which may carry a storage suffix).
+        suffix = Path(item.document_file.name).suffix.lower()
+        filename = f"{slugify(item.title)[:80] or 'document'}{suffix}"
+        inline_pdf = request.query_params.get("inline") == "1" and suffix == ".pdf"
+        response = FileResponse(item.document_file.open("rb"), as_attachment=not inline_pdf, filename=filename,
+                                content_type="application/pdf" if inline_pdf else "application/octet-stream")
+        if inline_pdf:
+            # Shown inside MentorMAMA only; never framed by another site.
+            response["X-Frame-Options"] = "SAMEORIGIN"
+            response["Content-Security-Policy"] = "frame-ancestors 'self'"
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
@@ -202,14 +232,7 @@ class ContentCoverImageView(APIView):
         if (
             item is None
             or not item.cover_image
-            or (
-                request.user.role != "program_admin"
-                and (
-                    item.archived_at
-                    or not item.is_published
-                    or request.user.role not in item.visible_roles
-                )
-            )
+            or not _can_see(item, request.user)
         ):
             return Response(
                 {"error": {"code": "not_found", "message": "Content image not found."}},
@@ -267,14 +290,14 @@ class ContentReviseView(APIView):
                     document_file=item.document_file or None, cover_image=item.cover_image or None,
                     content_type=item.content_type, category=item.category, visible_roles=item.visible_roles,
                 )
-                updates = ["title", "slug", "summary", "body", "resource_url", "content_type", "category", "visible_roles", "is_published", "published_at", "updated_at"]
+                updates = ["title", "slug", "summary", "body", "resource_url", "content_type", "category", "visible_roles", "tags", "facility_ids", "is_published", "published_at", "updated_at"]
                 if data.get("document_file"):
                     item.document_file = data["document_file"]
                     updates.append("document_file")
                 if data.get("cover_image"):
                     item.cover_image = data["cover_image"]
                     updates.append("cover_image")
-                for field in ("title", "summary", "body", "resource_url", "content_type", "category", "visible_roles"):
+                for field in ("title", "summary", "body", "resource_url", "content_type", "category", "visible_roles", "tags", "facility_ids"):
                     if field in data:
                         setattr(item, field, data[field])
                 item.slug = _unique_slug(item.program_id, data.get("slug") or item.title, exclude_id=item.id)

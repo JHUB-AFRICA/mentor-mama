@@ -65,6 +65,7 @@ export function ContentLibrary({
   const [audience, setAudience] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
+  const [tag, setTag] = useState("");
   const [requiredOnly, setRequiredOnly] = useState(false);
   const [addType, setAddType] = useState<AddType | null>(null);
   const query = useQuery({
@@ -77,6 +78,7 @@ export function ContentLibrary({
       audience,
       category,
       status,
+      tag,
       requiredOnly,
     ],
     queryFn: () =>
@@ -86,6 +88,7 @@ export function ContentLibrary({
         audience,
         category,
         status,
+        tag,
         required: requiredOnly ? "true" : "",
       }),
   });
@@ -110,7 +113,11 @@ export function ContentLibrary({
         ? `/student/library/${entry.kind}/${entry.source_id}`
         : user.role === "mentor"
           ? `/mentor/library/${entry.kind}/${entry.source_id}`
-          : `/admin/content/item/${entry.kind}/${entry.source_id}`,
+          : user.role === "coordinator"
+            ? `/coordinator/library/${entry.kind}/${entry.source_id}`
+            : user.role === "nurse_manager"
+              ? `/facility/library/${entry.kind}/${entry.source_id}`
+              : `/admin/content/item/${entry.kind}/${entry.source_id}`,
     );
   };
   const actions = useContentActions({
@@ -138,10 +145,11 @@ export function ContentLibrary({
     setAudience("");
     setCategory("");
     setStatus("");
+    setTag("");
     setRequiredOnly(false);
   }
   const hasFilters = Boolean(
-    search || audience || category || status || requiredOnly || kind !== "all",
+    search || audience || category || status || tag || requiredOnly || kind !== "all",
   );
   return (
     <div className="content-library-page">
@@ -204,6 +212,13 @@ export function ContentLibrary({
           onChange={setCategory}
           options={categoryOptions}
         />
+        {(query.data?.meta.tags ?? []).length > 0 && (
+          <FilterSelect
+            value={tag}
+            onChange={setTag}
+            options={[{ value: "", label: "All tags" }, ...(query.data?.meta.tags ?? []).map((item) => ({ value: item, label: item }))]}
+          />
+        )}
         <FilterSelect
           value={status}
           onChange={setStatus}

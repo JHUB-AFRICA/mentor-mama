@@ -1,6 +1,15 @@
-import { Download, Printer } from "lucide-react";
+import { Download } from "lucide-react";
 import { Button } from "@mentormama/ui";
+import { PrintFrame } from "../../components/PrintFrame";
 import type { InductionChecklist, Placement } from "../../services/api";
+
+const RESPONSE_LABEL: Record<string, string> = { yes: "Done", no: "Not yet", not_applicable: "Does not apply" };
+
+/** "29 Aug 2026" for the printed record; ISO dates are for machines. */
+function printDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 export function InductionSummary({
   placement,
@@ -37,37 +46,53 @@ export function InductionSummary({
         </div>
       </section>
 
-      <div className="induction-print-sheet" aria-hidden="true">
-        <header className="induction-print-header">
-          <div>
-            <p className="induction-print-kicker">MentorMAMA · Clinical programme</p>
-            <h1>Induction handoff record</h1>
-            <p>Signed digital checklist summary</p>
-          </div>
-          <Printer size={28} aria-hidden="true" />
-        </header>
-        <div className="induction-print-meta">
-          <div><strong>Student</strong><span>{placement.student?.name ?? "Not available"}</span></div>
-          <div><strong>Institution</strong><span>{placement.institution_name ?? "Not available"}</span></div>
-          <div><strong>Facility</strong><span>{placement.facility_name ?? "Not available"}</span></div>
-          <div><strong>Ward</strong><span>{placement.ward?.name ?? "Not available"}</span></div>
-          <div><strong>Placement period</strong><span>{placement.planned_start} — {placement.planned_end}</span></div>
-          <div><strong>Template version</strong><span>{checklist.template_version}</span></div>
+      <PrintFrame
+        title="Induction handoff record"
+        scope={`${placement.student?.name ?? "Student"} · ${placement.facility_name ?? "Facility"}`}
+        orientation="portrait"
+        className="doc-print-root--exclusive"
+      >
+        <div className="induction-print-sheet">
+          <p className="induction-print-eyebrow">Placement induction</p>
+          <h1>Induction handoff record</h1>
+          <p className="induction-print-lede">Signed digital checklist summary for the student file.</p>
+          <dl className="induction-print-meta">
+            <div><dt>Student</dt><dd>{placement.student?.name ?? "Not available"}</dd></div>
+            <div><dt>Institution</dt><dd>{placement.institution_name ?? "Not available"}</dd></div>
+            <div><dt>Facility</dt><dd>{placement.facility_name ?? "Not available"}</dd></div>
+            <div><dt>Ward</dt><dd>{placement.ward?.name ?? "Not available"}</dd></div>
+            <div><dt>Placement period</dt><dd>{printDate(placement.planned_start)} – {printDate(placement.planned_end)}</dd></div>
+            <div><dt>Template version</dt><dd>{checklist.template_version}</dd></div>
+          </dl>
+          <h2>Checklist responses</h2>
+          <table className="induction-print-table">
+            <thead>
+              <tr><th scope="col">No.</th><th scope="col">Checklist item</th><th scope="col">Response</th></tr>
+            </thead>
+            <tbody>
+              {checklist.items.map((item, index) => (
+                <tr key={item.id}>
+                  <td className="induction-print-num">{index + 1}</td>
+                  <td>
+                    <span className="induction-print-item-label">{item.label}</span>
+                    {item.comment && <p className="induction-print-comment">{item.comment}</p>}
+                  </td>
+                  <td className="induction-print-status">
+                    <span className={`induction-print-pill induction-print-pill--${item.response === "yes" ? "yes" : item.response === "no" ? "no" : "neutral"}`}>
+                      {RESPONSE_LABEL[item.response ?? ""] ?? "Not answered"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <dl className="induction-print-signature">
+            <div><dt>Signed by</dt><dd>{checklist.signed_by ?? "Assigned mentor"}</dd></div>
+            <div><dt>Signed on</dt><dd>{new Date(checklist.completed_at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short" })}</dd></div>
+          </dl>
+          <p className="induction-print-note">The digital record remains the authoritative version.</p>
         </div>
-        <h2>Checklist responses</h2>
-        <ol className="induction-print-items">
-          {checklist.items.map((item) => (
-            <li key={item.id}>
-              <div><strong>{item.label}</strong><span>{item.response?.replaceAll("_", " ") ?? "Not answered"}</span></div>
-              {item.comment && <p>{item.comment}</p>}
-            </li>
-          ))}
-        </ol>
-        <footer className="induction-print-footer">
-          <span>Signed by {checklist.signed_by ?? "assigned mentor"}</span>
-          <span>{new Date(checklist.completed_at).toLocaleString("en-GB")}</span>
-        </footer>
-      </div>
+      </PrintFrame>
     </>
   );
 }

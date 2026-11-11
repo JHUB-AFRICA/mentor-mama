@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { csvBlob, datedFilename, saveBlob } from "../../lib/download";
 import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Send, ShieldCheck, Upload, UserPlus } from "lucide-react";
 import { Field, FieldRow, Modal, TextInput } from "../../components/kit";
 import { useToast } from "../../components/ToastProvider";
@@ -72,12 +73,8 @@ export function InviteWizard({ memberType, scopeName, onBack, onError }: { membe
   }
   function downloadTemplate() {
     const head = isMentor ? "email,first_name,last_name,phone" : "email,first_name,last_name,registration_number,phone";
-    const example = isMentor ? "mentor@example.com,Alex,Otieno,+254700000000" : "student@example.com,Alex,Otieno,STU-2026-001,+254700000000";
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([`${head}\n${example}\n`], { type: "text/csv;charset=utf-8" }));
-    link.download = `mentormama-${noun}-invitations.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const example = isMentor ? "mentor@example.com,Alex,Otieno,254700000000" : "student@example.com,Alex,Otieno,STU-2026-001,254700000000";
+    saveBlob(csvBlob([head.split(","), example.split(",")]), datedFilename(`${noun}-invitations`, "csv"));
   }
 
   const ready = result?.results.filter((item) => item.status === "ready").length ?? 0;

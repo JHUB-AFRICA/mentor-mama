@@ -1,0 +1,63 @@
+/*
+ * Authoring layout.
+ *
+ * The three-column module editor used viewport breakpoints and fixed minimum column widths
+ * (15rem + 24rem + 20rem), but the page sits beside a 17rem sidebar, so below about 1440px the
+ * columns were wider than the space they were given and the page scrolled sideways. These rules
+ * respond to the width of the authoring area itself, and let every column shrink.
+ */
+.content-authoring-page {
+  container: authoring / inline-size;
+  min-width: 0;
+}
+
+.content-module-authoring-layout {
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr) minmax(15rem, 19rem);
+}
+
+.content-authoring-layout > *,
+.content-module-authoring-layout > * {
+  min-width: 0;
+}
+
+/* Medium: the outline moves above the editor and details sit beside it. */
+@container authoring (max-width: 62rem) {
+  .content-module-authoring-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem);
+  }
+  .content-module-authoring-layout > .content-module-structure {
+    grid-column: 1 / -1;
+  }
+  .content-authoring-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  }
+}
+
+/* Narrow: one column. */
+@container authoring (max-width: 46rem) {
+  .content-module-authoring-layout,
+  .content-authoring-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .content-authoring-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The editor toolbar wraps instead of stretching the page. */
+.content-editor-toolbar {
+  position: relative;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+/* The file picker behind the "Insert image" button: invisible, and kept inside the toolbar. */
+.lt-file-input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}

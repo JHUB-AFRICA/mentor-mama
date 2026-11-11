@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
+import { PrintFrame } from "../../components/PrintFrame";
 import { BarList, CHART_COLORS, ColumnChart, DonutChart, RateRing, TrendChart } from "../../components/charts";
 import {
   AdminButton,
@@ -27,6 +28,7 @@ import {
   AdminPageHeader,
   AdminTabs,
   EmptyState,
+  StatusPill,
   Notice,
   SearchField,
   SelectField,
@@ -35,7 +37,7 @@ import {
   Toolbar,
 } from "../programme-admin/ui/AdminKit";
 import { DataTable, type ColumnDef } from "../programme-admin/ui/DataTable";
-import { getReportInsights, type CurrentUser, type ReportInsights } from "../../services/api";
+import { getReportInsights, getTrainingReport, type CurrentUser, type ReportInsights, type TrainingReport } from "../../services/api";
 import { ExportCenter } from "./ExportCenter";
 import "./reports.css";
 
@@ -112,8 +114,22 @@ export function ReportsDashboard({
     [data?.kpis.open_concerns],
   );
 
+  const printScope = [
+    tabs.find((item) => item.value === tab)?.label,
+    copy.scope,
+    data ? `${shortDate(data.filters.from)} – ${shortDate(data.filters.to)}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <AdminPage className="rp">
+      <PrintFrame title="Programme insights" scope={printScope} orientation="landscape" />
+      <header className="rp-print-cover" aria-hidden="true">
+        <p>Programme report</p>
+        <h1>Programme insights</h1>
+        <span>{printScope}</span>
+      </header>
       <AdminPageHeader
         eyebrow={copy.eyebrow}
         title={copy.title}
@@ -175,7 +191,7 @@ export function ReportsDashboard({
           {tab === "training" && <Training data={data} />}
           {tab === "feedback" && <Feedback data={data} />}
           {tab === "safeguarding" && <Safeguarding data={data} onOpen={onOpenSafeguarding} />}
-          {tab === "exports" && <ExportCenter user={user} cohorts={data.options.cohorts} facilities={data.options.facilities} onError={onError} />}
+          {tab === "exports" && <ExportCenter user={user} cohorts={data.options.cohorts} facilities={data.options.facilities} onError={onError} period={range} cohortId={cohortId} facilityId={facilityId} />}
         </div>
       ) : null}
     </AdminPage>
@@ -364,7 +380,72 @@ function Training({ data }: { data: ReportInsights }) {
           empty={<EmptyState icon={<GraduationCap />} title="No training data yet" text="Completion appears once mentors are assigned and modules are published." />}
         />
       </AdminCard>
+      <TrainingByMentor />
     </div>
+  );
+}
+
+const STATE_LABEL: Record<TrainingReport["mentors"][number]["state"], string> = {
+  complete: "Complete",
+  in_progress: "In progress",
+  not_started: "Not started",
+  needs_refresh: "Needs refresh",
+};
+const STATE_TONE = { complete: "success", in_progress: "info", not_started: "warning", needs_refresh: "warning" } as const;
+
+/** Who has finished the required modules, who has not started, and which questions people miss. */
+function TrainingByMentor() {
+  const report = useQuery({ queryKey: ["training-report"], queryFn: getTrainingReport });
+  if (report.isPending) return <Skeleton className="h-48" />;
+  if (report.isError) return <PortalErrorState onRetry={() => void report.refetch()} />;
+  const columns: ColumnDef<TrainingReport["mentors"][number]>[] = [
+    { accessorKey: "name", header: "Mentor", cell: ({ row }) => <strong>{row.original.name}</strong> },
+    {
+      id: "progress",
+      header: "Required modules",
+      accessorFn: (row) => `${row.required_completed} of ${row.required_total}`,
+    },
+    {
+      accessorKey: "state",
+      header: "Status",
+      cell: ({ row }) => <StatusPill tone={STATE_TONE[row.original.state]}>{STATE_LABEL[row.original.state]}</StatusPill>,
+      accessorFn: (row) => STATE_LABEL[row.state],
+    },
+    {
+      id: "last",
+      header: "Last activity",
+      accessorFn: (row) => (row.last_activity ? row.last_activity.slice(0, 10) : ""),
+      cell: ({ row }) => (row.original.last_activity ? shortDate(row.original.last_activity.slice(0, 10)) : "—"),
+    },
+  ];
+  return (
+    <>
+      <AdminCard title="Training by mentor" description="Follow up with mentors who have not started or whose module needs a refresh." flush>
+        <DataTable
+          data={report.data.mentors}
+          columns={columns}
+          caption="Required training by mentor"
+          csvName="mentormama-training-by-mentor"
+          empty={<EmptyState icon={<Users />} title="No mentors in scope yet" text="Mentors appear here once they are assigned to placements you can see." />}
+        />
+      </AdminCard>
+      <AdminCard title="Questions people find hard" description="Knowledge-check questions answered wrongly most often (at least three attempts). Consider improving the lesson behind them.">
+        {report.data.hard_questions.length === 0 ? (
+          <p className="rp-muted">No question has enough attempts yet.</p>
+        ) : (
+          <BarList
+            items={report.data.hard_questions.map((item) => ({
+              label: item.prompt,
+              value: item.wrong_rate,
+              hint: `${item.module} · ${item.attempts} attempts`,
+            }))}
+            max={100}
+            suffix="% wrong"
+            empty=""
+          />
+        )}
+      </AdminCard>
+    </>
   );
 }
 

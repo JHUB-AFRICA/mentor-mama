@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import {
   Activity,
   BarChart3,
+  BookOpen,
+  Library,
   Building2,
   ClipboardList,
   LayoutDashboard,
@@ -21,6 +23,8 @@ export type FacilityNav =
   | "wards"
   | "safeguarding"
   | "reports"
+  | "learning"
+  | "library"
   | "activity";
 
 interface FacilityWorkspaceFrameProps {
@@ -76,6 +80,16 @@ const navGroups: Array<{
         id: "reports",
         label: "Reports",
         icon: <BarChart3 size={17} aria-hidden="true" />,
+      },
+      {
+        id: "library",
+        label: "Library",
+        icon: <Library size={17} aria-hidden="true" />,
+      },
+      {
+        id: "learning",
+        label: "Learning",
+        icon: <BookOpen size={17} aria-hidden="true" />,
       },
       {
         id: "activity",

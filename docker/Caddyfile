@@ -32,6 +32,18 @@
 		}
 	}
 
+	# Resend delivery callbacks. Django-anymail verifies the Svix signature on every request.
+	handle /anymail/* {
+		reverse_proxy {
+			dynamic a api 8000 {
+				refresh 5s
+			}
+			lb_policy round_robin
+			fail_duration 10s
+			max_fails 2
+		}
+	}
+
 	handle /admin* {
 		reverse_proxy {
 			dynamic a api 8000 {

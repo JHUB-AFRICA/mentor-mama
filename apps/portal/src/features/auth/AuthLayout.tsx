@@ -37,6 +37,14 @@ export function AuthLayout({
   focus?: "heading" | "field";
 }) {
   const reduce = useReducedMotion();
+  // Browser tab names the step ("Sign in · MentorMAMA") from the screen's own heading.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const heading = document.querySelector(".auth-surface h1, .auth-surface h2")?.textContent?.trim();
+      document.title = heading ? `${heading} · MentorMAMA` : "MentorMAMA";
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [stepKey]);
   return (
     <main className="auth-shell min-h-dvh overflow-x-clip bg-[#F4F7F8] lg:grid lg:grid-cols-[minmax(380px,0.82fr)_minmax(0,1.18fr)]">
       <BrandPanel />

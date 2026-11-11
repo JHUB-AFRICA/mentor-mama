@@ -31,6 +31,7 @@ interface RoleWorkspaceFrameProps {
     | "students"
     | "log"
     | "training"
+    | "learning"
     | "library"
     | "concerns"
     | "more";
@@ -99,6 +100,7 @@ export function RoleWorkspaceFrame({
         },
         ...(user.role === "student"
           ? [
+              { id: "learning", label: "Learning", icon: <GraduationCap size={18} />, href: "/student?view=learning" },
               { id: "library", label: "Library", icon: <BookOpen size={18} />, href: "/student?view=library" },
               { id: "log", label: "Sessions", icon: <CalendarDays size={18} />, href: "/student?view=sessions" },
               { id: "concerns", label: "Concerns", icon: <ShieldAlert size={18} />, href: "/student?view=concerns" },

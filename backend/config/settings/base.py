@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -166,18 +167,34 @@ AI_MAX_OUTPUT_TOKENS = env.int("AI_MAX_OUTPUT_TOKENS", default=500)
 # Leave empty for reasoning models (gpt-5*, o-series) that reject temperature.
 _ai_temperature = env("AI_TEMPERATURE", default="0.2").strip()
 AI_TEMPERATURE = float(_ai_temperature) if _ai_temperature else None
-USE_MAILTRAP = env("USE_MAILTRAP", default=False)
-EMAIL_BACKEND = (
-    "anymail.backends.mailtrap.EmailBackend"
-    if USE_MAILTRAP
-    else env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
-)
+# Transactional email. Production sends through Resend (domain sinapstechnology.tech, Resend Forge).
+# EMAIL_PROVIDER: "resend" | "mailtrap" (QA sandbox) | "console" (print to the log; the safe default).
+# USE_MAILTRAP=true is still honoured so existing environments keep working.
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
+# Svix signing secret ("whsec_...") of the Resend webhook that posts to /anymail/resend/tracking/.
+RESEND_SIGNING_SECRET = env("RESEND_SIGNING_SECRET", default="")
+USE_MAILTRAP = env.bool("USE_MAILTRAP", default=False)
+EMAIL_PROVIDER = env("EMAIL_PROVIDER", default="mailtrap" if USE_MAILTRAP else "console").strip().lower()
+_EMAIL_BACKENDS = {
+    "resend": "anymail.backends.resend.EmailBackend",
+    "mailtrap": "anymail.backends.mailtrap.EmailBackend",
+    "console": "django.core.mail.backends.console.EmailBackend",
+}
+if EMAIL_PROVIDER not in _EMAIL_BACKENDS:
+    raise ImproperlyConfigured(f"EMAIL_PROVIDER must be one of {sorted(_EMAIL_BACKENDS)}, not {EMAIL_PROVIDER!r}.")
+if EMAIL_PROVIDER == "resend" and not RESEND_API_KEY:
+    raise ImproperlyConfigured("EMAIL_PROVIDER=resend needs RESEND_API_KEY.")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default=_EMAIL_BACKENDS[EMAIL_PROVIDER])
 ANYMAIL = {
+    "RESEND_API_KEY": RESEND_API_KEY,
+    **({"RESEND_SIGNING_SECRET": RESEND_SIGNING_SECRET} if RESEND_SIGNING_SECRET else {}),
     "MAILTRAP_API_TOKEN": MAILTRAP_API_TOKEN,
     # Setting this selects Sandbox; leaving it empty selects production API.
     "MAILTRAP_SANDBOX_ID": MAILTRAP_SANDBOX_ID or None,
 }
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="accounts@localhost")
+# One sender for every part of the product: portal sign-in codes, invitations, notifications and exports.
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="MentorMAMA <mentormama@sinapstechnology.tech>")
+SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 OTP_EMAIL_SENDER = env("OTP_EMAIL_SENDER", default=DEFAULT_FROM_EMAIL)
 OTP_EMAIL_TOKEN_VALIDITY = env.int("OTP_EMAIL_TOKEN_VALIDITY", default=300)
 OTP_EMAIL_COOLDOWN_DURATION = env.int("OTP_EMAIL_COOLDOWN_DURATION", default=60)
@@ -221,6 +238,10 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 MFA_TOTP_ISSUER = env("MFA_TOTP_ISSUER", default="MentorMAMA")
+# Accept the previous and next 30-second code as well as the current one (RFC 6238 §5.2). With the allauth
+# default of 0, a code is valid only while it is the exact current one, so a few seconds of phone/server
+# clock difference or a slow typist was enough to be rejected.
+MFA_TOTP_TOLERANCE = env.int("MFA_TOTP_TOLERANCE", default=1)
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

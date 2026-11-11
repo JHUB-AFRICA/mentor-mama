@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { csvBlob, datedFilename, saveBlob } from "../../lib/download";
 import {
   AlertTriangle,
   Archive,
@@ -1523,13 +1524,7 @@ function DirectoryImportModal({
       facilities: "name,county,level,maternity_unit_name,contact_person,contact_email,contact_phone",
       wards: "name,shift_pattern,max_students",
     };
-    const blob = new Blob([`${headers[kind]}\r\n`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `mentormama-${kind}-template.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    saveBlob(csvBlob([headers[kind].split(",")]), datedFilename(`${kind}-template`, "csv"));
   }
 
   async function createPreview() {

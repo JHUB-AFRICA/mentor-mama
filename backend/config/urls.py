@@ -1,6 +1,7 @@
 """Root URLconf for MentorMAMA backend."""
 
 from django.contrib import admin
+from apps.notifications.webhooks import ResendTrackingWebhook
 from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
@@ -44,6 +45,8 @@ urlpatterns = [
     path("health/ready", ready_health, name="health-ready"),
     path("admin/", admin.site.urls),
     path("api/v1/", include(api_v1)),
+    # Resend delivery callbacks (signature-checked by django-anymail): /anymail/resend/tracking/
+    path("anymail/resend/tracking/", ResendTrackingWebhook.as_view(), name="resend-tracking-webhook"),
     path("api/v1/ai/status", AIStatusView.as_view(), name="ai-status"),
     path("api/v1/commands/<uuid:command_id>", CommandDetailView.as_view(), name="command-detail"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

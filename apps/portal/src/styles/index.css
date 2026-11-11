@@ -855,7 +855,7 @@
   .content-authoring-field--wide {
     grid-column: 1 / -1;
   }
-  .content-authoring-field input,
+  .content-authoring-field input:not([type="checkbox"]):not([type="radio"]),
   .content-authoring-field textarea,
   .content-authoring-field select,
   .content-authoring-lesson-fields input,
@@ -894,9 +894,9 @@
   }
   .content-authoring-editor .content-editor-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.15rem;
-    overflow-x: auto;
     border-bottom: 1px solid #dbe4ed;
     background: #fbfcfd;
     padding: 0.45rem 0.65rem;
@@ -1034,7 +1034,7 @@
     display: grid;
     gap: 1rem;
   }
-  .content-authoring-side-card label {
+  .content-authoring-side-card label:not(.content-authoring-field) {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 0.7rem;
@@ -1044,22 +1044,22 @@
       0.76rem/1.4 "Inter",
       sans-serif;
   }
-  .content-authoring-side-card label > input[type="number"] {
+  .content-authoring-side-card label:not(.content-authoring-field) > input[type="number"] {
     grid-column: 2;
     width: 100%;
     border: 1px solid #dbe4ed;
     border-radius: 0.6rem;
     padding: 0.55rem 0.7rem;
   }
-  .content-authoring-side-card label > span {
+  .content-authoring-side-card label:not(.content-authoring-field) > span {
     display: grid;
     gap: 0.25rem;
   }
-  .content-authoring-side-card label strong {
+  .content-authoring-side-card label:not(.content-authoring-field) strong {
     color: #10223b;
     font-weight: 700;
   }
-  .content-authoring-side-card label small,
+  .content-authoring-side-card label:not(.content-authoring-field) small,
   .content-authoring-side-card--quiet p {
     color: #607392;
     font-size: 0.7rem;
@@ -1970,121 +1970,3 @@ input[type="file"] + * {
   }
 }
 
-.induction-print-sheet {
-  display: none;
-}
-
-@media print {
-  @page {
-    margin: 16mm;
-  }
-
-  body {
-    background: #fff;
-  }
-
-  body * {
-    visibility: hidden;
-  }
-
-  .induction-print-sheet,
-  .induction-print-sheet * {
-    visibility: visible;
-  }
-
-  .induction-print-sheet {
-    display: block;
-    color: #0b1b3a;
-    font-family: Inter, Arial, sans-serif;
-  }
-
-  .induction-print-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    border-bottom: 3px solid #168f91;
-    padding-bottom: 18px;
-  }
-
-  .induction-print-header h1 {
-    margin: 6px 0 4px;
-    font-family: Georgia, serif;
-    font-size: 30px;
-  }
-
-  .induction-print-header p {
-    margin: 0;
-    color: #52657d;
-    font-size: 12px;
-  }
-
-  .induction-print-kicker {
-    color: #168f91 !important;
-    font-size: 11px !important;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .induction-print-meta {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px 28px;
-    margin: 24px 0 28px;
-    border-bottom: 1px solid #d7e1e5;
-    padding-bottom: 22px;
-  }
-
-  .induction-print-meta div,
-  .induction-print-items li div {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  .induction-print-meta strong {
-    color: #52657d;
-    font-size: 10px;
-    text-transform: uppercase;
-  }
-
-  .induction-print-meta span,
-  .induction-print-items span {
-    font-size: 12px;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  .induction-print-sheet h2 {
-    margin: 0 0 12px;
-    font-family: Georgia, serif;
-    font-size: 19px;
-  }
-
-  .induction-print-items {
-    margin: 0;
-    padding-left: 22px;
-  }
-
-  .induction-print-items li {
-    break-inside: avoid;
-    border-bottom: 1px solid #e5ecef;
-    padding: 12px 0;
-  }
-
-  .induction-print-items p {
-    margin: 7px 0 0;
-    color: #52657d;
-    font-size: 11px;
-  }
-
-  .induction-print-footer {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 32px;
-    border-top: 2px solid #168f91;
-    padding-top: 12px;
-    color: #52657d;
-    font-size: 11px;
-  }
-}

@@ -47,6 +47,8 @@ class Notification(BaseModel):
     delivered_at = models.DateTimeField(null=True, blank=True)
     provider_event_id = models.CharField(max_length=180, blank=True, default="")
     provider_status = models.CharField(max_length=32, blank=True, default="")
+    #: The email provider's id for the message (Resend `email_id`); how delivery callbacks find this row.
+    provider_message_id = models.CharField(max_length=120, blank=True, default="", db_index=True)
 
     class Meta:
         db_table = "notifications_notification"

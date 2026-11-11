@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -147,3 +149,32 @@ def mark_read(*, user, notification_id):
 @transaction.atomic
 def mark_all_read(*, user):
     return Notification.objects.filter(user_id=user.id, read_at=None).update(read_at=timezone.now())
+
+
+#: Resend/Anymail event types that change what we show. Opens and clicks are ignored (no tracking).
+_ANYMAIL_STATUS = {
+    "queued": "accepted", "sent": "accepted", "delivered": "delivered",
+    "bounced": "bounced", "rejected": "failed", "failed": "failed", "complained": "bounced",
+}
+
+
+def record_anymail_event(*, event_type: str, message_id: str, metadata: dict, event_id: str):
+    """Apply a verified delivery callback. Matches by our notification id when present, else by the provider's id."""
+    status = _ANYMAIL_STATUS.get(event_type)
+    if status is None:
+        return None
+    notification_id = (metadata or {}).get("notification_id")
+    row = None
+    if notification_id:
+        try:
+            row = Notification.objects.filter(id=uuid.UUID(str(notification_id))).first()
+        except ValueError:
+            row = None
+    if row is None and message_id:
+        row = Notification.objects.filter(provider_message_id=message_id).first()
+    if row is None:
+        return None
+    if status == "accepted" and row.provider_status in {"delivered", "bounced", "failed"}:
+        return row  # callbacks can arrive out of order; never walk a final state back
+    with transaction.atomic():
+        return record_provider_event(notification_id=row.id, status=status, provider_event_id=event_id or message_id or "")

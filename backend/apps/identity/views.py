@@ -378,7 +378,8 @@ class MFASetupView(APIView):
     throttle_scope = "auth_mfa_setup"
 
     def post(self, request):
-        return Response({"data": authentication.begin_mfa_setup(request=request, user=request.user)})
+        return Response({"data": authentication.begin_mfa_setup(
+            request=request, user=request.user, regenerate=bool(request.data.get("regenerate")))})
 
 
 class MFAVerifySetupView(APIView):

@@ -12,6 +12,7 @@ import { StudentConcernDetail } from "./StudentConcernDetail";
 import { getStudentProfile, type StudentProfile } from "../../services/api";
 import { Button, Skeleton } from "@mentormama/ui";
 import { ContentLibrary } from "../content/ContentLibrary";
+import { TrainingWorkspace } from "../training/TrainingWorkspace";
 import { MyActivity } from "../activity/MyActivity";
 import { ContentDetailScreen } from "../content/ContentDetailScreen";
 
@@ -266,6 +267,14 @@ export function StudentWorkspace(props: Props) {
       <StudentWorkspaceFrame user={props.user} title="My concerns" active="concerns">
         <div className="student-page-container">
           <StudentConcerns placements={props.placements} onError={props.onError} initialPlacementId={params.get("raise")} />
+        </div>
+      </StudentWorkspaceFrame>
+    );
+  if (params.get("view") === "learning")
+    return (
+      <StudentWorkspaceFrame user={props.user} title="Learning" active="learning">
+        <div className="student-page-container">
+          <TrainingWorkspace onError={props.onError} role="student" />
         </div>
       </StudentWorkspaceFrame>
     );

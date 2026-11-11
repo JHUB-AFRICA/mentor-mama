@@ -15,6 +15,9 @@ import { CoordinatorPlacementDetail } from "./CoordinatorPlacementDetail";
 import { CoordinatorPlacementRegister } from "./CoordinatorPlacementRegister";
 import { CoordinatorStudentInvites } from "./CoordinatorStudentInvites";
 import { CoordinatorStudents } from "./CoordinatorStudents";
+import { TrainingWorkspace } from "../training/TrainingWorkspace";
+import { ContentLibrary } from "../content/ContentLibrary";
+import { ContentDetailScreen } from "../content/ContentDetailScreen";
 
 type AccountTab = "security" | "profile" | "notifications" | "recovery";
 
@@ -137,6 +140,18 @@ export function CoordinatorWorkspace({
         nav: "reports", title: "Reports",
         render: () => <ReportsDashboard user={user} onError={onError} onOpenSafeguarding={() => go("/coordinator/safeguarding")} />,
       };
+    const libraryDetail = path.match(/^\/coordinator\/library\/(guide|module|document|external)\/([^/]+)$/);
+    if (libraryDetail)
+      return {
+        nav: "library", title: "Library", crumbs: ["Library"],
+        render: () => (
+          <ContentDetailScreen kind={libraryDetail[1] as "guide" | "module" | "document" | "external"} id={decodeURIComponent(libraryDetail[2])} user={user} onBack={() => go("/coordinator/library")} onError={onError} />
+        ),
+      };
+    if (path === "/coordinator/library")
+      return { nav: "library", title: "Library", render: () => <ContentLibrary user={user} onError={onError} /> };
+    if (path === "/coordinator/learning")
+      return { nav: "learning", title: "Learning", render: () => <TrainingWorkspace onError={onError} role="staff" /> };
     if (path === "/coordinator/activity")
       return { nav: "activity", title: "Activity", render: () => <CoordinatorActivity user={user} /> };
     if (path === "/coordinator/account")

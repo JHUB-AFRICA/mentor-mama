@@ -3,7 +3,7 @@
  * pagination and empty state. Built on TanStack Table (headless) and styled by
  * the Programme Admin kit (`.pa-table*`).
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -15,13 +15,9 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown, Download } from "lucide-react";
 import { AdminButton } from "./AdminKit";
+import { csvBlob, datedFilename, saveBlob } from "../../../lib/download";
 
 export type { ColumnDef };
-
-function csvEscape(value: unknown) {
-  const text = value == null ? "" : String(value);
-  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
 
 export function DataTable<T>({
   data,
@@ -62,18 +58,12 @@ export function DataTable<T>({
   const from = total === 0 ? 0 : pageIndex * pageSize + 1;
   const to = Math.min(total, (pageIndex + 1) * pageSize);
 
-  const exportable = useMemo(() => columns.filter((column) => "accessorKey" in column || "accessorFn" in column), [columns]);
   function downloadCsv() {
-    const header = exportable.map((column) => csvEscape(typeof column.header === "string" ? column.header : (column as { accessorKey?: string }).accessorKey));
-    const body = table.getSortedRowModel().rows.map((row) =>
-      exportable.map((column) => csvEscape(row.getValue((column as { accessorKey?: string; id?: string }).accessorKey ?? (column.id as string)))).join(","),
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${csvName ?? "mentormama-table"}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const exportable = table.getVisibleLeafColumns().filter((column) => column.accessorFn !== undefined);
+    const header = exportable.map((column) => (typeof column.columnDef.header === "string" ? column.columnDef.header : column.id));
+    const body = table.getSortedRowModel().rows.map((row) => exportable.map((column) => row.getValue(column.id)));
+    const base = (csvName ?? "table").replace(/^mentormama-/, "");
+    saveBlob(csvBlob([header, ...body]), datedFilename(base, "csv"));
   }
 
   if (data.length === 0 && empty) return <>{empty}</>;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { saveBlob } from "../../lib/download";
 import type { FormEvent } from "react";
 import { ArrowRight, Check, Copy, Download, KeyRound, Mail, ShieldCheck, Smartphone, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -78,7 +79,7 @@ export function MfaFlow({
   async function retrySetup() {
     setSetupLoading(true);
     setError(null);
-    try { setSetup(await beginMfaSetup()); }
+    try { setSetup(await beginMfaSetup(true)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Authenticator setup could not start."); }
     finally { setSetupLoading(false); }
   }
@@ -352,13 +353,7 @@ function RecoveryCodes({ codes, onContinue, onError }: { codes: string[]; onCont
   }
   function downloadCodes() {
     const text = `MentorMAMA recovery codes\nEach code works once. Keep this file somewhere private.\n\n${codes.join("\n")}\n`;
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "mentormama-recovery-codes.txt";
-    link.click();
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([text], { type: "text/plain" }), "mentormama-recovery-codes.txt");
   }
   async function continueToWorkspace() {
     setBusy(true);

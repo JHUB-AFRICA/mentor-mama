@@ -121,9 +121,14 @@ export interface ExportRecord {
   format: string;
   status: "queued" | "running" | "completed" | "failed";
   row_count: number;
-  filters: Record<string, string>;
+  /** Why a failed export failed, e.g. "pdf_too_large". */
+  error_code: string | null;
+  /** Echo of the request filters. */
+  filters: { cohort_id?: string; facility_id?: string; from?: string; to?: string };
   created_at: string;
   completed_at: string | null;
+  /** ISO time after which the download link stops working. */
+  expires_at: string | null;
   download_url: string | null;
 }
 export type ExportFormat = "csv" | "xlsx" | "json" | "pdf";
@@ -470,6 +475,14 @@ export interface TrainingModule {
   best_score?: number | null;
   last_score?: number | null;
   last_passed?: boolean | null;
+  visited_lesson_ids?: string[];
+  checks?: TrainingModule["quiz"];
+  certificate_enabled?: boolean;
+  version?: number | null;
+  version_count?: number;
+  has_unpublished_changes?: boolean;
+  completed_version?: number | null;
+  needs_refresh?: boolean;
   total_minutes?: number;
   has_quiz?: boolean;
   learners_completed?: number;
@@ -481,13 +494,23 @@ export interface TrainingModule {
     body: string;
     lesson_type: LessonType;
     duration_minutes: number;
+    video_url?: string;
+    video?: { provider: "youtube" | "vimeo"; id: string; embed_url: string } | null;
+    section?: string;
   }>;
   quiz: Array<{
     id: string;
     position: number;
     prompt: string;
     options: string[];
+    kind?: "single" | "multi" | "true_false";
+    lesson_id?: string;
+    scenario?: string;
+    explanation?: string;
+    choices: Array<{ id: string; text: string; feedback?: string }>;
     correct_option?: string;
+    correct_option_id?: string;
+    correct_option_ids?: string[];
   }>;
 }
 
@@ -514,6 +537,8 @@ export interface ContentItem {
   cover_image: string;
   content_type: string;
   visible_roles: string[];
+  tags?: string[];
+  facility_ids?: string[];
   published: boolean;
   published_at: string | null;
   category?: string;
@@ -548,6 +573,7 @@ export interface LibraryEntry {
   summary: string;
   audience: string[];
   category: string;
+  tags?: string[];
   status: "draft" | "published" | "archived";
   required: boolean;
   updated_at: string;
@@ -562,6 +588,7 @@ export interface LibraryResponse {
   data: LibraryEntry[];
   meta: {
     total: number;
+    tags?: string[];
     counts: Record<
       "all" | "guide" | "module" | "document" | "external",
       number
@@ -604,13 +631,25 @@ export async function getTrainingProgress(): Promise<TrainingProgress> {
   return response.data;
 }
 
+export type AttemptResult = {
+  id: string;
+  score: number;
+  passed: boolean;
+  pass_mark: number;
+  results?: Array<{
+    question_id: string;
+    correct: boolean;
+    explanation: string;
+    feedback: string[];
+    correct_option_ids?: string[];
+  }>;
+};
+
 export async function submitTrainingAttempt(
   moduleId: string,
-  answers: Record<string, string>,
+  answers: Record<string, string | string[]>,
 ) {
-  const response = await request<{
-    data: { id: string; score: number; passed: boolean; pass_mark: number };
-  }>(`/api/v1/training/modules/${moduleId}/attempts`, {
+  const response = await request<{ data: AttemptResult }>(`/api/v1/training/modules/${moduleId}/attempts`, {
     method: "POST",
     headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ answers }),
@@ -696,11 +735,23 @@ export async function getLibrary(
   return request<LibraryResponse>(`/api/v1/library${query}`);
 }
 
+export type QuizPayloadQuestion = {
+  id?: string;
+  lesson_id?: string;
+  kind: "single" | "multi" | "true_false";
+  scenario: string;
+  prompt: string;
+  explanation: string;
+  options: Array<{ id?: string; text: string; feedback: string }>;
+  correct_options: string[];
+};
+
 export async function createTrainingModule(input: {
   title: string;
   description: string;
   pass_mark: number;
   is_required: boolean;
+  certificate_enabled?: boolean;
   visible_roles: string[];
   category: string;
   lessons: Array<{
@@ -708,8 +759,11 @@ export async function createTrainingModule(input: {
     body: string;
     lesson_type: LessonType;
     duration_minutes: number;
+    video_url?: string;
+    id?: string;
+    section?: string;
   }>;
-  quiz: Array<{ prompt: string; options: string[]; correct_option: string }>;
+  quiz: QuizPayloadQuestion[];
   cover_image?: File | null;
   keep_published?: boolean;
 }) {
@@ -751,10 +805,10 @@ export async function reviseTrainingModule(
   return response.data;
 }
 
-export async function publishTrainingModule(id: string) {
+export async function publishTrainingModule(id: string, change?: { kind: "minor" | "major"; note: string }) {
   const response = await request<{ data: TrainingModule }>(
     `/api/v1/training/modules/${id}/publish`,
-    { method: "POST", body: "{}" },
+    { method: "POST", body: JSON.stringify(change ? { change_kind: change.kind, change_note: change.note } : { change_kind: "major", change_note: "Republished" }) },
   );
   return response.data;
 }
@@ -789,6 +843,10 @@ export async function completeTrainingModule(id: string) {
     { method: "POST", body: "{}" },
   );
   return response.data;
+}
+
+export async function recordLessonVisit(moduleId: string, lessonId: string) {
+  await request<unknown>(`/api/v1/training/modules/${moduleId}/lessons/${lessonId}/visit`, { method: "POST", body: "{}" });
 }
 
 export async function unpublishContentItem(id: string) {
@@ -1262,6 +1320,20 @@ export async function getExports(): Promise<ExportRecord[]> {
   const response = await request<{ data: ExportRecord[] }>("/api/v1/exports");
   return response.data;
 }
+/** Build an ApiError from a failed file download, preferring the server's JSON message. */
+async function fileErrorFrom(response: Response): Promise<ApiError> {
+  let message = safeStatusMessage(response.status);
+  let code: string | null = null;
+  try {
+    const body = (await response.json()) as { error?: { message?: string; code?: string } };
+    if (response.status < 500 && typeof body.error?.message === "string") message = body.error.message;
+    if (typeof body.error?.code === "string") code = body.error.code;
+  } catch {
+    // Keep the safe fallback when the server did not return JSON.
+  }
+  return new ApiError(message, response.status, { code });
+}
+
 export async function downloadExport(record: ExportRecord): Promise<Blob> {
   if (!record.download_url) {
     throw new ApiError("This export is no longer available to download.", 410);
@@ -1278,33 +1350,21 @@ export async function downloadExport(record: ExportRecord): Promise<Blob> {
     throw new ApiError("We couldn’t reach MentorMAMA. Check your connection and try again.", 0, { retryable: true });
   }
   if (!response.ok) {
-    let serverMessage = safeStatusMessage(response.status);
-    try {
-      const body = (await response.json()) as {
-        error?: { message?: string };
-      };
-      if (response.status < 500 && typeof body.error?.message === "string") {
-        serverMessage = body.error.message;
-      }
-    } catch {
-      // Keep the safe fallback when the server did not return JSON.
+    if (response.status === 410 || response.status === 404) {
+      throw new ApiError("This export has expired. Request it again.", response.status, { code: "export_expired" });
     }
-    throw new ApiError(
-      response.status === 403
-        ? "Your export session has expired. Refresh the export list and try again."
-        : serverMessage,
-      response.status,
-    );
+    throw await fileErrorFrom(response);
   }
   return response.blob();
 }
 export async function requestExport(
-  exportType: "placements" | "cohort",
+  exportType: "placements" | "cohort" | "training",
   filters: Record<string, string> = {},
   format: ExportFormat = "csv",
 ): Promise<ExportRecord> {
   const response = await request<{ data: ExportRecord }>("/api/v1/exports", {
     method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ export_type: exportType, format, ...filters }),
   });
   return response.data;
@@ -2002,13 +2062,18 @@ export async function changePassword(
   });
 }
 
-export async function beginMfaSetup(): Promise<{
+/**
+ * Start (or resume) authenticator setup. The server keeps one pending secret per person, so calling this twice
+ * returns the same secret and the QR code on screen always matches what the server checks. Pass `regenerate`
+ * only when the person explicitly asks for a fresh code.
+ */
+export async function beginMfaSetup(regenerate = false): Promise<{
   secret: string;
   otpauth_uri: string;
 }> {
   const response = await request<{
     data: { secret: string; otpauth_uri: string };
-  }>("/api/v1/auth/mfa/setup", { method: "POST", body: "{}" });
+  }>("/api/v1/auth/mfa/setup", { method: "POST", body: JSON.stringify(regenerate ? { regenerate: true } : {}) });
   return response.data;
 }
 
@@ -2915,16 +2980,17 @@ export async function getReportInsights(params: { from: string; to: string; coho
 }
 
 /** Download the allocation list (where each student is placed) as CSV, XLSX or PDF. */
-export async function downloadAllocationList(file: "csv" | "xlsx" | "pdf", cohortId?: string): Promise<Blob> {
+export async function downloadAllocationList(file: "csv" | "xlsx" | "pdf", cohortId?: string, signal?: AbortSignal): Promise<Blob> {
   const query = new URLSearchParams({ file });
   if (cohortId) query.set("cohort_id", cohortId);
   let response: Response;
   try {
-    response = await fetch(`/api/v1/placements/allocation-list?${query.toString()}`, { credentials: "include" });
-  } catch {
+    response = await fetch(`/api/v1/placements/allocation-list?${query.toString()}`, { credentials: "include", signal });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
     throw new ApiError("We couldn’t reach MentorMAMA. Check your connection and try again.", 0, { retryable: true });
   }
-  if (!response.ok) throw new ApiError(safeStatusMessage(response.status), response.status);
+  if (!response.ok) throw await fileErrorFrom(response);
   return response.blob();
 }
 
@@ -3033,4 +3099,115 @@ export async function withdrawFacilityRequests(placementIds: string[]): Promise<
     body: JSON.stringify({ placement_ids: placementIds }),
   });
   return response.data;
+}
+
+export type ModuleVersionRow = {
+  number: number;
+  change_kind: "minor" | "major";
+  change_note: string;
+  published_at: string;
+  published_by: string;
+  lessons: number;
+  questions: number;
+  learners_completed: number;
+};
+
+export async function getModuleVersions(id: string): Promise<ModuleVersionRow[]> {
+  const response = await request<{ data: ModuleVersionRow[] }>(`/api/v1/training/modules/${id}/versions`);
+  return response.data;
+}
+
+export async function restoreModuleVersion(id: string, number: number) {
+  const response = await request<{ data: TrainingModule }>(`/api/v1/training/modules/${id}/versions/${number}/restore`, { method: "POST", body: "{}" });
+  return response.data;
+}
+
+export async function uploadLessonImage(file: File, alt: string) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("alt", alt);
+  const response = await request<{ data: { id: string; url: string; alt: string; width: number; height: number } }>(
+    "/api/v1/training/media",
+    { method: "POST", body },
+  );
+  return response.data;
+}
+
+export async function downloadCertificate(moduleId: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/training/modules/${moduleId}/certificate`, { credentials: "include" });
+  } catch {
+    throw new ApiError("We couldn’t reach MentorMAMA. Check your connection and try again.", 0, { retryable: true });
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 404 ? "Complete this module to receive a certificate." : "We could not prepare your certificate. Please try again.",
+      response.status,
+    );
+  }
+  return response.blob();
+}
+
+export type TrainingReport = {
+  summary: { mentors: number; required_modules: number; mentors_complete: number; rate: number | null };
+  mentors: Array<{
+    id: string;
+    name: string;
+    email: string;
+    required_completed: number;
+    required_total: number;
+    state: "complete" | "in_progress" | "not_started" | "needs_refresh";
+    last_activity: string | null;
+  }>;
+  modules: Array<{
+    id: string;
+    title: string;
+    required: boolean;
+    completed: number;
+    in_progress: number;
+    not_started: number;
+    average_score: number | null;
+  }>;
+  hard_questions: Array<{ module: string; prompt: string; attempts: number; wrong_rate: number }>;
+};
+
+export async function getTrainingReport(): Promise<TrainingReport> {
+  const response = await request<{ data: TrainingReport }>("/api/v1/reports/training");
+  return response.data;
+}
+
+export type CheckResult = NonNullable<AttemptResult["results"]>;
+
+export async function checkLesson(moduleId: string, lessonId: string, answers: Record<string, string | string[]>) {
+  const response = await request<{ data: { results: CheckResult } }>(
+    `/api/v1/training/modules/${moduleId}/lessons/${lessonId}/check`,
+    { method: "POST", body: JSON.stringify({ answers }) },
+  );
+  return response.data.results;
+}
+
+export type BankQuestion = {
+  id: string;
+  kind: "single" | "multi" | "true_false";
+  scenario: string;
+  prompt: string;
+  explanation: string;
+  options: Array<{ text: string; feedback: string }>;
+  correct_options: string[];
+  tags: string[];
+};
+
+export async function getQuestionBank(search = ""): Promise<BankQuestion[]> {
+  const response = await request<{ data: BankQuestion[] }>(`/api/v1/training/question-bank?search=${encodeURIComponent(search)}`);
+  return response.data;
+}
+
+export async function saveToQuestionBank(question: Omit<QuizPayloadQuestion, "id" | "lesson_id"> & { tags?: string[] }): Promise<BankQuestion> {
+  const response = await request<{ data: BankQuestion }>("/api/v1/training/question-bank", { method: "POST", body: JSON.stringify(question) });
+  return response.data;
+}
+
+export async function archiveBankQuestion(id: string): Promise<void> {
+  await request<void>(`/api/v1/training/question-bank/${id}`, { method: "DELETE" });
 }

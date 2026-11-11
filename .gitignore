@@ -50,3 +50,5 @@ node_modules
 /mentormama-placements-*.pdf
 /mentormama_test_students.csv
 /mentormama-quiz-template.csv
+
+backend/private_content/

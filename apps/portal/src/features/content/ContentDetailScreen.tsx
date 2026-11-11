@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -30,6 +30,8 @@ import {
   ApiError,
   getContentItem,
   getContentRevisions,
+  getModuleVersions,
+  restoreModuleVersion,
   getTrainingModule,
   type ContentItem,
   type CurrentUser,
@@ -37,6 +39,7 @@ import {
 } from "../../services/api";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { GuideReader, PlainText, isGuideBodyEmpty } from "./ContentReader";
+import { VideoPlayer, parseVideoUrl } from "../training/VideoPlayer";
 import {
   actionMeta,
   actionsFor,
@@ -82,6 +85,21 @@ export function ContentDetailScreen({
     queryKey: ["content-revisions", id],
     queryFn: () => getContentRevisions(id),
     enabled: isAdmin && !isModule,
+  });
+  const versions = useQuery({
+    queryKey: ["module-versions", id],
+    queryFn: () => getModuleVersions(id),
+    enabled: isAdmin && isModule,
+  });
+  const queryClient = useQueryClient();
+  const restore = useMutation({
+    mutationFn: (number: number) => restoreModuleVersion(id, number),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["content-detail"] });
+      void queryClient.invalidateQueries({ queryKey: ["module-versions", id] });
+      navigate(`/admin/content/new/module?edit=${id}`);
+    },
+    onError: (cause) => onError(cause instanceof ApiError ? cause.message : "We could not restore that version."),
   });
   const actions = useContentActions({
     onError,
@@ -141,8 +159,8 @@ export function ContentDetailScreen({
     }));
 
   const edit = () => navigate(`/admin/content/new/${kind}?edit=${id}`);
-  const trainingHref = `/mentor?view=training&module=${id}`;
-  const canTrain = user.role === "mentor" && module?.status === "published";
+  const trainingHref = learningHref(user.role, id);
+  const canTrain = !isAdmin && Boolean(trainingHref) && module?.status === "published";
   const trainingLabel = module?.completed ? "Review training" : (module?.attempt_count ?? 0) > 0 ? "Continue training" : "Start training";
 
   const detailItems = [
@@ -178,6 +196,9 @@ export function ContentDetailScreen({
               {kindLabel(kind)}
             </span>
             <span className="cd-chip">{categoryLabel(subject.category)}</span>
+            {(item?.tags ?? []).map((tag) => (
+              <span key={tag} className="cd-chip">#{tag}</span>
+            ))}
             {isAdmin && <StatusPill tone={statusTone(status)}>{statusLabel(status)}</StatusPill>}
             {module?.is_required && <span className="cd-chip cd-chip--amber">Required</span>}
             {module?.completed && (
@@ -220,7 +241,7 @@ export function ContentDetailScreen({
             {!isModule && item && item.resource_url && kind !== "guide" && (
               <a className="pa-btn pa-btn--primary" href={item.resource_url} target="_blank" rel="noopener noreferrer">
                 {kind === "document" ? <Download /> : <ExternalLink />}
-                {kind === "document" ? "Open document" : "Open resource"}
+                {kind === "document" ? "Download document" : "Open resource"}
               </a>
             )}
             {isAdmin && (
@@ -273,7 +294,39 @@ export function ContentDetailScreen({
             <DetailList items={detailItems} />
           </AdminCard>
           {module && isAdmin && <LearnerCard module={module} />}
-          {module && !isAdmin && user.role === "mentor" && <MyProgressCard module={module} />}
+          {module && !isAdmin && <MyProgressCard module={module} />}
+          {isAdmin && module && (
+            <AdminCard title="Version history" description="Published versions, newest first. Restoring copies a version back into the editor; it is not published until you publish.">
+              {module.has_unpublished_changes && <p className="cd-empty">There are unpublished edits. Open the editor and choose Publish to release them.</p>}
+              {versions.isPending ? (
+                <Skeleton className="h-16" />
+              ) : versions.isError ? (
+                <p className="cd-empty">History could not be loaded.</p>
+              ) : versions.data.length === 0 ? (
+                <p className="cd-empty">Not published yet.</p>
+              ) : (
+                <ul className="cd-list">
+                  {versions.data.map((row, index) => (
+                    <li key={row.number}>
+                      <span>
+                        v{row.number} · {row.change_kind === "major" ? "Major" : "Minor"} · {row.published_by || "Programme team"}
+                        {row.change_note ? ` — ${row.change_note}` : ""}
+                        <br />
+                        <small>{formatDate(row.published_at)} · {row.learners_completed} completed</small>
+                      </span>
+                      {index > 0 && (
+                        <AdminButton variant="secondary" size="sm" disabled={restore.isPending} onClick={() => {
+                            if (!module.has_unpublished_changes || window.confirm("Restoring replaces your unpublished edits in the editor. Continue?")) restore.mutate(row.number);
+                          }}>
+                          Restore
+                        </AdminButton>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </AdminCard>
+          )}
           {isAdmin && item && (
             <AdminCard title="Version history" description="Earlier saved versions, newest first.">
               {revisions.isPending ? (
@@ -352,8 +405,22 @@ function ItemBody({ item, kind, isAdmin }: { item: ContentItem; kind: ContentKin
   }
   const Icon = kind === "document" ? FileText : Link2;
   const name = item.document_name || (kind === "document" ? "Document" : item.resource_url);
+  const isPdf = kind === "document" && item.document_name?.toLowerCase().endsWith(".pdf");
+  const video = kind === "external" ? parseVideoUrl(item.resource_url) : null;
   return (
     <>
+      {video && (
+        <AdminCard title="Watch">
+          <VideoPlayer video={video} title={item.title} />
+          <p className="cd-empty">Plays inside MentorMAMA only when you tap play. Use the link below if the video does not load on your connection.</p>
+        </AdminCard>
+      )}
+      {isPdf && (
+        <AdminCard title="Preview">
+          <iframe className="cd-pdf" title={`${item.title} (PDF preview)`} src={`${item.resource_url}?inline=1`} />
+          <p className="cd-empty">If the preview does not open on your device, use Download document.</p>
+        </AdminCard>
+      )}
       <AdminCard title={kind === "document" ? "Document" : "External resource"}>
         {item.resource_url ? (
           <div className="cd-resource">
@@ -370,7 +437,7 @@ function ItemBody({ item, kind, isAdmin }: { item: ContentItem; kind: ContentKin
             </div>
             <a className="pa-btn pa-btn--secondary pa-btn--sm" href={item.resource_url} target="_blank" rel="noopener noreferrer">
               {kind === "document" ? <Download /> : <ExternalLink />}
-              {kind === "document" ? "Open document" : "Open link"}
+              {kind === "document" ? "Download document" : "Open link"}
             </a>
           </div>
         ) : (
@@ -407,7 +474,7 @@ function ModuleBody({ module, isAdmin }: { module: TrainingModule; isAdmin: bool
                     {lesson.lesson_type} · {lesson.duration_minutes} min
                   </p>
                   <h4>{lesson.title}</h4>
-                  <PlainText text={lesson.body} />
+                  <GuideReader body={lesson.body} />
                 </div>
               </article>
             ))}
@@ -423,12 +490,16 @@ function ModuleBody({ module, isAdmin }: { module: TrainingModule; isAdmin: bool
                   {index + 1}. {question.prompt}
                 </h4>
                 <ul>
-                  {question.options.map((option) => (
-                    <li key={option} className={option === question.correct_option ? "is-correct" : undefined}>
-                      <span>{option}</span>
-                      {option === question.correct_option && <small>Correct</small>}
-                    </li>
-                  ))}
+                  {question.choices.map((choice) => {
+                    const correct = (question.correct_option_ids ?? [question.correct_option_id]).includes(choice.id);
+                    return (
+                      <li key={choice.id} className={correct ? "is-correct" : undefined}>
+                        <span>{choice.text}</span>
+                        {correct && <small>Correct</small>}
+                        {choice.feedback && <small> · {choice.feedback}</small>}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -472,6 +543,23 @@ function LearnerCard({ module }: { module: TrainingModule }) {
       )}
     </AdminCard>
   );
+}
+
+/** Where each role runs a training module (the same player for everyone). */
+export function learningHref(role: string, moduleId?: string): string {
+  const suffix = moduleId ? `module=${moduleId}` : "";
+  switch (role) {
+    case "mentor":
+      return `/mentor?view=training${suffix ? `&${suffix}` : ""}`;
+    case "student":
+      return `/student?view=learning${suffix ? `&${suffix}` : ""}`;
+    case "coordinator":
+      return `/coordinator/learning${suffix ? `?${suffix}` : ""}`;
+    case "nurse_manager":
+      return `/facility/learning${suffix ? `?${suffix}` : ""}`;
+    default:
+      return "";
+  }
 }
 
 function MyProgressCard({ module }: { module: TrainingModule }) {

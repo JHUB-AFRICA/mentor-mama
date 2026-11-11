@@ -1,9 +1,9 @@
 import { Fragment, useMemo } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import StarterKit from "@tiptap/starter-kit";
 import type { JSONContent } from "@tiptap/react";
+import { Callout } from "./lessonExtensions";
 import "./content-detail.css";
 
 type DocNode = JSONContent;
@@ -33,9 +33,9 @@ export function isGuideBodyEmpty(body: string): boolean {
 }
 
 const readerExtensions = [
-  StarterKit,
-  Image.configure({ allowBase64: true }),
-  Link.configure({ openOnClick: true, HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" } }),
+  StarterKit.configure({ link: { openOnClick: true, HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" } } }),
+  Callout,
+  Image.configure({ allowBase64: true, HTMLAttributes: { loading: "lazy" } }),
 ];
 
 /** Read-only, formatted rendering of a guide body (headings, lists, links, images, quotes). */

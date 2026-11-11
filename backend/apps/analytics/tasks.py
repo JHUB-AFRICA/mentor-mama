@@ -39,12 +39,19 @@ def refresh_feedback_projection_task(self):
     logger.info("analytics_projection_refresh_succeeded", extra={"projection": "feedback"})
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+# Branded PDFs take ~25 ms a row; give exports their own budget instead of the 60 s global hard limit.
+# The soft limit raises inside the render so generate_export can mark the record failed (never stuck "running").
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=150, time_limit=180)
 def generate_export_task(self, record_id):
-    from apps.analytics.export_service import generate_export
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from apps.analytics.export_service import ExportTooLarge, generate_export
 
     try:
         generate_export(record_id)
+    except (ExportTooLarge, SoftTimeLimitExceeded):
+        logger.warning("analytics_export_not_retried", extra={"export_id": str(record_id)})
+        return
     except Exception as exc:
         logger.exception("analytics_export_generation_failed", extra={"export_id": str(record_id)})
         raise self.retry(exc=exc) from exc

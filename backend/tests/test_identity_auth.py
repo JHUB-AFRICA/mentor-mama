@@ -330,3 +330,34 @@ def test_admin_recovery_request_review_is_scoped_and_audited(coordinator, progra
     assert record.status == MFARecoveryRequest.Status.REVIEWED
     from apps.core.models import AuditEntry
     assert AuditEntry.objects.filter(entity_id=coordinator.id, action="account.mfa_recovery_request_reviewed", override_reason="Verified with the user").exists()
+
+
+def test_overlapping_authenticator_setup_calls_share_one_secret(coordinator):
+    """StrictMode and two tabs start setup twice; the QR on screen must match the secret the server checks."""
+    client = APIClient()
+    client.force_authenticate(coordinator)
+    first = client.post("/api/v1/auth/mfa/setup", {}, format="json").json()["data"]["secret"]
+    second = client.post("/api/v1/auth/mfa/setup", {}, format="json").json()["data"]["secret"]
+    assert first == second
+    fresh = client.post("/api/v1/auth/mfa/setup", {"regenerate": True}, format="json").json()["data"]["secret"]
+    assert fresh != first
+    # A code made from the secret that was shown last is accepted.
+    import time
+
+    from allauth.mfa import app_settings
+
+    counter = int(time.time()) // app_settings.TOTP_PERIOD
+    code = format_hotp_value(hotp_value(fresh, counter))
+    assert client.post("/api/v1/auth/mfa/setup/verify", {"code": code}, format="json").status_code == 200
+
+
+def test_authenticator_codes_tolerate_one_step_of_clock_difference(coordinator):
+    import time
+
+    from allauth.mfa import app_settings
+    from allauth.mfa.totp.internal.auth import generate_totp_secret, validate_totp_code
+
+    secret = generate_totp_secret()
+    counter = int(time.time()) // app_settings.TOTP_PERIOD
+    for offset, ok in ((-2, False), (-1, True), (0, True), (1, True), (2, False)):
+        assert validate_totp_code(secret, format_hotp_value(hotp_value(secret, counter + offset))) is ok

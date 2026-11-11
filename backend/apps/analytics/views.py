@@ -38,6 +38,17 @@ class ReportOverviewView(APIView):
         return Response({"data": selectors.report_overview(actor=request.user, period_start=start, period_end=end)})
 
 
+class TrainingReportView(APIView):
+    """Training completion by mentor, per-module progress and the hardest questions."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.analytics import training_report
+
+        return Response({"data": training_report.training_report(actor=request.user)})
+
+
 class ReportInsightsView(APIView):
     """Charts and indicators for the Reports screens (admin, coordinator, nurse manager)."""
 
@@ -114,9 +125,10 @@ class CohortProgressView(APIView):
 def _export_data(record, request=None):
     data = {
         "id": str(record.id), "export_type": record.export_type, "format": record.format,
-        "status": record.status, "row_count": record.row_count,
+        "status": record.status, "row_count": record.row_count, "error_code": record.error_code or None,
         "filters": record.filters, "created_at": record.created_at.isoformat(),
         "completed_at": record.completed_at.isoformat() if record.completed_at else None,
+        "expires_at": record.expires_at.isoformat() if record.expires_at else None,
     }
     if record.status == "completed" and record.expires_at and record.expires_at > timezone.now() and request:
         token = signing.TimestampSigner().sign(str(record.id))
@@ -133,18 +145,43 @@ class ExportListView(APIView):
         records = ExportRecord.objects.filter(actor_id=request.user.id).order_by("-created_at")[:50]
         return Response({"data": [_export_data(record, request) for record in records]})
 
+    MAX_ACTIVE = 3
+
     def post(self, request):
+        from apps.core.errors import TooManyExports
+        from apps.core.http import IdempotentCommand
+
         export_type = request.data.get("export_type", "placements")
         filters = {key: request.data[key] for key in ("cohort_id", "facility_id", "from", "to") if request.data.get(key)}
         export_format = request.data.get("format", "csv")
-        try:
+
+        def create():
+            if ExportRecord.objects.filter(actor_id=request.user.id, status__in=["queued", "running"]).count() >= self.MAX_ACTIVE:
+                raise TooManyExports()
             record = export_service.create_export(actor=request.user, export_type=export_type, filters=filters, format=export_format)
-        except UnauthorizedFacilityAccess:
+            audit.record(actor=request.user, action="export.requested", entity_table="analytics_export_record", entity_id=record.id,
+                         scope=record.scope, changes={"export_type": export_type, "format": export_format, "filters": record.filters})
+            from apps.analytics.tasks import generate_export_task
+
+            transaction.on_commit(lambda: generate_export_task.delay(str(record.id)))
+            return record
+
+        try:
+            if request.headers.get("Idempotency-Key"):
+                # A double click or a retried request returns the first export instead of starting another job.
+                with IdempotentCommand(request, "request_export") as command:
+                    if command.replayed:
+                        record = ExportRecord.objects.get(id=command.result_ref, actor_id=request.user.id)
+                    else:
+                        record = create()
+                        command.record(record.id)
+            else:
+                record = create()
+        except (UnauthorizedFacilityAccess, TooManyExports):
             raise
-        except (TypeError, ValueError):
-            return Response({"error": {"code": "invalid_export_request", "message": "Choose a supported export and scope."}}, status=status.HTTP_400_BAD_REQUEST)
-        from apps.analytics.tasks import generate_export_task
-        transaction.on_commit(lambda: generate_export_task.delay(str(record.id)))
+        except (TypeError, ValueError) as exc:
+            message = "Choose a valid period: a start and end date, with the start first." if "period" in str(exc) else "Choose a supported export and scope."
+            return Response({"error": {"code": "invalid_export_request", "message": message}}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"data": _export_data(record), "meta": {"job_id": str(record.id)}}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -162,11 +199,20 @@ class ExportDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, export_id):
+        from apps.core.errors import ExportExpired
+        from apps.identity import capabilities
+
+        # Access is re-checked now, not only when the file was generated: a suspended or demoted user cannot download.
+        capabilities.require(request.user, "export_reports")
         record = ExportRecord.objects.filter(id=export_id, actor_id=request.user.id, status="completed").first()
-        if record is None or not record.expires_at or record.expires_at <= timezone.now():
+        if record is None:
             raise UnauthorizedFacilityAccess()
+        if not record.expires_at or record.expires_at <= timezone.now():
+            raise ExportExpired()
         try:
             signed_id = signing.TimestampSigner().unsign(request.query_params.get("token", ""), max_age=900)
+        except signing.SignatureExpired:
+            raise ExportExpired()
         except signing.BadSignature:
             raise UnauthorizedFacilityAccess()
         if signed_id != str(record.id):
@@ -175,4 +221,8 @@ class ExportDownloadView(APIView):
             raise ExportFileUnavailable()
         audit.record(actor=request.user, action="export.download", entity_table="analytics_export_record", entity_id=record.id, scope=record.scope, changes={"row_count": record.row_count, "format": record.format})
         content_types = {"csv": "text/csv", "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "json": "application/json", "pdf": "application/pdf"}
-        return FileResponse(get_export_storage().open(record.storage_key), as_attachment=True, content_type=content_types.get(record.format, "application/octet-stream"), filename=f"mentormama-{record.export_type}-{record.id}.{record.format}")
+        response = FileResponse(get_export_storage().open(record.storage_key), as_attachment=True, content_type=content_types.get(record.format, "application/octet-stream"),
+                                filename=f"mentormama-{record.export_type}-{record.created_at:%Y-%m-%d}-{str(record.id)[:8]}.{record.format}")
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response

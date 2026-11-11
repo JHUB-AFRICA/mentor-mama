@@ -43,6 +43,11 @@ export function PortalHeader({
   const reduce = useReducedMotion() ?? false;
   const ai = useQuery({ queryKey: ["ai-status"], queryFn: getAIStatus, staleTime: 5 * 60_000, retry: false });
   const [open, setOpen] = useState(false);
+  // Browser tab: "Placement details · MentorMAMA". The page name comes first so it survives tab truncation.
+  const pageName = title ?? crumbs?.[crumbs.length - 1];
+  useEffect(() => {
+    document.title = pageName ? `${pageName} · MentorMAMA` : "MentorMAMA";
+  }, [pageName]);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 

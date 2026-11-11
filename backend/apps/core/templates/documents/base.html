@@ -1,0 +1,140 @@
+<!doctype html>
+{% comment %}
+  Shared frame for every MentorMAMA PDF. See docs/ux/document-design-system.md.
+  Child templates fill: eyebrow, description, meta, body. `page` is supplied by apps.core.documents.renderer.
+{% endcomment %}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ page.title }}</title>
+<meta name="author" content="MentorMAMA">
+<meta name="description" content="{{ page.subject }}">
+<meta name="generator" content="MentorMAMA">
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("fonts/Inter-Regular.ttf"); }
+  @font-face { font-family: "Inter"; font-weight: 500; src: url("fonts/Inter-Medium.ttf"); }
+  @font-face { font-family: "Inter"; font-weight: 600; src: url("fonts/Inter-SemiBold.ttf"); }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url("fonts/Inter-Bold.ttf"); }
+  @font-face { font-family: "Manrope"; font-weight: 600; src: url("fonts/Manrope-SemiBold.ttf"); }
+  @font-face { font-family: "Manrope"; font-weight: 700; src: url("fonts/Manrope-Bold.ttf"); }
+  @font-face { font-family: "Manrope"; font-weight: 800; src: url("fonts/Manrope-ExtraBold.ttf"); }
+
+  :root {
+    --navy: #0D1B33; --navy-soft: #22304A; --muted: #5E6C81; --teal: #1D8C8C; --teal-light: #EAF6F6;
+    --mist: #F4F7F8; --stone: #E4E8EE; --terracotta: #D97757; --terracotta-light: #FBEEE8; --success: #3E9A72;
+    --success-light: #E8F4EE;
+  }
+
+  @page {
+    size: A4 {{ page.orientation }};
+    margin: 26mm 14mm 17mm 14mm;
+    @top-left { content: element(doc-header); vertical-align: bottom; width: 100%; }
+    @bottom-left {
+      content: "Confidential · Programme metadata only. No narratives, concern text or clinical details. Handle under the MentorMAMA data policy.";
+      font: 500 7pt/1.3 "Inter"; color: var(--muted); vertical-align: top; padding-top: 4mm; width: 68%;
+    }
+    @bottom-right {
+      content: "Generated {{ page.generated }}   ·   Page " counter(page) " of " counter(pages);
+      font: 500 7pt/1.3 "Inter"; color: var(--muted); vertical-align: top; padding-top: 4mm; white-space: pre;
+    }
+  }
+
+  html { font-family: "Inter"; font-size: 8.6pt; line-height: 1.45; color: var(--navy); }
+  body { margin: 0; }
+  * { box-sizing: border-box; }
+
+  /* Running header: master logo lockup left, document title right, rule with a teal lead segment. */
+  .doc-header { position: running(doc-header); display: flex; align-items: flex-end; justify-content: space-between;
+    padding-bottom: 3mm; border-bottom: 0.6pt solid var(--stone); }
+  .doc-header::after { content: ""; position: absolute; left: 0; bottom: -0.6pt; width: 28mm; height: 1.4pt; background: var(--teal); }
+  .doc-header img { height: 10mm; width: auto; display: block; }
+  .doc-header__title { text-align: right; font: 600 7.4pt/1.35 "Inter"; color: var(--navy); }
+  .doc-header__title span { display: block; font-weight: 500; color: var(--muted); }
+
+  /* Watermark: monochrome lockup, Midnight Navy 5%, centred, never rotated (Brand Guidelines §04, §05). */
+  .watermark { position: fixed; left: 50%; top: 50%; width: 55%; transform: translate(-50%, -55%); opacity: 0.05; z-index: -1; }
+  .watermark img { width: 100%; height: auto; display: block; }
+
+  /* Cover block */
+  .cover { margin: 2mm 0 6mm; }
+  .eyebrow { font: 600 6.8pt/1 "Inter"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--teal); margin: 0 0 2.4mm; }
+  h1 { font: 700 21pt/1.12 "Manrope"; letter-spacing: -0.01em; margin: 0; color: var(--navy); }
+  .description { margin: 2mm 0 0; max-width: 175mm; font-size: 9pt; color: var(--navy-soft); }
+  .meta { display: flex; gap: 7mm; margin-top: 4mm; padding-top: 3mm; border-top: 0.5pt solid var(--stone); }
+  .meta div { font-size: 7.6pt; color: var(--navy); }
+  .meta dt { font: 600 6.2pt/1 "Inter"; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.2mm; }
+  .meta dd { margin: 0; font-weight: 600; }
+
+  h2 { font: 600 11.5pt/1.25 "Manrope"; margin: 0 0 1mm; color: var(--navy); break-after: avoid; }
+  .section__lead { break-after: avoid; }
+  .section--table { break-before: auto; }
+  .section { margin-top: 7mm; }
+  .section__lead { margin: 0 0 3mm; color: var(--muted); font-size: 7.8pt; }
+
+  /* KPI strip */
+  .kpis { display: flex; gap: 3mm; }
+  .kpi { flex: 1; background: var(--mist); border-radius: 3mm; padding: 3.2mm 3.6mm 3.4mm; break-inside: avoid; }
+  .kpi__label { font: 600 6.2pt/1.2 "Inter"; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .kpi__value { margin-top: 1.6mm; font: 700 17pt/1 "Manrope"; color: var(--teal); }
+  .kpi__hint { margin-top: 1.2mm; font-size: 6.8pt; color: var(--muted); }
+  .kpi--attention .kpi__value { color: var(--terracotta); }
+  .kpi--neutral .kpi__value { color: var(--navy); }
+
+  /* Charts row */
+  .insights { display: flex; gap: 6mm; break-inside: avoid; }
+  .panel { flex: 1; border: 0.6pt solid var(--stone); border-radius: 3mm; padding: 4mm 4.5mm; break-inside: avoid; }
+  .panel__body { display: flex; align-items: center; gap: 6mm; margin-top: 2.5mm; }
+  .legend { flex: 1; min-width: 0; border-collapse: collapse; font-size: 7.6pt; }
+  .panel__body > svg { flex: none; }
+  .legend td { padding: 1.1mm 2mm 1.1mm 0; border-bottom: 0.4pt solid var(--stone); }
+  .legend td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .legend td.share { text-align: right; width: 12mm; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .swatch { display: inline-block; width: 2.4mm; height: 2.4mm; border-radius: 0.7mm; margin-right: 2mm; vertical-align: -0.2mm; }
+
+  /* Data table */
+  table.data { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 2mm; font-size: 7.5pt; }
+  table.data thead { display: table-header-group; }
+  table.data th { background: var(--navy); color: #fff; text-align: left; font: 600 6.2pt/1.2 "Inter"; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 2.4mm 2.2mm; vertical-align: bottom; }
+  table.data th:first-child { border-top-left-radius: 1.6mm; }
+  table.data th:last-child { border-top-right-radius: 1.6mm; }
+  table.data td { padding: 2.1mm 2.2mm; border-bottom: 0.4pt solid var(--stone); vertical-align: top; overflow-wrap: anywhere; }
+  table.data tbody tr { break-inside: avoid; }
+  table.data tbody tr:nth-child(even) td { background: var(--mist); }
+  table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data .strong { font-weight: 600; }
+  table.data .sub { display: block; color: var(--muted); font-size: 6.6pt; margin-top: 0.4mm; }
+  table.data--continued { margin-top: 0; }
+  table.data .empty td { text-align: center; color: var(--muted); padding: 8mm; background: #fff; }
+
+  .pill { display: inline-block; padding: 0.7mm 2mm; border-radius: 3mm; font: 600 6.4pt/1.3 "Inter"; white-space: nowrap;
+    background: #fff; color: var(--navy-soft); border: 0.5pt solid #CBD3DC; }
+  .pill--teal, .pill--success, .pill--attention { border-color: transparent; }
+  .pill--teal { background: var(--teal-light); color: #136F6F; }
+  .pill--success { background: var(--success-light); color: #2D7656; }
+  .pill--attention { background: var(--terracotta-light); color: #A9512F; }
+  .dash { color: #A3AEBD; }
+  .attention { color: var(--terracotta); font-weight: 700; }
+
+  .handling { margin-top: 7mm; padding: 3.2mm 4mm; border-left: 1.4pt solid var(--teal); background: var(--mist);
+    border-radius: 0 2mm 2mm 0; font-size: 7.2pt; color: var(--navy-soft); break-inside: avoid; }
+  .handling strong { color: var(--navy); }
+</style>
+</head>
+<body>
+  <div class="watermark" aria-hidden="true"><img src="{{ page.watermark }}" alt=""></div>
+  <header class="doc-header">
+    <img src="{{ page.logo }}" alt="MentorMAMA">
+    <div class="doc-header__title">{{ page.title }}{% block header_scope %}{% endblock %}</div>
+  </header>
+
+  <section class="cover">
+    <p class="eyebrow">{% block eyebrow %}MentorMAMA report{% endblock %}</p>
+    <h1>{{ page.title }}</h1>
+    {% block description %}{% endblock %}
+    {% block meta %}{% endblock %}
+  </section>
+
+  {% block body %}{% endblock %}
+</body>
+</html>

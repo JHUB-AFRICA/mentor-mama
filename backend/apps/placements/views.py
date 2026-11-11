@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -600,11 +601,14 @@ class AllocationListView(APIView):
         fmt = request.query_params.get("file", "csv").lower()
         if fmt not in allocation_list.FORMATS:
             raise errors.InvalidTransition("Choose CSV, XLSX or PDF.")
-        rows = allocation_list.rows_for(request.user, cohort_id=request.query_params.get("cohort_id") or None)
-        content = allocation_list.render(rows, fmt)
+        rows = allocation_list.rows_for(request.user, cohort_id=request.query_params.get("cohort_id") or None, file_format=fmt)
+        from apps.core.documents.reports import scope_label
+
+        content = allocation_list.render(rows, fmt, scope_label=scope_label(request.user))
         response = HttpResponse(content, content_type=allocation_list.FORMATS[fmt])
-        response["Content-Disposition"] = f'attachment; filename="mentormama-allocation-list.{fmt}"'
-        response["Cache-Control"] = "no-store"
+        response["Content-Disposition"] = f'attachment; filename="mentormama-allocation-list-{timezone.localdate():%Y-%m-%d}.{fmt}"'
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 

@@ -113,6 +113,8 @@ ReviewerConflictOfInterest = _error(
 
 # -- platform --------------------------------------------------------------
 UnauthorizedFacilityAccess = _error("UnauthorizedFacilityAccess", 404, "Not found.")
+ExportExpired = _error("export_expired", 410, "This export has expired. Request it again.")
+TooManyExports = _error("too_many_exports", 429, "You already have 3 exports being prepared. Wait for one to finish.", retryable=True)
 ExportFileUnavailable = _error("ExportFileUnavailable", 410, "This export file is no longer available. Request a fresh snapshot to download it.")
 ScopeDerivationMismatch = _error("ScopeDerivationMismatch", 500, "An internal consistency check failed.")
 UnattributedWrite = _error("UnattributedWrite", 500, "An internal consistency check failed.")

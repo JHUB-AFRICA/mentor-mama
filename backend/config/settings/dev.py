@@ -18,5 +18,6 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Local development must never consume the Mailtrap sandbox quota. The
 # transactional outbox and worker still run normally; Django prints the
 # rendered message to the API/worker console instead.
-USE_MAILTRAP = False
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# To try real delivery locally, set EMAIL_PROVIDER=resend with a Resend key in .env.
+if EMAIL_PROVIDER == "mailtrap":
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

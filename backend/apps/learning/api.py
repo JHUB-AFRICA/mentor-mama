@@ -1,23 +1,40 @@
 """Public learning queries used by placement guards and the API."""
 
 
+from apps.learning import versioning
+from apps.learning.text import plain_text
 from apps.learning.models import ModuleCompletion, TrainingModule
 
 
+def _assigned(user):
+    """Live modules meant for this user's role (archived or other-audience modules never count)."""
+    return TrainingModule.objects.filter(
+        program_id=user.program_id, is_published=True, archived_at=None, visible_roles__contains=[user.role]
+    )
+
+
+def _counted_completions(user, modules) -> set:
+    """Module ids this person has completed in a way that still counts (decision D-3 grace period)."""
+    rows = ModuleCompletion.objects.filter(user=user, module__in=modules).select_related("module")
+    return {row.module_id for row in rows if versioning.completion_counts(row.module, row)}
+
+
 def required_modules_complete(user) -> bool:
-    required = TrainingModule.objects.filter(program_id=user.program_id, is_required=True, is_published=True)
-    return not required.exclude(completions__user_id=user.id).exists()
+    required = list(_assigned(user).filter(is_required=True))
+    counted = _counted_completions(user, required)
+    return all(module.id in counted for module in required)
 
 
 def progress(user) -> dict:
-    modules = TrainingModule.objects.filter(program_id=user.program_id, is_published=True)
-    completed = ModuleCompletion.objects.filter(user=user, module__in=modules).count()
-    required = modules.filter(is_required=True).count()
-    required_done = ModuleCompletion.objects.filter(user=user, module__is_required=True, module__in=modules).count()
-    return {"available": modules.exists(), "completed": completed, "total": modules.count(),
-            "percentage": round(completed * 100 / modules.count()) if modules.exists() else None,
-            "required_completed": required_done, "required_total": required,
-            "required_complete": required_done == required}
+    modules = list(_assigned(user))
+    counted = _counted_completions(user, modules)
+    required = [m for m in modules if m.is_required]
+    required_done = sum(1 for m in required if m.id in counted)
+    completed = len(counted)
+    return {"available": bool(modules), "completed": completed, "total": len(modules),
+            "percentage": round(completed * 100 / len(modules)) if modules else None,
+            "required_completed": required_done, "required_total": len(required),
+            "required_complete": required_done == len(required)}
 
 
 def visible_modules(user):
@@ -26,13 +43,19 @@ def visible_modules(user):
     ).prefetch_related("lessons", "quiz__questions").order_by("title")
 
 
+def _documents(modules) -> list[dict]:
+    """Lessons of the version learners currently see (not unpublished edits)."""
+    rows = []
+    for module in modules:
+        latest = versioning.latest_version(module)
+        lessons = latest.snapshot["lessons"] if latest else versioning.build_snapshot(module)["lessons"]
+        rows.extend({"kind": "Training", "title": f"{module.title}: {lesson['title']}", "text": plain_text(lesson["body"])} for lesson in lessons)
+    return rows
+
+
 def knowledge_documents(user) -> list[dict]:
     """Published lessons this user may read, as plain dicts for grounded assistants."""
-    return [
-        {"kind": "Training", "title": f"{module.title}: {lesson.title}", "text": lesson.body}
-        for module in visible_modules(user)
-        for lesson in module.lessons.all()
-    ]
+    return _documents(visible_modules(user))
 
 
 def catalogue(user, limit: int = 25) -> list[dict]:
@@ -58,10 +81,5 @@ def programme_catalogue(user, limit: int = 40) -> list[dict]:
 
 def programme_knowledge_documents(user) -> list[dict]:
     """Lessons of every published module in the programme (content managers may read all of them)."""
-    modules = TrainingModule.objects.filter(program_id=user.program_id, is_published=True).prefetch_related("lessons")
-    return [
-        {"kind": "Training", "title": f"{module.title}: {lesson.title}", "text": lesson.body}
-        for module in modules
-        for lesson in module.lessons.all()
-    ]
+    return _documents(TrainingModule.objects.filter(program_id=user.program_id, is_published=True))
 

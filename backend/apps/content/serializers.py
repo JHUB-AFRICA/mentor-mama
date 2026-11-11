@@ -18,14 +18,28 @@ class ContentItemWriteSerializer(serializers.Serializer):
     content_type = serializers.ChoiceField(choices=ContentKind.values, default=ContentKind.GUIDE)
     category = serializers.ChoiceField(choices=ContentCategory.values, default=ContentCategory.GENERAL)
     visible_roles = serializers.ListField(child=serializers.CharField(max_length=32), required=False)
+    tags = serializers.ListField(child=serializers.CharField(max_length=30), required=False, max_length=8)
+    facility_ids = serializers.ListField(child=serializers.UUIDField(), required=False, max_length=50)
+
+    def validate_tags(self, value):
+        cleaned = []
+        for tag in value:
+            tag = " ".join(tag.split()).lower()
+            if tag and tag not in cleaned:
+                cleaned.append(tag)
+        return cleaned
+
+    def validate_facility_ids(self, value):
+        return [str(item) for item in value]
 
     def to_internal_value(self, data):
-        if hasattr(data, "copy"):
-            data = data.copy()
-            roles = data.get("visible_roles")
-            if isinstance(roles, str):
+        # A QueryDict stringifies nested lists on assignment, so work on a plain mapping.
+        data = {key: data.get(key) for key in data} if hasattr(data, "getlist") else dict(data)
+        for field in ("visible_roles", "tags", "facility_ids"):
+            value = data.get(field)
+            if isinstance(value, str):
                 try:
-                    data["visible_roles"] = json.loads(roles)
+                    data[field] = json.loads(value)
                 except json.JSONDecodeError:
                     pass
         return super().to_internal_value(data)
