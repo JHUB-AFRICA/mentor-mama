@@ -7,6 +7,8 @@ import { StudentPlacementDetail } from "./StudentPlacementDetail";
 import { AccountSettings } from "../auth/AccountSettings";
 import { StudentSessions } from "./StudentSessions";
 import { StudentMore } from "./StudentMore";
+import { StudentConcerns } from "./StudentConcerns";
+import { StudentConcernDetail } from "./StudentConcernDetail";
 import { getStudentProfile, type StudentProfile } from "../../services/api";
 import { Button, Skeleton } from "@mentormama/ui";
 import { ContentLibrary } from "../content/ContentLibrary";
@@ -39,6 +41,7 @@ export function StudentWorkspace(props: Props) {
   const placementFromPath = location.pathname.match(
     /^\/student\/placements\/([^/]+)$/,
   )?.[1];
+  const concernDetail = location.pathname.match(/^\/student\/concerns\/([^/]+)$/)?.[1];
   const libraryDetail = location.pathname.match(
     /^\/student\/library\/(guide|module|document|external)\/([^/]+)$/,
   );
@@ -183,6 +186,15 @@ export function StudentWorkspace(props: Props) {
       </StudentWorkspaceFrame>
     );
   }
+  if (concernDetail) {
+    return (
+      <StudentWorkspaceFrame user={props.user} title="Concern details" active="concerns">
+        <div className="student-page-container">
+          <StudentConcernDetail key={concernDetail} id={decodeURIComponent(concernDetail)} placements={props.placements} onError={props.onError} />
+        </div>
+      </StudentWorkspaceFrame>
+    );
+  }
   if (libraryDetail) {
     const [, kind, id] = libraryDetail;
     return (
@@ -247,6 +259,14 @@ export function StudentWorkspace(props: Props) {
           placements={props.placements}
           onOpen={(id) => navigate(`/student/placements/${id}`)}
         />
+      </StudentWorkspaceFrame>
+    );
+  if (params.get("view") === "concerns")
+    return (
+      <StudentWorkspaceFrame user={props.user} title="My concerns" active="concerns">
+        <div className="student-page-container">
+          <StudentConcerns placements={props.placements} onError={props.onError} initialPlacementId={params.get("raise")} />
+        </div>
       </StudentWorkspaceFrame>
     );
   if (params.get("view") === "library")

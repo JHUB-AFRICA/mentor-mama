@@ -1,35 +1,79 @@
-import { useState, type FormEvent } from "react";
-import { Button, Card } from "@mentormama/ui";
-import { useToast } from "../../components/ToastProvider";
-import { raiseSafeguardingConcern } from "../../services/api";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "@mentormama/ui";
+import { ArrowRight, Plus, ShieldAlert } from "lucide-react";
+import { Modal } from "../../components/kit";
+import { getEscalations } from "../../services/api";
+import { AdminButton, StatusPill } from "../programme-admin/ui/AdminKit";
 import { StudentFeedbackForm } from "./StudentFeedbackForm";
+import { RaiseConcernForm } from "./RaiseConcernForm";
+import { stateLabel } from "./MyConcerns";
+import "./concerns.css";
 
 export function FeedbackAndSafeguardingPanel({ placementId, role, onError, surface = "card" }: { placementId: string; role: string; onError: (message: string) => void; surface?: "card" | "plain" }) {
-  const { pushToast } = useToast();
-  const [category, setCategory] = useState("Professional conduct");
-  const [severity, setSeverity] = useState<"low" | "medium" | "high">("medium");
-  const [description, setDescription] = useState("");
-  const [concernCommandId, setConcernCommandId] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState<string | null>(null);
-
-  async function submitConcern(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setSent(null);
-    try { await raiseSafeguardingConcern({ placement_id: placementId, category, severity, description }, concernCommandId); setDescription(""); setConcernCommandId(crypto.randomUUID()); setSent("Your concern was submitted to the authorised safeguarding reviewers."); pushToast({ kind: "success", title: "Concern submitted", message: "Your message has been sent to the authorised safeguarding reviewers." }); }
-    catch (cause) { onError(cause instanceof Error ? cause.message : "We could not submit your concern."); }
-    finally { setBusy(false); }
+  if (role !== "student") {
+    return (
+      <Card padding="lg" className={`w-full border-warning/25 bg-warning/5 ${surface === "plain" ? "rounded-2xl" : ""}`}>
+        {surface !== "plain" && (
+          <>
+            <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-warning">Safeguarding</p>
+            <h2 className="mb-4 mt-1 font-display text-h3 text-navy">Raise a private concern</h2>
+          </>
+        )}
+        <RaiseConcernForm placementId={placementId} onError={onError} />
+      </Card>
+    );
   }
-  return <div className={role === "student" ? "grid gap-5 lg:grid-cols-2" : "w-full"}>
-    {role === "student" && <StudentFeedbackForm placementId={placementId} onError={onError} />}
-    <Card padding="lg" className={`w-full border-warning/25 bg-warning/5 ${surface === "plain" ? "rounded-2xl" : ""}`}>
-      {surface !== "plain" && <><p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-warning">Safeguarding</p><h2 className="mt-1 font-display text-h3 text-navy">Raise a private concern</h2></>}
-      <p className={`${surface === "plain" ? "mt-0" : "mt-2"} font-body text-body-sm leading-6 text-navy-muted`}>This is confidential, not anonymous. Only the submitter and authorised reviewers can read the narrative. Do not include patient identifiers.</p>
-      <form className="mt-5 space-y-4" onSubmit={submitConcern}>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="font-body text-sm font-semibold text-navy">Category<select className="input mt-2" value={category} onChange={(event) => { setCategory(event.target.value); setConcernCommandId(crypto.randomUUID()); }}><option>Professional conduct</option><option>Safety concern</option><option>Harassment or discrimination</option><option>Other</option></select></label><label className="font-body text-sm font-semibold text-navy">Severity<select className="input mt-2" value={severity} onChange={(event) => { setSeverity(event.target.value as typeof severity); setConcernCommandId(crypto.randomUUID()); }}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High — urgent review</option></select></label></div>
-        <label className="block font-body text-sm font-semibold text-navy">What happened? <textarea className="input mt-2 min-h-28" minLength={10} value={description} onChange={(event) => { setDescription(event.target.value); setConcernCommandId(crypto.randomUUID()); }} placeholder="Describe the concern without naming a patient." required /></label>
-        <Button type="submit" size="sm" disabled={busy}>{busy ? "Submitting…" : "Submit private concern"}</Button>
-      </form>
-      {sent && <p role="status" className="mt-4 rounded-xl bg-white/70 px-3 py-2 font-body text-sm text-teal">{sent}</p>}
-    </Card>
-  </div>;
+  return (
+    <div className="sp-support">
+      <StudentFeedbackForm placementId={placementId} onError={onError} />
+      <ConcernAside placementId={placementId} onError={onError} />
+    </div>
+  );
+}
+
+/** Compact concern entry point beside the feedback form: sized to its content, never stretched. */
+function ConcernAside({ placementId, onError }: { placementId: string; onError: (message: string) => void }) {
+  const [raising, setRaising] = useState(false);
+  const list = useQuery({ queryKey: ["escalations"], queryFn: getEscalations });
+  const mine = (list.data ?? []).filter((row) => row.placement_id === placementId);
+  return (
+    <aside className="sp-support__aside">
+      <section className="sp-concern-cta">
+        <span className="sp-concern-cta__icon" aria-hidden="true"><ShieldAlert /></span>
+        <h3>Something worrying you?</h3>
+        <p>Raise a private concern. You choose who looks into it: the nurse manager, your university coordinator, or both.</p>
+        <AdminButton icon={<Plus />} onClick={() => setRaising(true)}>Raise a private concern</AdminButton>
+      </section>
+      <section className="sp-concern-recent" aria-labelledby={`recent-concerns-${placementId}`}>
+        <header>
+          <h3 id={`recent-concerns-${placementId}`}>Your concerns here</h3>
+          <Link to="/student?view=concerns">View all <ArrowRight aria-hidden="true" /></Link>
+        </header>
+        {list.isPending ? (
+          <p className="sp-concern-recent__empty">Loading…</p>
+        ) : mine.length === 0 ? (
+          <p className="sp-concern-recent__empty">None raised for this placement.</p>
+        ) : (
+          <ul>
+            {mine.slice(0, 3).map((row) => {
+              const state = stateLabel(row);
+              return (
+                <li key={row.id}>
+                  <Link to={`/student/concerns/${row.id}`}>
+                    <span>{row.category}<small>{new Date(row.submitted_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</small></span>
+                    <StatusPill tone={state.tone}>{state.text}</StatusPill>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+      <Modal open={raising} onClose={() => setRaising(false)} icon={<ShieldAlert />} title="Raise a private concern" description="Choose who may look into it. Nobody else will see it." size="lg">
+        <RaiseConcernForm placementId={placementId} onError={onError} onCancel={() => setRaising(false)} onSubmitted={() => setRaising(false)} />
+      </Modal>
+    </aside>
+  );
 }

@@ -3,8 +3,20 @@ project: mentor-mama
 current_stage: VERIFY
 tier: medium
 tier_reason: User-visible learning-module creation bug spans the portal form and API serializer; no schema or authorization-boundary change.
-last_updated: 2026-11-10T00:00:00Z
+last_updated: 2026-11-11T00:00:00Z
 ---
+
+## Current session update — Activity crash, student placement redesign, concern routing, open issues (2026-11-11)
+
+Activity 500: `_transition` assumed `changes["state"]` was a `{from,to}` dict; `escalation.raise` and other actions store a plain string, so `/api/v1/activity` raised AttributeError for anyone with such an entry. Now shape-tolerant, with a regression test.
+
+Student placement detail rebuilt on the shared kit (AdminKit / `--pa-*`), matching the Sessions page. Cause of the mismatch: the screen mixed bespoke 10-17px CSS, Tailwind `@mentormama/ui` Cards with display type, and no kit, and repeated the same facts three times. New: one hero with facts and time meter, one "where you are" card (stepper + next step + action), kit check-in card, icon tabs with motion transitions, an Overview with progress stats, next steps, recent sessions and placement team, and a Support tab with the feedback form plus a compact concern aside (no stretched card). Phone layout: vertical stepper, 2-column stats.
+
+Concerns (ADR 0030): the submitter chooses nurse manager, coordinator or both (required, no default). Reviewers who were not chosen see nothing, not in the queue, summary, notifications, progress or dashboard counts, insights or exports. Mentors and students see only their own concerns counted (before, a mentor saw the count on their student's placement, possibly about themselves). New dedicated Student "Concerns" page (sidebar + More): stats, tabs, progress tracker, outcome, "Ask for another review" (resolved/closed -> open, same reviewers, reason stored, audited). `safeguarding.0003`. Coordinator/NM queue shows "Sent to" and re-review reason. Menta guides and navigation updated.
+
+Open issues closed: notifications N3 (copy), N4 (`not_emailed` status, `notifications.0005`), N9 (emails carry an opaque notification id header/metadata for Mailtrap callbacks; N1/N2/N7 were already fixed); D10 orphaned placements (identity status-change port -> placements listener -> `MentorUnavailableForPlacements` to facility NMs, `GET /placements/orphaned`, NM dashboard card).
+
+Verified: backend 220 passed, Ruff, no migration drift, portal tsc / full ESLint / build; real Chrome against local data (temporary sessions, revoked): placement detail at 1366 and 390px, Support tab, concern raise modal, Concerns page empty -> raised -> resolved -> re-review, NM orphaned card. Dev data restored (test mentor reactivated, test concern deleted; the e2e workflow student now has a filled profile). Not verified: mentor-side raise dialog visually, coordinator queue visually, Mailtrap callback against the real provider, Menta e2e spec rerun. Still open: P1-6 change approvals and P1-8 capacity windows (need governance answers Q3/Q4/Q10), "Reassign all" for orphaned placements, P1-13 templates, digest content.
 
 ## Current session update — Concept-note audit of induction, feedback, session log and profiles (2026-11-10)
 

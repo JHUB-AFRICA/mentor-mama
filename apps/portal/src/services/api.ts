@@ -883,7 +883,13 @@ export interface EscalationSummary {
   placement_id: string | null;
   submitted_at: string;
   reviewer: string | null;
+  routed_to: ConcernAudience;
+  rereview_count: number;
+  rereview_requested_at: string | null;
+  updated_at: string;
+  related_escalation_id: string | null;
 }
+export type ConcernAudience = "coordinator" | "nurse_manager" | "both";
 export interface EscalationDetail extends EscalationSummary {
   /** "summary" = in scope but not the assigned reviewer: no narrative until the concern is taken. */
   access: "full" | "summary";
@@ -893,6 +899,7 @@ export interface EscalationDetail extends EscalationSummary {
   action_taken?: string | null;
   resolution_outcome?: string | null;
   referral_note?: string | null;
+  rereview_reason?: string | null;
   closure_date?: string | null;
   submitted_by?: string;
   reviewer_id?: string | null;
@@ -942,6 +949,12 @@ export async function recordEscalationAction(
     action_taken,
     resolution_outcome,
   });
+}
+export async function requestEscalationRereview(
+  id: string,
+  reason: string,
+): Promise<void> {
+  await escalationCommand(id, "request-rereview", { reason });
 }
 export async function closeEscalation(id: string): Promise<void> {
   await escalationCommand(id, "close", {
@@ -994,6 +1007,8 @@ export async function raiseSafeguardingConcern(input: {
   category: string;
   severity: "low" | "medium" | "high";
   description: string;
+  routed_to: ConcernAudience;
+  related_escalation_id?: string;
 }, commandId: string = crypto.randomUUID()): Promise<void> {
   await request("/api/v1/escalations", {
     method: "POST",
@@ -1330,7 +1345,7 @@ export type NotificationItem = {
   event_type: string;
   template_key: string;
   payload: Record<string, string | number | null>;
-  status: "queued" | "sent" | "failed";
+  status: "queued" | "sent" | "failed" | "not_emailed";
   read_at: string | null;
   created_at: string;
 };
@@ -2294,6 +2309,23 @@ export type ArrangeInput = {
 };
 
 /** Draft placements that coordinators have requested of this facility. */
+export interface OrphanedPlacement {
+  placement_id: string;
+  state: PlacementState;
+  urgent: boolean;
+  student_first_name: string;
+  mentor_name: string;
+  mentor_status: string;
+  planned_start: string;
+  planned_end: string;
+}
+
+/** Open placements whose mentor was suspended or deactivated (need a new mentor). */
+export async function getOrphanedPlacements(): Promise<OrphanedPlacement[]> {
+  const response = await request<{ data: OrphanedPlacement[] }>("/api/v1/placements/orphaned");
+  return response.data;
+}
+
 export async function getIncomingPlacements(): Promise<Placement[]> {
   const response = await request<{ data: Placement[] }>("/api/v1/placements/incoming");
   return response.data;

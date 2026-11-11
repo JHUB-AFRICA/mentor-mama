@@ -74,8 +74,8 @@ export function NotificationPreferences({ onError }: { onError: (message: string
 
   return (
     <AdminCard
-      title="Choose what reaches your inbox"
-      description="Security messages stay enabled. You can tune the operational updates that are useful to you."
+      title="Choose which emails you receive"
+      description="These switches control email only. Every update still appears in your in-app notifications, and security and safeguarding emails are always sent."
       titleId="notifications-title"
     >
       {loadError && !preferences ? (

@@ -7,20 +7,46 @@ import {
 } from "react";
 
 import {
+  Activity,
   ArrowLeft,
   ArrowRight,
+  Building2,
   CalendarDays,
   Check,
   CheckCircle2,
+  ClipboardCheck,
   Clock3,
   FileText,
+  GraduationCap,
+  HeartHandshake,
+  History,
+  LayoutDashboard,
+  LifeBuoy,
   MapPin,
+  Route,
+  ShieldAlert,
   ShieldCheck,
+  TrendingUp,
   UserRound,
   X,
 } from "lucide-react";
-
-import { Button, Card } from "@mentormama/ui";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AdminButton,
+  AdminCard,
+  AdminPage,
+  AdminTabs,
+  EmptyState,
+  ListRow,
+  Notice,
+  StatCard,
+  StatGrid,
+  StatusPill,
+  type PillTone,
+} from "../programme-admin/ui/AdminKit";
+import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
 import { InlineFeedback } from "../../components/InlineFeedback";
 
@@ -30,6 +56,8 @@ import {
   getFinalAssessmentStatus,
   getInductionChecklist,
   getPlacement,
+  getPlacementProgress,
+  getMentorshipSessions,
   getTransitions,
   type PlacementAcknowledgement,
   type Placement,
@@ -38,7 +66,6 @@ import {
 
 import type { WorkspaceProps } from "../workspaces/WorkspaceTypes";
 
-import { PlacementProgressSummary } from "../placements/PlacementProgressSummary";
 import { OrientationPanel } from "../induction/OrientationPanel";
 import { InductionSummary } from "../induction/InductionSummary";
 import { FinalAssessmentForm } from "../assessments/FinalAssessmentForm";
@@ -47,6 +74,7 @@ import { FeedbackAndSafeguardingPanel } from "../safeguarding/FeedbackAndSafegua
 import { PlacementHistory } from "../placements/PlacementHistory";
 
 import "./StudentPlacementDetail.css";
+import "./student-placement.css";
 import { lockScroll } from "../../lib/scrollLock";
 
 type DetailTab =
@@ -70,21 +98,12 @@ function formatState(value: string) {
   return placementStateLabel(value, "learner");
 }
 
-function stateTone(value: string) {
-  switch (value) {
-    case "active":
-      return "active";
-    case "induction":
-      return "induction";
-    case "orientation":
-      return "orientation";
-    case "awaiting_student":
-      return "attention";
-    case "paused":
-      return "paused";
-    default:
-      return "neutral";
-  }
+function pillTone(value: string): PillTone {
+  if (value === "active" || value === "completed") return "success";
+  if (value === "awaiting_student" || value === "paused") return "warning";
+  if (value === "withdrawn") return "danger";
+  if (value === "orientation" || value === "induction") return "info";
+  return "neutral";
 }
 
 function stageDescription(state: string) {
@@ -184,6 +203,7 @@ export function StudentPlacementDetail({
   onBack: () => void;
 }) {
   const { pushToast } = useToast();
+  const navigate = useNavigate();
   const [current, setCurrent] = useState(placement);
 
   const [transitions, setTransitions] =
@@ -434,8 +454,6 @@ export function StudentPlacementDetail({
     }
   }
 
-  const tone = stateTone(current.state);
-
   const requiresConfirmation = Boolean(
     transitions?.available.includes("orientation"),
   );
@@ -476,625 +494,264 @@ export function StudentPlacementDetail({
   }, [current.state]);
 
   const currentStep = getCurrentStep(current.state);
+  const journey = placementJourney(current.state, "learner");
+  const time = (() => {
+    const start = new Date(`${current.planned_start}T00:00:00`).getTime();
+    const end = new Date(`${current.planned_end}T00:00:00`).getTime();
+    const total = Math.max(1, Math.round((end - start) / 86_400_000));
+    const done = Math.min(total, Math.max(0, Math.round((Date.now() - start) / 86_400_000)));
+    return { total, pct: current.state === "completed" ? 100 : Math.round((done / total) * 100) };
+  })();
 
   return (
     <>
-      <div className="student-page-container student-detail">
-        <button
-          type="button"
-          className="student-back-link"
-          onClick={onBack}
-        >
-          <ArrowLeft size={16} />
-          <span>Back to placements</span>
+      <AdminPage className="sp">
+        <button type="button" className="sp-back" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" />
+          Back to placements
         </button>
 
-        {/* -------------------------------------------------------------- */}
-        {/* Placement identity                                             */}
-        {/* -------------------------------------------------------------- */}
-
-        <section className="placement-hero">
-          <div className="placement-hero__top">
-            <div className="placement-hero__icon" aria-hidden="true">
-              <MapPin size={24} />
-            </div>
-            <div className="placement-hero__copy">
-              <div className="placement-hero__eyebrow">
-                <span>Your placement</span>
-                <span className={`student-detail-status student-detail-status--${tone}`}>
-                  <span />
-                  {formatState(current.state)}
-                </span>
+        {/* Identity: who, where, when, with whom. Shown once. */}
+        <section className="sp-hero" aria-labelledby="sp-title">
+          <div className="sp-hero__top">
+            <span className="sp-hero__icon" aria-hidden="true"><MapPin /></span>
+            <div className="sp-hero__copy">
+              <div className="sp-hero__eyebrow">
+                <span className="pa-eyebrow">My placement</span>
+                <StatusPill tone={pillTone(current.state)}>{formatState(current.state)}</StatusPill>
               </div>
-              <h1>{current.facility_name ?? "My placement"}</h1>
-              <p>{current.cohort_name ?? "Clinical placement"}</p>
+              <h2 id="sp-title" className="sp-hero__title">{current.facility_name ?? "My placement"}</h2>
+              <p className="sp-hero__sub">{current.cohort_name ?? "Clinical placement"}</p>
             </div>
-            <div className="placement-privacy">
-              <ShieldCheck size={15} />
-              <span>Private learning record</span>
-            </div>
+            <span className="sp-chip"><ShieldCheck aria-hidden="true" /> Private learning record</span>
           </div>
-
-          <dl className="placement-facts">
+          <dl className="sp-facts">
             <div>
-              <dt><CalendarDays size={14} /> Dates</dt>
+              <dt><CalendarDays aria-hidden="true" /> Dates</dt>
               <dd>{formatDate(current.planned_start)} – {formatDate(current.planned_end)}</dd>
             </div>
             <div>
-              <dt><MapPin size={14} /> Ward</dt>
+              <dt><Building2 aria-hidden="true" /> Ward</dt>
               <dd>{current.ward?.name ?? "To be confirmed"}</dd>
             </div>
             <div>
-              <dt><UserRound size={14} /> Mentor</dt>
+              <dt><UserRound aria-hidden="true" /> Mentor</dt>
               <dd>{current.mentor?.name ?? "Assignment pending"}</dd>
             </div>
             <div>
-              <dt><ShieldCheck size={14} /> Time on placement</dt>
+              <dt><Clock3 aria-hidden="true" /> Time on placement</dt>
               <dd>
-                {(() => {
-                  const start = new Date(`${current.planned_start}T00:00:00`).getTime();
-                  const end = new Date(`${current.planned_end}T00:00:00`).getTime();
-                  const total = Math.max(1, Math.round((end - start) / 86_400_000));
-                  const done = Math.min(total, Math.max(0, Math.round((Date.now() - start) / 86_400_000)));
-                  const pct = current.state === "completed" ? 100 : Math.round((done / total) * 100);
-                  return (
-                    <span className="placement-facts__meter">
-                      <span className="placement-facts__bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-                      <span>{pct}% · {total} days</span>
-                    </span>
-                  );
-                })()}
+                <span className="sp-meter" role="img" aria-label={`${time.pct}% of ${time.total} days`}>
+                  <span className="sp-meter__bar"><span style={{ width: `${time.pct}%` }} /></span>
+                  <span>{time.pct}% · {time.total} days</span>
+                </span>
               </dd>
             </div>
           </dl>
         </section>
 
-        {/* -------------------------------------------------------------- */}
-        {/* Journey                                                        */}
-        {/* -------------------------------------------------------------- */}
-
-        <PlacementJourney state={current.state} />
-
-        {/* -------------------------------------------------------------- */}
-        {/* Current step                                                   */}
-        {/* -------------------------------------------------------------- */}
-
-        <section
-          className={`placement-current-step placement-current-step--${currentStep.tone}`}
-        >
-          <div className="placement-current-step__content">
-            <p className="student-kicker">
-              {currentStep.eyebrow}
-            </p>
-
-            <h2>{currentStep.title}</h2>
-
-            <p>{currentStep.description}</p>
-
-            {current.state === "induction" && checklist && (
-              <InductionProgress checklist={checklist} />
-            )}
-          </div>
-
-          <div className="placement-current-step__action">
-            {current.state === "awaiting_student" && transitionsError && (
-              <div role="alert" className="space-y-2 text-sm text-error">
-                <p>We couldn’t check whether your confirmation is ready.</p>
-                <Button size="sm" variant="tertiary" onClick={() => setTransitionsAttempt((attempt) => attempt + 1)}>Try again</Button>
-              </div>
-            )}
-
-            {current.state === "awaiting_student" && !transitionsLoaded && (
-              <p role="status" className="text-sm text-navy-muted">Checking your placement options…</p>
-            )}
-
-            {current.state === "awaiting_student" && transitionsLoaded && !transitionsError && !requiresConfirmation && (
-              <p role="status" className="text-sm text-navy-muted">Your programme team is still preparing this placement. You’ll be able to confirm when it’s ready.</p>
-            )}
-
-            {current.state === "awaiting_student" &&
-              transitionsLoaded && requiresConfirmation && (
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={openAcknowledgement}
-                  className="placement-primary-button"
-                >
-                  Review assignment
-                  <ArrowRight size={16} />
-                </Button>
+        {/* Where you are + what to do now, in one card. */}
+        <section className={`sp-next sp-next--${currentStep.tone}`} aria-labelledby="sp-next-title">
+          <header className="sp-next__head">
+            <div>
+              <p className="pa-eyebrow">{currentStep.eyebrow}</p>
+              <h3 id="sp-next-title">{currentStep.title}</h3>
+            </div>
+            <span className="sp-next__stage">{journey.progressLabel}</span>
+          </header>
+          <ol className="sp-steps" aria-label="Placement progress">
+            {journey.stages.map((stage, index) => {
+              const done = stage.status === "done";
+              const now = stage.status === "current" || stage.status === "attention";
+              return (
+                <li key={stage.key} className={done ? "is-done" : now ? "is-current" : ""} aria-current={now ? "step" : undefined}>
+                  <span className="sp-steps__dot">{done ? <Check aria-hidden="true" /> : index + 1}</span>
+                  <span className="sp-steps__label">
+                    {stage.label}
+                    <span className="sr-only">{done ? " (complete)" : now ? " (current)" : " (upcoming)"}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="sp-next__body">
+            <div className="sp-next__copy">
+              <p>{currentStep.description}</p>
+              {current.state === "induction" && checklist && <InductionProgress checklist={checklist} />}
+            </div>
+            <div className="sp-next__action">
+              {current.state === "awaiting_student" && transitionsError && (
+                <div role="alert" className="sp-inline-alert">
+                  <span>We couldn’t check whether your confirmation is ready.</span>
+                  <AdminButton size="sm" variant="ghost" onClick={() => setTransitionsAttempt((attempt) => attempt + 1)}>Try again</AdminButton>
+                </div>
               )}
-
-            {current.state === "orientation" && (
-              <button
-                type="button"
-                className="placement-outline-button"
-                onClick={() => setActiveTab("journey")}
-              >
-                Continue orientation
-                <ArrowRight size={16} />
-              </button>
-            )}
-
-            {current.state === "active" && (
-              <button
-                type="button"
-                className="placement-outline-button"
-                onClick={() => setActiveTab("journey")}
-              >
-                View progress
-                <ArrowRight size={16} />
-              </button>
-            )}
+              {current.state === "awaiting_student" && !transitionsLoaded && <p role="status" className="sp-muted">Checking your placement options…</p>}
+              {current.state === "awaiting_student" && transitionsLoaded && !transitionsError && !requiresConfirmation && (
+                <p role="status" className="sp-muted">Your programme team is still preparing this placement. You’ll be able to confirm when it’s ready.</p>
+              )}
+              {current.state === "awaiting_student" && transitionsLoaded && requiresConfirmation && (
+                <AdminButton disabled={busy} onClick={openAcknowledgement}>Review assignment <ArrowRight aria-hidden="true" /></AdminButton>
+              )}
+              {current.state === "orientation" && (
+                <AdminButton onClick={() => setActiveTab("journey")}>Continue orientation <ArrowRight aria-hidden="true" /></AdminButton>
+              )}
+              {current.state === "active" && (
+                <AdminButton variant="secondary" onClick={() => setActiveTab("journey")}>View my journey <ArrowRight aria-hidden="true" /></AdminButton>
+              )}
+            </div>
           </div>
         </section>
 
         <BaselineConfidenceCard placementId={current.id} state={current.state} onError={onError} />
 
-        {/* -------------------------------------------------------------- */}
-        {/* Tabs                                                           */}
-        {/* -------------------------------------------------------------- */}
+        <AdminTabs
+          label="Placement sections"
+          value={activeTab}
+          onChange={setActiveTab}
+          tabs={[
+            { value: "overview", label: "Overview", icon: <LayoutDashboard aria-hidden="true" /> },
+            { value: "journey", label: "Journey", icon: <Route aria-hidden="true" /> },
+            { value: "activity", label: "Activity", icon: <History aria-hidden="true" /> },
+            { value: "documents", label: "Documents", icon: <FileText aria-hidden="true" /> },
+            { value: "support", label: "Support", icon: <LifeBuoy aria-hidden="true" /> },
+          ]}
+        />
 
-        <nav className="placement-tabs" aria-label="Placement sections">
-          <TabButton
-            active={activeTab === "overview"}
-            onClick={() => setActiveTab("overview")}
-          >
-            Overview
-          </TabButton>
-
-          <TabButton
-            active={activeTab === "journey"}
-            onClick={() => setActiveTab("journey")}
-          >
-            Journey
-          </TabButton>
-
-          <TabButton
-            active={activeTab === "activity"}
-            onClick={() => setActiveTab("activity")}
-          >
-            Activity
-          </TabButton>
-
-          <TabButton
-            active={activeTab === "documents"}
-            onClick={() => setActiveTab("documents")}
-          >
-            Documents
-          </TabButton>
-
-          <TabButton
-            active={activeTab === "support"}
-            onClick={() => setActiveTab("support")}
-          >
-            Support
-          </TabButton>
-        </nav>
-
-        {/* -------------------------------------------------------------- */}
-        {/* Overview                                                       */}
-        {/* -------------------------------------------------------------- */}
-
+        <AnimatePresence mode="wait" initial={false}>
         {activeTab === "overview" && (
-          <div className="placement-tab-content">
-            <div className="placement-section-heading">
-              <div>
-                <p className="student-kicker">Placement overview</p>
-                <h2>Your placement at a glance</h2>
-                <p>
-                  Keep track of your placement details and
-                  what happens next.
-                </p>
-              </div>
-            </div>
-
-            <div className="placement-overview-grid">
-              <Card className="placement-snapshot">
-                <div className="placement-card-heading">
-                  <div>
-                    <p className="student-kicker">
-                      Placement snapshot
-                    </p>
-                    <h3>Assignment details</h3>
-                  </div>
-
-                  <FileText size={18} />
-                </div>
-
-                <div className="placement-detail-list">
-                  <DetailItem
-                    label="Facility"
-                    value={
-                      current.facility_name ??
-                      "Not assigned"
-                    }
-                  />
-
-                  <DetailItem
-                    label="Cohort"
-                    value={
-                      current.cohort_name ??
-                      "Programme placement"
-                    }
-                  />
-
-                  <DetailItem
-                    label="Ward"
-                    value={
-                      current.ward?.name ??
-                      "Ward details pending"
-                    }
-                  />
-
-                  <DetailItem
-                    label="Placement dates"
-                    value={`${formatDate(
-                      current.planned_start,
-                    )} – ${formatDate(
-                      current.planned_end,
-                    )}`}
-                  />
-
-                  <DetailItem
-                    label="Mentor"
-                    value={
-                      current.mentor?.name ??
-                      "Assignment pending"
-                    }
-                  />
-                </div>
-              </Card>
-
-              <Card className="placement-status-card">
-                <div className="placement-card-heading">
-                  <div>
-                    <p className="student-kicker">
-                      Current stage
-                    </p>
-                    <h3>{stageLabel}</h3>
-                  </div>
-
-                  {current.state === "active" || current.state === "completed" ? (
-                    <CheckCircle2 size={19} />
-                  ) : (
-                    <Clock3 size={19} />
-                  )}
-                </div>
-
-                <p className="placement-status-card__description">
-                  {stageDescription(current.state)}
-                </p>
-
-                <div className="placement-status-card__line">
-                  <span>Placement status</span>
-                  <strong>
-                    {formatState(current.state)}
-                  </strong>
-                </div>
-              </Card>
-            </div>
-
-            <section className="placement-overview-progress">
-              <div className="placement-section-heading placement-section-heading--compact">
-                <div>
-                  <p className="student-kicker">
-                    Your journey
-                  </p>
-                  <h2>Placement progress</h2>
-                </div>
-              </div>
-
-              <PlacementProgressSummary
-                placementId={current.id}
-              />
-            </section>
-          </div>
+          <TabPanel id="overview">
+          <PlacementOverview
+            placement={current}
+            stageTitle={stageLabel}
+            stageText={stageDescription(current.state)}
+            onSessions={() => navigate("/student?view=sessions")}
+            onConcerns={() => navigate("/student?view=concerns")}
+            onSupport={() => setActiveTab("support")}
+          />
+          </TabPanel>
         )}
 
-        {/* -------------------------------------------------------------- */}
-        {/* Journey                                                        */}
-        {/* -------------------------------------------------------------- */}
-
         {activeTab === "journey" && (
-          <div className="placement-tab-content">
-            <div className="placement-section-heading">
-              <div>
-                <p className="student-kicker">
-                  Placement journey
-                </p>
-                <h2>Your placement journey</h2>
-                <p>
-                  Follow each stage from assignment through
-                  placement close-out.
-                </p>
-              </div>
-            </div>
+          <TabPanel id="journey">
+          <div className="sp-tab">
+            <SectionHeading eyebrow="Placement journey" title="Your placement journey" text="Each stage from assignment through to close-out, and what you need to do in it." />
 
             {current.state === "orientation" && (
-              <section className="placement-flow-section">
-                <OrientationPanel
-                  placement={current}
-                  onComplete={() => {
-                    void refresh().catch(() => onError("Your orientation is recorded, but we couldn’t refresh the placement. Reload this page to see the latest details."));
-                  }}
-                  onError={onError}
-                />
-              </section>
+              <OrientationPanel
+                placement={current}
+                onComplete={() => {
+                  void refresh().catch(() => onError("Your orientation is recorded, but we couldn’t refresh the placement. Reload this page to see the latest details."));
+                }}
+                onError={onError}
+              />
             )}
 
             {current.state === "induction" && (
-              <Card className="placement-information-panel">
-                <div className="placement-information-panel__icon">
-                  <Clock3 size={19} />
-                </div>
-
-                <div>
-                  <p className="student-kicker">
-                    Induction in progress
-                  </p>
-
-                  <h3>
-                    Your mentor is completing the induction
-                    checklist.
-                  </h3>
-
-                  <p>
-                    You’ll see the placement become active
-                    once all required items are signed.
-                  </p>
-                </div>
-              </Card>
+              <Notice icon={<Clock3 />}>
+                <strong>Your mentor is completing the induction checklist.</strong> The placement becomes active once every required item is signed.
+              </Notice>
             )}
 
             {showInductionSummary && checklist && (
-              <section className="placement-flow-section">
-                <div className="placement-section-heading placement-section-heading--compact">
-                  <div>
-                    <p className="student-kicker">
-                      Completed
-                    </p>
-                    <h2>Induction record</h2>
-                  </div>
-                </div>
-
-                <InductionSummary
-                  placement={current}
-                  checklist={checklist}
-                />
-              </section>
+              <>
+                <SectionHeading eyebrow="Completed" title="Induction record" />
+                <InductionSummary placement={current} checklist={checklist} />
+              </>
             )}
 
             {showAssessment && (
-              <section className="placement-flow-section">
-                <div className="placement-section-heading placement-section-heading--compact">
-                  <div>
-                    <p className="student-kicker">
-                      Close-out
-                    </p>
-                    <h2>Final assessment</h2>
-                    <p>
-                      Complete your assessment when the
-                      placement is ready to close.
-                    </p>
-                  </div>
-                </div>
-
+              <>
+                <SectionHeading eyebrow="Close-out" title="Final assessment" text="Complete your assessment when the placement is ready to close." />
                 {assessment?.can_submit && closeoutLifecycle && (
                   <FinalAssessmentForm
                     placementId={current.id}
-                    onSubmitted={() =>
-                      setAssessment((value) =>
-                        value
-                          ? {
-                              ...value,
-                              submitted: true,
-                              can_submit: false,
-                            }
-                          : value,
-                      )
-                    }
+                    onSubmitted={() => setAssessment((value) => (value ? { ...value, submitted: true, can_submit: false } : value))}
                     onError={onError}
                   />
                 )}
-
-                {assessmentLoading && assessmentAttempt > 0 && (
-                  <p className="font-body text-sm text-navy-muted" role="status">
-                    Checking whether your final assessment is ready…
-                  </p>
-                )}
-
+                {assessmentLoading && assessmentAttempt > 0 && <p className="sp-muted" role="status">Checking whether your final assessment is ready…</p>}
                 {assessmentError && (
-                  <InlineFeedback
-                    kind="error"
-                    title="We couldn’t check your close-out status"
-                  >
-                    Your final assessment availability is unconfirmed. Retry to
-                    check whether it is ready; you can submit once the portal
-                    confirms it is due.
-                    <button
-                      type="button"
-                      className="mt-2 block font-semibold text-teal underline underline-offset-2"
-                      onClick={() => setAssessmentAttempt((attempt) => attempt + 1)}
-                    >
+                  <InlineFeedback kind="error" title="We couldn’t check your close-out status">
+                    Your final assessment availability is unconfirmed. Retry to check whether it is ready; you can submit once the portal confirms it is due.
+                    <button type="button" className="mt-2 block font-semibold text-teal underline underline-offset-2" onClick={() => setAssessmentAttempt((attempt) => attempt + 1)}>
                       Try again
                     </button>
                   </InlineFeedback>
                 )}
-
                 {assessment?.submitted && (
-                  <Card className="placement-success">
-                    <div className="placement-success__icon">
-                      <CheckCircle2 size={19} />
-                    </div>
-
-                    <div>
-                      <h3>
-                        Final assessment submitted
-                      </h3>
-
-                      <p>
-                        Your close-out response is safely
-                        recorded.
-                      </p>
-                    </div>
-                  </Card>
+                  <Notice icon={<CheckCircle2 />}>
+                    <strong>Final assessment submitted.</strong> Your close-out response is safely recorded.
+                  </Notice>
                 )}
-              </section>
+              </>
+            )}
+
+            {!["orientation", "induction"].includes(current.state) && !showInductionSummary && !showAssessment && (
+              <EmptyState icon={<Route />} title="Nothing to do here yet" text={stageDescription(current.state)} />
             )}
           </div>
+          </TabPanel>
         )}
-
-        {/* -------------------------------------------------------------- */}
-        {/* Activity                                                       */}
-        {/* -------------------------------------------------------------- */}
 
         {activeTab === "activity" && (
-          <div className="placement-tab-content">
-            <div className="placement-section-heading">
-              <div>
-                <p className="student-kicker">
-                  Record
-                </p>
-
-                <h2>Placement activity</h2>
-
-                <p>
-                  Review important changes and activity
-                  recorded against this placement.
-                </p>
-              </div>
-            </div>
-
-            <PlacementHistory
-              placementId={current.id}
-            />
+          <TabPanel id="activity">
+          <div className="sp-tab">
+            <SectionHeading eyebrow="Record" title="Placement activity" text="Important changes and activity recorded against this placement." />
+            <AdminCard>
+              <PlacementHistory placementId={current.id} />
+            </AdminCard>
           </div>
+          </TabPanel>
         )}
-
-        {/* -------------------------------------------------------------- */}
-        {/* Documents                                                      */}
-        {/* -------------------------------------------------------------- */}
 
         {activeTab === "documents" && (
-          <div className="placement-tab-content">
-            <div className="placement-section-heading">
-              <div>
-                <p className="student-kicker">
-                  Documents
-                </p>
-
-                <h2>Your placement documents</h2>
-
-                <p>
-                  Access important placement records and
-                  acknowledgement information.
-                </p>
-              </div>
-            </div>
-
-            <Card className="placement-document-row">
-              <div className="placement-document-row__icon">
-                <FileText size={20} />
-              </div>
-
-              <div className="placement-document-row__content">
-                <h3>Placement assignment</h3>
-
-                <p>
-                  Official placement details including your
-                  facility, dates, mentor and placement
-                  expectations.
-                </p>
-
-                {acknowledgementComplete || acknowledgement ? (
-                  <span className="placement-document-status placement-document-status--complete">
-                    <Check size={13} />
-                    Acknowledged
-                  </span>
-                ) : ["awaiting_student", "orientation"].includes(current.state) ? (
-                  <span className="placement-document-status">
-                    Acknowledgement needed
-                  </span>
-                ) : (
-                  <span className="placement-document-status">
-                    No signed record available
-                  </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                className="placement-document-button"
+          <TabPanel id="documents">
+          <div className="sp-tab">
+            <SectionHeading eyebrow="Documents" title="Your placement documents" text="Official placement records and your signed acknowledgement." />
+            <AdminCard flush>
+              <ListRow
+                icon={<FileText />}
+                title="Placement assignment"
+                meta="Facility, dates, mentor and placement expectations"
+                trailing={
+                  acknowledgementComplete || acknowledgement ? (
+                    <StatusPill tone="success">Acknowledged</StatusPill>
+                  ) : ["awaiting_student", "orientation"].includes(current.state) ? (
+                    <StatusPill tone="warning">Acknowledgement needed</StatusPill>
+                  ) : (
+                    <StatusPill tone="neutral" dot={false}>No signed record</StatusPill>
+                  )
+                }
                 onClick={() => {
-                  if (acknowledgementComplete || acknowledgement || !["awaiting_student", "orientation"].includes(current.state)) {
-                    setAssignmentViewed(true);
-                    openAcknowledgement();
-                  } else {
-                    openAcknowledgement();
-                  }
+                  setAssignmentViewed(true);
+                  openAcknowledgement();
                 }}
-              >
-                View assignment
-                <ArrowRight size={15} />
-              </button>
-            </Card>
-
+              />
+            </AdminCard>
             {assignmentViewed && (
-              <div className="placement-document-note">
-                <ShieldCheck size={15} />
-                <span>
-                  This document remains available as part
-                  of your private learning record.
-                </span>
-              </div>
+              <p className="sp-footnote"><ShieldCheck aria-hidden="true" /> This document stays available as part of your private learning record.</p>
             )}
           </div>
+          </TabPanel>
         )}
-
-        {/* -------------------------------------------------------------- */}
-        {/* Support                                                        */}
-        {/* -------------------------------------------------------------- */}
 
         {activeTab === "support" && (
-          <div id="feedback" className="placement-tab-content">
-            <div className="placement-section-heading">
-              <div>
-                <p className="student-kicker">
-                  Support
-                </p>
-
-                <h2>Feedback & safeguarding</h2>
-
-                <p>
-                  Share feedback or raise a concern about
-                  your placement.
-                </p>
-              </div>
-            </div>
-
-            <FeedbackAndSafeguardingPanel
-              placementId={current.id}
-              role="student"
-              onError={onError}
-            />
+          <TabPanel id="support">
+          <div id="feedback" className="sp-tab">
+            <SectionHeading eyebrow="Support" title="Feedback & concerns" text="Tell us how the placement is going, or raise something privately." />
+            <FeedbackAndSafeguardingPanel placementId={current.id} role="student" onError={onError} />
           </div>
+          </TabPanel>
         )}
 
-        {/* -------------------------------------------------------------- */}
-        {/* Privacy                                                        */}
-        {/* -------------------------------------------------------------- */}
+        </AnimatePresence>
 
-        <footer className="student-detail-footer">
-          <ShieldCheck size={16} />
-
-          <p>
-            Your placement information is part of your
-            private learning record and is only shared with
-            authorised programme staff.
-          </p>
-        </footer>
-      </div>
+        <p className="sp-footnote">
+          <ShieldCheck aria-hidden="true" />
+          Your placement information is part of your private learning record and is only shared with authorised programme staff.
+        </p>
+      </AdminPage>
 
       {/* ---------------------------------------------------------------- */}
       {/* Placement acknowledgement modal                                 */}
@@ -1125,81 +782,6 @@ export function StudentPlacementDetail({
         />
       )}
     </>
-  );
-}
-
-/* ====================================================================== */
-/* Placement Journey                                                     */
-/* ====================================================================== */
-
-function PlacementJourney({ state }: { state: string }) {
-  const journey = placementJourney(state, "learner");
-
-  return (
-    <section className="placement-journey">
-      <div className="placement-journey__header">
-        <div>
-          <p className="student-kicker">
-            Placement journey
-          </p>
-
-          <h2>Where you are in the process</h2>
-        </div>
-
-        <span className="placement-journey__stage">
-          {journey.progressLabel}
-        </span>
-      </div>
-
-      <ol className="placement-timeline" aria-label="Placement progress">
-        {journey.stages.map((stage, index) => {
-          const completed = stage.status === "done";
-          const current =
-            stage.status === "current" ||
-            stage.status === "attention";
-
-          return (
-            <li
-              key={stage.key}
-              aria-current={current ? "step" : undefined}
-              className={`placement-timeline__item ${
-                completed
-                  ? "placement-timeline__item--complete"
-                  : ""
-              } ${
-                current
-                  ? "placement-timeline__item--current"
-                  : ""
-              }`}
-            >
-              <div className="placement-timeline__marker">
-                {completed ? (
-                  <Check size={13} />
-                ) : (
-                  <span>{index + 1}</span>
-                )}
-              </div>
-
-              <div className="placement-timeline__label">
-                {stage.label}
-                <span className="sr-only">
-                  {completed
-                    ? " (complete)"
-                    : current
-                      ? " (current)"
-                      : " (upcoming)"}
-                </span>
-              </div>
-
-              {index < journey.stages.length - 1 && (
-                <div className="placement-timeline__connector" />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-
-    </section>
   );
 }
 
@@ -1264,51 +846,6 @@ function InductionProgress({
       <span className="induction-progress__caption">
         {completed} of {total} required items completed
       </span>
-    </div>
-  );
-}
-
-/* ====================================================================== */
-/* Tabs                                                                  */
-/* ====================================================================== */
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      className={`placement-tab ${
-        active ? "placement-tab--active" : ""
-      }`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
-
-/* ====================================================================== */
-/* Detail Item                                                           */
-/* ====================================================================== */
-
-function DetailItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="placement-detail-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
@@ -1957,5 +1494,174 @@ function DocumentList({
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ====================================================================== */
+/* Overview tab                                                          */
+/* ====================================================================== */
+
+function SectionHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text?: string }) {
+  return (
+    <header className="sp-section">
+      <p className="pa-eyebrow">{eyebrow}</p>
+      <h3>{title}</h3>
+      {text && <p>{text}</p>}
+    </header>
+  );
+}
+
+const NEXT_STEPS: Record<string, string[]> = {
+  awaiting_student: ["Read your assignment document", "Sign to acknowledge the placement", "Complete orientation before day one"],
+  orientation: ["Work through the orientation items", "Acknowledge orientation", "Your mentor then opens induction"],
+  induction: ["Meet your mentor on the ward", "Your mentor signs the induction checklist", "The placement becomes active"],
+  active: ["Attend mentorship sessions", "Share feedback about how it is going", "Complete the final assessment near the end"],
+  paused: ["Wait for an update from your programme team", "You can still share feedback or raise a concern"],
+  completed: ["Review your sessions and documents", "Your record stays available to you"],
+};
+
+function PlacementOverview({
+  placement,
+  stageTitle,
+  stageText,
+  onSessions,
+  onConcerns,
+  onSupport,
+}: {
+  placement: Placement;
+  stageTitle: string;
+  stageText: string;
+  onSessions: () => void;
+  onConcerns: () => void;
+  onSupport: () => void;
+}) {
+  const progress = useQuery({ queryKey: ["placement-progress", placement.id], queryFn: () => getPlacementProgress(placement.id), staleTime: 30_000 });
+  const data = progress.data;
+  const shortDate = (value: string | null) =>
+    value ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${value}T00:00:00`)) : undefined;
+  const steps = NEXT_STEPS[placement.state] ?? [];
+
+  return (
+    <div className="sp-tab">
+      {progress.isError ? (
+        <PortalErrorState onRetry={() => void progress.refetch()} />
+      ) : (
+        <StatGrid>
+          <StatCard icon={<TrendingUp />} tone="teal" value={data?.overall_percentage == null ? "—" : `${data.overall_percentage}%`} label="Overall progress" hint="From completed milestones" loading={progress.isPending} />
+          <StatCard
+            icon={<ClipboardCheck />}
+            tone="violet"
+            value={data?.induction.percentage == null ? "—" : `${data.induction.percentage}%`}
+            label="Induction"
+            hint={data?.induction.available ? `${data.induction.completed} of ${data.induction.total} ${data.induction.total === 1 ? "item" : "items"}` : "Checklist not open yet"}
+            loading={progress.isPending}
+          />
+          <StatCard
+            icon={<Activity />}
+            tone="blue"
+            value={data?.mentorship.sessions_logged ?? 0}
+            label="Mentorship sessions"
+            hint={data?.mentorship.last_session_date ? `Last on ${shortDate(data.mentorship.last_session_date)}` : "None logged yet"}
+            onClick={onSessions}
+            loading={progress.isPending}
+          />
+          <StatCard
+            icon={data?.safeguarding.open_concerns ? <ShieldAlert /> : <HeartHandshake />}
+            tone={data?.safeguarding.open_concerns ? "amber" : "green"}
+            value={data?.safeguarding.open_concerns ?? 0}
+            label="Open concerns"
+            hint={data?.safeguarding.open_concerns ? "Being followed up" : "Nothing outstanding"}
+            onClick={onConcerns}
+            loading={progress.isPending}
+          />
+        </StatGrid>
+      )}
+
+      <div className="sp-overview">
+        <div className="sp-overview__col">
+        <AdminCard title={stageTitle} description={stageText}>
+          {steps.length > 0 ? (
+            <ol className="sp-checklist">
+              {steps.map((step, index) => (
+                <li key={step}>
+                  <span aria-hidden="true">{index + 1}</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="sp-muted">There is nothing for you to do at this stage.</p>
+          )}
+        </AdminCard>
+        <RecentSessions placementId={placement.id} onAll={onSessions} />
+        </div>
+        <AdminCard title="Your placement team" description="The people and places behind this placement." flush>
+          <ListRow icon={<UserRound />} tone="teal" title={placement.mentor?.name ?? "Mentor not assigned yet"} meta="Clinical mentor" />
+          <ListRow icon={<Building2 />} tone="blue" title={placement.ward?.name ?? "Ward to be confirmed"} meta={placement.facility_name ?? "Facility"} />
+          <ListRow icon={<GraduationCap />} tone="violet" title={placement.cohort_name ?? "Programme placement"} meta="Cohort" />
+          <ListRow icon={<LifeBuoy />} tone="amber" title="Need help or something feels wrong?" meta="Feedback and private concerns" onClick={onSupport} />
+        </AdminCard>
+      </div>
+    </div>
+  );
+}
+
+function RecentSessions({ placementId, onAll }: { placementId: string; onAll: () => void }) {
+  const sessions = useQuery({ queryKey: ["mentorship-sessions", placementId], queryFn: () => getMentorshipSessions(placementId), staleTime: 30_000 });
+  const rows = [...(sessions.data ?? [])].sort((a, b) => b.session_date.localeCompare(a.session_date)).slice(0, 3);
+  const label = (value: string) => value.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    <AdminCard
+      title="Recent mentorship sessions"
+      description="The latest sessions your mentor recorded with you."
+      action={rows.length > 0 ? <AdminButton size="sm" variant="ghost" onClick={onAll}>View all <ArrowRight aria-hidden="true" /></AdminButton> : undefined}
+      flush
+    >
+      {sessions.isPending ? (
+        <p className="sp-muted sp-pad">Loading sessions…</p>
+      ) : sessions.isError ? (
+        <p className="sp-muted sp-pad">We couldn’t load your sessions right now.</p>
+      ) : rows.length === 0 ? (
+        <p className="sp-muted sp-pad">No sessions recorded yet. They appear here once your mentor logs one.</p>
+      ) : (
+        <ul className="sp-sessions">
+          {rows.map((row) => {
+            const date = new Date(`${row.session_date}T00:00:00`);
+            return (
+              <li key={row.id}>
+                <button type="button" onClick={onAll}>
+                  <span className="sp-sessions__date">
+                    <strong>{date.getDate()}</strong>
+                    <small>{date.toLocaleDateString("en-GB", { month: "short" })}</small>
+                  </span>
+                  <span className="sp-sessions__main">
+                    <strong>{label(row.session_type)}</strong>
+                    <small>{row.topics.length ? row.topics.map(label).join(" · ") : "No topics recorded"}{row.duration_minutes ? ` · ${row.duration_minutes} min` : ""}</small>
+                  </span>
+                  <ArrowRight aria-hidden="true" className="sp-sessions__arrow" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </AdminCard>
+  );
+}
+
+/** Fades and lifts tab content in; respects reduced motion. */
+function TabPanel({ id, children }: { id: string; children: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      key={id}
+      role="tabpanel"
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduce ? undefined : { opacity: 0, y: -4 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
   );
 }

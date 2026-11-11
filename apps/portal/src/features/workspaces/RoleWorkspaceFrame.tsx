@@ -6,6 +6,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Settings2,
+  ShieldAlert,
   Users,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -31,6 +32,7 @@ interface RoleWorkspaceFrameProps {
     | "log"
     | "training"
     | "library"
+    | "concerns"
     | "more";
 
   secondaryLabel?: string;
@@ -99,6 +101,7 @@ export function RoleWorkspaceFrame({
           ? [
               { id: "library", label: "Library", icon: <BookOpen size={18} />, href: "/student?view=library" },
               { id: "log", label: "Sessions", icon: <CalendarDays size={18} />, href: "/student?view=sessions" },
+              { id: "concerns", label: "Concerns", icon: <ShieldAlert size={18} />, href: "/student?view=concerns" },
               { id: "more", label: "More", icon: <Settings2 size={18} />, href: "/student?view=more" },
             ]
           : []),

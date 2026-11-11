@@ -16,6 +16,7 @@ const titles: Record<string, string> = {
   "placement.induction_completed": "Your placement induction is complete",
   "placement.mentor_assigned": "You have a new placement assignment",
   "placement.mentor_batch_assigned": "New students have been assigned to you",
+  "placement.mentor_unavailable": "Some placements need a new mentor",
   "placement.arrangement_overridden": "A placement arrangement was changed by the coordinator",
   "placement.arranged": "Students have been arranged into wards",
   "placement.requested": "Students are waiting to be placed at your facility",

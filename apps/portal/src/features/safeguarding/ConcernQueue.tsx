@@ -81,6 +81,11 @@ export function ConcernQueue({ user, onError }: { user: CurrentUser; onError: (m
         );
       },
     },
+    {
+      accessorKey: "routed_to",
+      header: "Sent to",
+      cell: ({ row }) => (row.original.routed_to === "both" ? "Nurse manager & coordinator" : row.original.routed_to === "coordinator" ? "Coordinator" : "Nurse manager"),
+    },
     { accessorKey: "reviewer", header: "Reviewer", cell: ({ row }) => row.original.reviewer ?? <span className="pa-muted">Unassigned</span> },
     {
       id: "actions",
@@ -180,7 +185,7 @@ function ConcernDrawer({ id, user, onClose, onError }: { id: string | null; user
       onClose={onClose}
       icon={<ShieldAlert />}
       title={item?.category ?? "Concern"}
-      description={item ? `${label(item.severity)} severity · ${label(item.state)}` : undefined}
+      description={item ? `${label(item.severity)} severity · ${label(item.state)}${item.routed_to === "both" ? " · Sent to both reviewers" : " · Sent to you only"}${item.rereview_count ? ` · Reviewed again ×${item.rereview_count}` : ""}` : undefined}
     >
       {detail.isPending ? (
         <Skeleton className="h-40" />
@@ -208,6 +213,12 @@ function ConcernDrawer({ id, user, onClose, onError }: { id: string | null; user
               <h3>What was reported</h3>
               <p>{item.description}</p>
             </section>
+          )}
+          {item.rereview_count > 0 && (
+            <Notice icon={<ShieldAlert />}>
+              The student asked for another review{item.rereview_requested_at ? ` on ${new Date(item.rereview_requested_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.
+              {item.access === "full" && item.rereview_reason ? ` Their reason: ${item.rereview_reason}` : " Take the concern to read their reason."}
+            </Notice>
           )}
           {item.finding && (
             <section>

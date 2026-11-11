@@ -123,19 +123,12 @@ export function StudentMore({
 
               <p>
                 Report a wellbeing, safety, safeguarding, or professional
-                concern to the authorised people responsible for reviewing it.
+                concern to the reviewers you choose, and follow its progress.
               </p>
             </div>
 
-            <Link
-              to={
-                selectedPlacement
-                  ? `${placementTarget}#feedback`
-                  : placementTarget
-              }
-              className="student-more-action"
-            >
-              {selectedPlacement ? "Open safeguarding" : "Choose a placement"}
+            <Link to="/student?view=concerns" className="student-more-action">
+              Open my concerns
               <ArrowRight size={16} />
             </Link>
           </Card>

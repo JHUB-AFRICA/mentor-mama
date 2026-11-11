@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Button, Card } from "@mentormama/ui";
+import { AdminButton } from "../programme-admin/ui/AdminKit";
+import "./concerns.css";
 import { useToast } from "../../components/ToastProvider";
 import { submitPlacementFeedback, type FeedbackMode } from "../../services/api";
 
@@ -135,10 +136,10 @@ export function StudentFeedbackForm({ placementId, onError }: { placementId: str
   }
 
   return (
-    <Card padding="lg" className="border-teal/20 bg-white">
-      <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">Your voice</p>
-      <h2 className="mt-1 font-display text-h3 text-navy">Share placement feedback</h2>
-      <p className="mt-2 font-body text-body-sm leading-6 text-navy-muted">
+    <section className="sf-card" aria-labelledby={`sf-title-${placementId}`}>
+      <p className="pa-eyebrow">Your voice</p>
+      <h3 id={`sf-title-${placementId}`} className="sf-card__title">Share placement feedback</h3>
+      <p className="sf-card__text">
         It takes about two minutes. Choose how you want your feedback handled. Please do not include patient names or identifiers.
       </p>
       <form className="mt-5 space-y-4" onSubmit={submit}>
@@ -185,11 +186,11 @@ export function StudentFeedbackForm({ placementId, onError }: { placementId: str
           </>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="sm" disabled={busy || !complete}>{busy ? "Submitting…" : "Submit feedback"}</Button>
+          <AdminButton type="submit" disabled={busy || !complete}>{busy ? "Submitting…" : "Submit feedback"}</AdminButton>
           {!complete && <span className="font-body text-xs text-navy-muted">Answer every question to submit.</span>}
         </div>
         {sent && <p role="status" className="rounded-xl bg-teal-light px-3 py-2 font-body text-sm text-teal">Your feedback was submitted safely.</p>}
       </form>
-    </Card>
+    </section>
   );
 }

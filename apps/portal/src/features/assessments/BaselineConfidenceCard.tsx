@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card } from "@mentormama/ui";
+import { AdminButton } from "../programme-admin/ui/AdminKit";
+import "./baseline-confidence.css";
 import { useToast } from "../../components/ToastProvider";
 import { ApiError, getBaselineAssessmentStatus, submitBaselineAssessment } from "../../services/api";
 
@@ -44,37 +45,32 @@ export function BaselineConfidenceCard({
   }
 
   return (
-    <Card padding="lg" className="mt-5 border-teal/25 bg-teal-light/25">
-      <p className="font-body text-xs font-bold uppercase tracking-[0.12em] text-teal">Quick check-in · 30 seconds</p>
-      <h2 className="mt-1 font-display text-h3 text-navy">How confident do you feel about this placement?</h2>
-      <p className="mt-2 max-w-reading font-body text-body-sm leading-6 text-navy-muted">
-        Rate your confidence in your clinical learning right now, from 0 (not at all confident) to 100 (very confident). You will be asked again at the end so you can see your growth. There is no right answer.
-      </p>
-      <form className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end" onSubmit={submit}>
-        <label className="block flex-1 font-body text-sm font-semibold text-navy">
-          Starting confidence: <span className="text-teal">{touched ? score : "—"}</span>
+    <section className="bc" aria-labelledby={`bc-title-${placementId}`}>
+      <div className="bc__copy">
+        <p className="pa-eyebrow">Quick check-in · 30 seconds</p>
+        <h3 id={`bc-title-${placementId}`}>How confident do you feel about this placement?</h3>
+        <p>From 0 (not at all) to 100 (very confident). We ask again at the end so you can see your growth. There is no right answer.</p>
+      </div>
+      <form className="bc__form" onSubmit={submit}>
+        <label className="bc__label">
+          <span>Starting confidence <strong>{touched ? score : "—"}</strong></span>
           <input
-            className="mt-3 w-full accent-teal"
             type="range"
             min={0}
             max={100}
             step={5}
             value={score}
+            style={{ ["--bc-fill" as string]: `${score}%` }}
             aria-valuetext={touched ? `${score} out of 100` : "Not set"}
             onChange={(event) => {
               setScore(Number(event.target.value));
               setTouched(true);
             }}
           />
-          <span className="mt-1 flex justify-between font-body text-xs font-normal text-navy-muted">
-            <span>Not confident</span>
-            <span>Very confident</span>
-          </span>
+          <span className="bc__scale" aria-hidden="true"><span>Not confident</span><span>Very confident</span></span>
         </label>
-        <Button type="submit" size="sm" disabled={!touched || save.isPending}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        <AdminButton type="submit" disabled={!touched || save.isPending}>{save.isPending ? "Saving…" : "Save"}</AdminButton>
       </form>
-    </Card>
+    </section>
   );
 }

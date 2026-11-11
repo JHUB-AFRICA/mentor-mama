@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Activity, Building2, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { Activity, Building2, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, UserX, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { BarList } from "../../components/charts";
 import { greetingFor } from "../../lib/greeting";
-import { getDashboardIndicators, getFacilities, getFacilityMentors, getIncomingPlacements, getPlacements, getWards, type CurrentUser } from "../../services/api";
+import { getDashboardIndicators, getFacilities, getFacilityMentors, getIncomingPlacements, getOrphanedPlacements, getPlacements, getWards, type CurrentUser } from "../../services/api";
 import {
   AdminButton,
   AdminCard,
@@ -35,6 +35,8 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
   const mentors = useQuery({ queryKey: ["facility-dashboard-mentors"], queryFn: () => getFacilityMentors({ page_size: 50 }), staleTime: 15_000 });
 
   const incoming = useQuery({ queryKey: ["facility-incoming"], queryFn: getIncomingPlacements, staleTime: 15_000 });
+  const orphaned = useQuery({ queryKey: ["facility-orphaned"], queryFn: getOrphanedPlacements, staleTime: 15_000 });
+  const orphans = orphaned.data ?? [];
   const [arranging, setArranging] = useState(false);
   const incomingCount = incoming.data?.length ?? 0;
   const n = (key: string) => indicators.data?.indicators[key] ?? 0;
@@ -78,8 +80,8 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
           description={
             incomingCount > 0
               ? `${incomingCount} ${incomingCount === 1 ? "student is" : "students are"} waiting to be placed in your wards.`
-              : actionable.length || concerns
-              ? `${actionable.length + concerns} ${actionable.length + concerns === 1 ? "item needs" : "items need"} a decision from you.`
+              : actionable.length || concerns || orphans.length
+              ? `${actionable.length + concerns + orphans.length} ${actionable.length + concerns + orphans.length === 1 ? "item needs" : "items need"} a decision from you.`
               : "Your facility is running smoothly. Nothing needs a decision right now."
           }
           actions={
@@ -105,6 +107,31 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
           <StatCard icon={<Activity />} tone="violet" value={n("placements_induction")} label="In induction" hint="Mentor sign-off pending" loading={indicators.isPending} />
           <StatCard icon={<ShieldAlert />} tone={concerns ? "rose" : "green"} value={concerns} label="Open concerns" hint={concerns ? "Needs a reviewer" : "All clear"} loading={indicators.isPending} onClick={() => go("/facility/safeguarding")} />
         </StatGrid>
+
+        {orphans.length > 0 && (
+          <AdminCard
+            className="nm-orphans"
+            title={`${orphans.length} ${orphans.length === 1 ? "placement needs" : "placements need"} a new mentor`}
+            description={
+              orphans.some((row) => row.urgent)
+                ? "Their mentor was suspended or deactivated. Active placements cannot log sessions until you assign a new mentor."
+                : "Their mentor was suspended or deactivated. Assign a new mentor before these placements start."
+            }
+            flush
+          >
+            {orphans.map((row) => (
+              <ListRow
+                key={row.placement_id}
+                icon={<UserX />}
+                tone={row.urgent ? "rose" : "amber"}
+                title={`${row.student_first_name || "Student"} · ${placementStateLabel(row.state)}`}
+                meta={`Was with ${row.mentor_name} (${row.mentor_status})`}
+                trailing={row.urgent ? <StatusPill tone="danger">Sessions blocked</StatusPill> : <StatusPill tone="warning">Before start</StatusPill>}
+                onClick={() => go(`/placements/${row.placement_id}`)}
+              />
+            ))}
+          </AdminCard>
+        )}
 
         <div className="rp-grid-2">
           <AdminCard
