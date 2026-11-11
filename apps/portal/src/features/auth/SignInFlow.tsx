@@ -63,7 +63,7 @@ export function SignInFlow({
 
       {error && <div className="mt-5"><AuthAlert>{error}</AuthAlert></div>}
 
-      <form className="mt-6 space-y-4" onSubmit={submit}>
+      <form className="mt-4 space-y-3" onSubmit={submit}>
         <Field label="Email address">
           <TextInput leading={<Mail />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.org" required autoComplete="email" />
         </Field>
@@ -96,11 +96,11 @@ export function SignInFlow({
         </AuthButton>
       </form>
 
-      <div className="auth-note mt-6">
+      <div className="auth-note mt-4">
         <ShieldCheck aria-hidden="true" />
         <p className="m-0">Some programme accounts ask for a sign-in code from an authenticator app to help keep account information safe.</p>
       </div>
-      <p className="mb-0 mt-5 text-center text-sm text-[#4f627d]">
+      <p className="mb-0 mt-3 text-center text-sm text-[#4f627d]">
         Need access? <a href="mailto:support@mentormama.org" className="font-semibold text-[#157373] underline-offset-4 hover:underline">Contact your programme team</a>
       </p>
     </AuthLayout>

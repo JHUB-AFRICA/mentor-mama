@@ -38,10 +38,10 @@ export function AuthLayout({
 }) {
   const reduce = useReducedMotion();
   return (
-    <main className="auth-shell min-h-screen overflow-x-clip bg-[#F4F7F8] lg:grid lg:grid-cols-[minmax(380px,0.82fr)_minmax(0,1.18fr)]">
+    <main className="auth-shell min-h-dvh overflow-x-clip bg-[#F4F7F8] lg:grid lg:grid-cols-[minmax(380px,0.82fr)_minmax(0,1.18fr)]">
       <BrandPanel />
 
-      <div className="flex min-h-screen min-w-0 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-col">
         {/* Sticky compact bar for small screens */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#dbe4ed] bg-white/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/75 sm:px-8 lg:hidden">
           <Link to="/" className="inline-flex min-h-11 items-center gap-2.5 rounded-lg text-[#0D1B33] no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#157373]">
@@ -51,7 +51,7 @@ export function AuthLayout({
           <span className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#4f627d]">Secure portal</span>
         </header>
 
-        <section className="auth-surface relative flex overflow-x-clip flex-1 items-start justify-center px-4 py-8 sm:px-8 sm:py-12 lg:items-center lg:px-12">
+        <section className="auth-surface relative flex overflow-x-clip flex-1 items-start justify-center px-4 py-6 sm:px-8 sm:py-8 lg:items-center lg:px-12">
           <div className="relative z-10 w-full" style={{ maxWidth: width === "lg" ? "30rem" : "26rem" }}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -89,7 +89,7 @@ function StepFocus({ children, focus }: { children: ReactNode; focus: "heading" 
 
 function BrandPanel() {
   return (
-    <aside className="auth-brand auth-brand-pad relative hidden overflow-hidden px-12 py-12 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:self-start lg:flex-col xl:px-16">
+    <aside className="auth-brand auth-brand-pad relative hidden overflow-hidden px-12 py-12 text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col xl:px-16">
       <div className="auth-blob auth-blob--a" aria-hidden="true" />
       <div className="auth-blob auth-blob--b" aria-hidden="true" />
       <div className="auth-lines" aria-hidden="true" />

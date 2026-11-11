@@ -95,11 +95,11 @@
   border: 1px solid var(--auth-line);
   border-radius: 1.25rem;
   background: #fff;
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 24px 60px -28px rgba(13, 27, 51, 0.28), 0 2px 6px rgba(13, 27, 51, 0.04);
 }
 @media (min-width: 640px) {
-  .auth-card { padding: 2.25rem; }
+  .auth-card { padding: 1.5rem 1.75rem; }
 }
 .auth-card h1:focus { outline: none; }
 
@@ -114,26 +114,26 @@
   text-transform: uppercase;
 }
 .auth-title {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   color: var(--auth-navy);
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.025em;
 }
 @media (min-width: 640px) {
-  .auth-title { font-size: 2rem; }
+  .auth-title { font-size: 1.75rem; }
 }
 .auth-lede {
-  margin-top: 0.6rem;
+  margin-top: 0.4rem;
   color: var(--auth-muted);
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 /* Kit overrides scoped to the auth card: 44px targets, 16px text. */
 .auth-card .ui-label { font-size: 0.875rem; }
-.auth-card .ui-input { min-height: 2.9rem; font-size: 1rem; }
+.auth-card .ui-input { min-height: 2.6rem; font-size: 1rem; }
 .auth-card .ui-input--leading { padding-left: 2.8rem; }
 .auth-card .ui-input--trailing { padding-right: 3.2rem; }
 .auth-card .ui-input-wrap__leading svg { width: 1.15rem; height: 1.15rem; }
@@ -147,7 +147,7 @@
 /* ---- Buttons and links ------------------------------------------ */
 .auth-btn {
   display: inline-flex;
-  min-height: 3rem;
+  min-height: 2.75rem;
   width: 100%;
   align-items: center;
   justify-content: center;
@@ -356,10 +356,10 @@
   align-items: flex-start;
   border-radius: 0.85rem;
   background: var(--auth-mist);
-  padding: 0.85rem 1rem;
+  padding: 0.65rem 0.85rem;
   color: var(--auth-muted);
-  font-size: 0.8125rem;
-  line-height: 1.55;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 .auth-note svg { width: 1.1rem; height: 1.1rem; flex: 0 0 auto; margin-top: 0.15rem; color: var(--auth-teal-ink); }
 
@@ -372,3 +372,7 @@
   .auth-meter > span,
   .auth-check__dot { transition: none; }
 }
+
+/* The surface's decorative ::before/::after glows extend below it and used to add a
+   blank scrollable strip under the page. Clip both axes. */
+.auth-shell .auth-surface { overflow: clip; }
