@@ -37,3 +37,23 @@ class SafeApiErrorResponseMiddleware:
                 "retryable": retryable,
             }}, status=status)
         return response
+
+
+class LivenessProbeMiddleware:
+    """Answer ``/health/live`` before host validation.
+
+    Platform health checks (Render, load balancers, Docker) call the container by its private IP, which is
+    not in ALLOWED_HOSTS, so Django would reject them with 400 and the deploy would never go healthy. The
+    response is the same static body as ``apps.core.views.live_health`` and touches no data, so exposing
+    it without a host check reveals nothing. Readiness (``/health/ready``) still goes through normal routing.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == "/health/live" and request.method in {"GET", "HEAD"}:
+            from django.http import JsonResponse
+
+            return JsonResponse({"status": "ok", "checks": {"process": "ok"}})
+        return self.get_response(request)

@@ -41,8 +41,8 @@ if PROMETHEUS_METRICS_ENABLED:
     DATABASES["default"]["ENGINE"] = DATABASES["default"]["ENGINE"].replace(
         "django.db.backends", "django_prometheus.db.backends", 1
     )
-    if USE_REDIS:
-        CACHES["default"]["BACKEND"] = "django_prometheus.cache.backends.redis.RedisCache"
+    # Cache hit/miss metrics would need the `django_redis` package (django-prometheus' Redis cache wrapper imports it),
+    # which this project does not use. The built-in Redis cache stays as configured in base.py.
 
 # The reverse proxy terminates TLS and sets this forwarded header itself.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
