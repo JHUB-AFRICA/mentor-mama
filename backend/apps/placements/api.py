@@ -15,7 +15,7 @@ from apps.placements.services import AssessmentWriteAuthority
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from apps.placements.models import MentorAssignment, PauseInterval, Placement, State, StudentAssignment
+from apps.placements.models import MentorAssignment, PauseInterval, Placement, State, StudentAssignment, WardAssignment
 from apps.identity import api as identity
 
 __all__ = [
@@ -266,3 +266,18 @@ def assert_access(placement_id: UUID, *, actor) -> Placement:
         from apps.core.errors import UnauthorizedFacilityAccess
         raise UnauthorizedFacilityAccess()
     return placement
+
+
+def notice_details(placement_id: UUID) -> dict | None:
+    """Plain facts for a notice email: where, when and with whom. No clinical or restricted content."""
+    placement = Placement.objects.select_related("facility", "cohort").filter(id=placement_id).first()
+    if placement is None:
+        return None
+    ward = WardAssignment.objects.filter(placement=placement, ended_at=None).select_related("ward").first()
+    mentor = MentorAssignment.objects.filter(placement=placement, ended_at=None).select_related("mentor").first()
+    return {
+        "facility": placement.facility.name if placement.facility else "",
+        "ward": ward.ward.name if ward else "",
+        "mentor": mentor.mentor.full_name if mentor else "",
+        "start": placement.planned_start, "end": placement.planned_end, "cohort": placement.cohort.name,
+    }

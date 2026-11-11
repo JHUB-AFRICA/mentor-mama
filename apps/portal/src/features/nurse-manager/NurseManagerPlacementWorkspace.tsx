@@ -19,6 +19,7 @@ import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptySta
 import { ServerPager } from "../programme-admin/ui/DataTable";
 import { isPlacementClosed, placementStateLabel, placementStateTone } from "../placements/placementJourney";
 import { AllocationListModal } from "../placements/AllocationListModal";
+import { RecentArrangements } from "./RecentArrangements";
 import { ArrangeStudentsModal } from "./ArrangeStudentsModal";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 import { isManagerActionablePlacement, managerPlacementAction } from "./managerPlacementLogic";
@@ -188,6 +189,8 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
             </div>
           </AdminCard>
         )}
+
+        <RecentArrangements onError={onError} />
 
         <AdminTabs label="Quick stage filter" tabs={QUICK} value={QUICK.some((q) => q.value === state) ? state : "__other"} onChange={(value) => patch({ state: value })} />
         <Toolbar filters={3}>

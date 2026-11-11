@@ -228,7 +228,7 @@ export function CoordinatorPlacementRegister({
           {list.data && <ServerPager pagination={list.data.pagination} onPage={(next) => patch({ page: String(next) })} noun="placements" />}
         </div>
       )}
-      <AllocationListModal open={listing} onClose={() => setListing(false)} cohorts={(options.data?.cohorts ?? []).map((item) => ({ id: item.id, name: item.name }))} />
+      <AllocationListModal canShare={Boolean(user.capabilities.share_allocation)} open={listing} onClose={() => setListing(false)} cohorts={(options.data?.cohorts ?? []).map((item) => ({ id: item.id, name: item.name }))} />
       <RequestFacilitiesModal
         open={requesting}
         onClose={() => { setRequesting(false); setPicked([]); }}

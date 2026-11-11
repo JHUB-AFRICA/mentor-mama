@@ -34,3 +34,11 @@ def process_placement_batch_task(self, batch_id):
             batch.error_message = "The placement batch could not be completed."
             batch.save(update_fields=["status", "error_message", "updated_at"])
         raise self.retry(exc=exc) from exc
+
+
+@shared_task
+def send_placement_lead_reminders_task():
+    """Daily: remind students and mentors before a placement starts."""
+    from apps.placements import notices
+
+    return notices.send_lead_reminders()

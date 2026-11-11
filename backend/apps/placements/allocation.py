@@ -27,6 +27,7 @@ from collections import defaultdict
 from uuid import UUID
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core import audit, errors, outbox
 from apps.facilities import api as facilities
@@ -316,3 +317,88 @@ def apply_auto_arrange(*, actor, facility_id=None, placement_ids=None, strategy:
     run.result = result
     run.save(update_fields=["status", "summary", "result", "updated_at"])
     return result
+
+
+UNDO_WINDOW = dt.timedelta(hours=24)
+
+
+def runs_for(*, actor, limit: int = 8):
+    """Recent automatic arrangements the actor may see, newest first."""
+    identity.require_capability(actor, "arrange_placements")
+    rows = AllocationRun.objects.filter(mode=AllocationRun.Mode.AUTO_ARRANGE).select_related("actor").order_by("-created_at")
+    if actor.role != identity.ROLES.PROGRAM_ADMIN:
+        rows = rows.filter(facility_id=actor.facility_id)
+    else:
+        rows = rows.filter(facility__program_id=actor.program_id)
+    out = []
+    for run in rows[:limit]:
+        undoable = run.status in {"completed", "partial"} and timezone.now() - run.created_at <= UNDO_WINDOW
+        out.append({
+            "id": str(run.id), "created_at": run.created_at, "by": run.actor.full_name, "strategy": run.strategy, "status": run.status,
+            "arranged": run.summary.get("arranged", 0), "unplaced": run.summary.get("unplaced", 0),
+            "can_undo": undoable, "can_retry": run.status in {"partial", "failed"} and bool(run.result.get("unplaced")),
+        })
+    return out
+
+
+def _run_for_actor(actor, run_id) -> AllocationRun:
+    identity.require_capability(actor, "arrange_placements")
+    run = AllocationRun.objects.select_for_update().filter(id=run_id, mode=AllocationRun.Mode.AUTO_ARRANGE).first()
+    if run is None or (actor.role != identity.ROLES.PROGRAM_ADMIN and run.facility_id != actor.facility_id):
+        raise errors.UnauthorizedFacilityAccess()
+    return run
+
+
+@transaction.atomic
+def undo_auto_arrange(*, actor, run_id) -> dict:
+    """Put students from one recent arrangement back in the incoming queue.
+
+    Only placements that are still where the run left them (draft or scheduled, same ward and mentor)
+    are reverted; anyone who has moved on is left alone and reported.
+    """
+    run = _run_for_actor(actor, run_id)
+    if run.status not in {"completed", "partial"}:
+        raise errors.InvalidTransition("This arrangement can no longer be undone.")
+    if timezone.now() - run.created_at > UNDO_WINDOW:
+        raise errors.InvalidTransition("Arrangements can only be undone within 24 hours.")
+    reverted, kept = 0, []
+    now = timezone.now()
+    for item in run.result.get("arranged", []):
+        placement = Placement.objects.select_for_update().filter(id=item["placement_id"]).first()
+        if placement is None:
+            continue
+        ward_row = WardAssignment.objects.filter(placement=placement, ended_at=None).first()
+        mentor_row = MentorAssignment.objects.filter(placement=placement, ended_at=None).first()
+        same_ward = ward_row is not None and str(ward_row.ward_id) == item["ward"]["id"]
+        same_mentor = (mentor_row is None and not item.get("mentor")) or (mentor_row is not None and item.get("mentor") and str(mentor_row.mentor_id) == item["mentor"]["id"])
+        if placement.state not in {State.DRAFT, State.SCHEDULED} or not same_ward or not same_mentor:
+            kept.append({"student": item["student"], "reason": "Already moved on, so it was left as it is."})
+            continue
+        ward_row.ended_at = now
+        ward_row.save(update_fields=["ended_at"])
+        if mentor_row:
+            mentor_row.ended_at = now
+            mentor_row.end_reason = "arrangement undone"
+            mentor_row.save(update_fields=["ended_at", "end_reason", "updated_at"])
+        placement.facility_id = None
+        placement.state = State.DRAFT
+        placement.version += 1
+        placement.save(update_fields=["facility_id", "state", "version", "updated_at"])
+        reverted += 1
+    run.status = "undone"
+    run.summary = {**run.summary, "reverted": reverted, "kept": len(kept)}
+    run.save(update_fields=["status", "summary", "updated_at"])
+    audit.record(actor=actor, action="placement.undo_auto_arrange", entity_table="placements_allocation_run", entity_id=run.id,
+                 scope={"program_id": str(actor.program_id), "facility_id": str(run.facility_id)}, changes={"reverted": reverted, "kept": len(kept)})
+    return {"run_id": str(run.id), "reverted": reverted, "kept": kept}
+
+
+def retry_unplaced(*, actor, run_id) -> dict:
+    """Try again for the students a run could not place, e.g. after wards or mentors were added."""
+    with transaction.atomic():
+        run = _run_for_actor(actor, run_id)
+        ids = [row["placement_id"] for row in run.result.get("unplaced", []) if row.get("placement_id")]
+        strategy, facility = run.strategy, run.facility_id
+    if not ids:
+        raise errors.InvalidTransition("Nobody was left unplaced in that run.")
+    return apply_auto_arrange(actor=actor, facility_id=facility, placement_ids=ids, strategy=strategy)

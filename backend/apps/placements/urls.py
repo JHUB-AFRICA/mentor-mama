@@ -4,6 +4,10 @@ from apps.placements import views
 
 urlpatterns = [
     path("placements/<uuid:placement_id>/override", views.OverrideArrangementView.as_view(), name="override-arrangement"),
+    path("placements/share-with-students", views.ShareWithStudentsView.as_view(), name="share-with-students"),
+    path("placements/allocation-runs", views.AllocationRunsView.as_view(), name="allocation-runs"),
+    path("placements/allocation-runs/<uuid:run_id>/undo", views.AllocationRunUndoView.as_view(), name="allocation-run-undo"),
+    path("placements/allocation-runs/<uuid:run_id>/retry", views.AllocationRunRetryView.as_view(), name="allocation-run-retry"),
     path("placements/allocation-list", views.AllocationListView.as_view(), name="allocation-list"),
     path("wards", views.ProgrammeWardDirectoryView.as_view(), name="programme-ward-directory"),
     path("wards/<uuid:ward_id>", views.ProgrammeWardConfigurationView.as_view(), name="programme-ward-configuration"),

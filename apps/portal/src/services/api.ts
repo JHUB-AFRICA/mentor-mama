@@ -2939,3 +2939,45 @@ export async function createConsentDraft(input: { title: string; body: string })
 export async function publishConsent(versionId: string): Promise<void> {
   await request(`/api/v1/consent/versions/${versionId}/publish`, { method: "POST", body: JSON.stringify({}) });
 }
+
+export interface AllocationRunSummary {
+  id: string;
+  created_at: string;
+  by: string;
+  strategy: string;
+  status: "running" | "completed" | "partial" | "failed" | "undone";
+  arranged: number;
+  unplaced: number;
+  can_undo: boolean;
+  can_retry: boolean;
+}
+export async function getAllocationRuns(): Promise<AllocationRunSummary[]> {
+  const response = await request<{ data: AllocationRunSummary[] }>("/api/v1/placements/allocation-runs");
+  return response.data;
+}
+export async function undoAllocationRun(id: string): Promise<{ reverted: number; kept: Array<{ student: string; reason: string }> }> {
+  const response = await request<{ data: { reverted: number; kept: Array<{ student: string; reason: string }> } }>(`/api/v1/placements/allocation-runs/${id}/undo`, {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({}),
+  });
+  return response.data;
+}
+export async function retryAllocationRun(id: string): Promise<ArrangeResult> {
+  const response = await request<{ data: ArrangeResult }>(`/api/v1/placements/allocation-runs/${id}/retry`, {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({}),
+  });
+  return response.data;
+}
+
+/** Email arranged students where they are placed, ahead of release. Repeating only re-sends what changed. */
+export async function shareAllocationWithStudents(cohortId?: string): Promise<{ sent: number; updated: number; unchanged: number; not_arranged: number }> {
+  const response = await request<{ data: { sent: number; updated: number; unchanged: number; not_arranged: number } }>("/api/v1/placements/share-with-students", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(cohortId ? { cohort_id: cohortId } : {}),
+  });
+  return response.data;
+}

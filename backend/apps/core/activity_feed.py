@@ -23,6 +23,8 @@ TITLES = {
     "placement.facility_requested": ("placements", "Partner facility requested", "You requested partner facilities"),
     "placement.allocate_ward": ("placements", "Ward allocated", "You allocated a ward"),
     "placement.change_ward": ("placements", "Ward changed", "You changed a ward"),
+    "placement.share_allocation": ("placements", "Placements shared with students", "You shared placements with students"),
+    "placement.undo_auto_arrange": ("placements", "Arrangement undone", "You undid an arrangement"),
     "placement.assign_mentor": ("placements", "Mentor assigned", "You assigned a mentor"),
     "placement.reassign_mentor": ("placements", "Mentor changed", "You changed a mentor"),
     "placement.auto_arrange": ("placements", "Students arranged automatically", "You arranged incoming students"),

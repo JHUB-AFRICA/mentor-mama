@@ -118,3 +118,19 @@ class ArrangementOverridden:
     placement_id: UUID
     what: str
     recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementProvisionalNotice:
+    """The coordinator shared where a student is placed, ahead of release."""
+
+    placement_id: UUID
+    update: bool = False
+    recipient_user_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlacementStartsSoon:
+    placement_id: UUID
+    days: int
+    recipient_user_ids: tuple[UUID, ...] = ()

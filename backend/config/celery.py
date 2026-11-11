@@ -26,6 +26,10 @@ app.conf.beat_schedule = {
         "task": "apps.analytics.tasks.refresh_feedback_projection_task",
         "schedule": 900.0,
     },
+    "placement-lead-time-reminders-daily": {
+        "task": "apps.placements.tasks.send_placement_lead_reminders_task",
+        "schedule": 86400.0,
+    },
     "send-weekly-notification-digests": {
         "task": "apps.notifications.tasks.send_weekly_digest_task",
         "schedule": 604800.0,

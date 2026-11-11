@@ -621,3 +621,57 @@ class OverrideArrangementView(APIView):
             command.record(placement_id)
         placement = _get_in_scope(request, placement_id)
         return Response({"data": serializers.PlacementSerializer(placement).data}, status=status.HTTP_200_OK)
+
+
+class AllocationRunsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.placements import allocation
+
+        return Response({"data": allocation.runs_for(actor=request.user)})
+
+
+class AllocationRunUndoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, run_id):
+        from apps.placements import allocation
+
+        with IdempotentCommand(request, "undo_auto_arrange") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = allocation.undo_auto_arrange(actor=request.user, run_id=run_id)
+            command.record(run_id)
+        return Response({"data": result})
+
+
+class AllocationRunRetryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, run_id):
+        from apps.placements import allocation
+
+        with IdempotentCommand(request, "retry_auto_arrange") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = allocation.retry_unplaced(actor=request.user, run_id=run_id)
+            command.record(UUID(result["run_id"]))
+        return Response({"data": result}, status=status.HTTP_201_CREATED)
+
+
+class ShareWithStudentsView(APIView):
+    """Email arranged students where they are placed, ahead of release. Repeating only re-sends what changed."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import notices
+
+        ids = request.data.get("placement_ids") or None
+        with IdempotentCommand(request, "share_allocation") as command:
+            if command.replayed:
+                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+            result = notices.share_with_students(actor=request.user, placement_ids=ids, cohort_id=request.data.get("cohort_id") or None)
+            command.record(UUID(int=0))
+        return Response({"data": result})

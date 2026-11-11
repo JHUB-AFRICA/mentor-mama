@@ -52,7 +52,7 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
         return True
     if event_type in MANDATORY_EVENTS:
         return True
-    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
+    if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
     if event_type in {"SessionLogged"}:
         return preference.account_activity
@@ -183,6 +183,41 @@ def deliver_outbox_event(event) -> None:
             detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
         )
         send_mail(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, [user.email])
+    elif event.event_type in {"PlacementProvisionalNotice", "PlacementStartsSoon"}:
+        from apps.placements import api as placements_api
+
+        details = placements_api.notice_details(event.payload.get("placement_id"))
+        if not details:
+            return
+        where = " · ".join(part for part in (details["facility"], details["ward"]) if part)
+        when = f"{details['start']:%d %b %Y} to {details['end']:%d %b %Y}"
+        for recipient_id in event.payload.get("recipient_user_ids", []):
+            if str(recipient_id) in (event.delivered_to or []):
+                continue
+            recipient = identity.user_of(recipient_id)
+            if not recipient or recipient.status != identity.STATUSES.ACTIVE:
+                continue
+            if not _optional_email_enabled(user_id=recipient.id, event_type=event.event_type):
+                continue
+            if event.event_type == "PlacementProvisionalNotice":
+                updated = bool(event.payload.get("update"))
+                subject = "Your placement details have been updated" if updated else "Your clinical placement: details so far"
+                title = "Your placement details were updated" if updated else "Here is where you are placed"
+                intro = f"Hello {recipient.first_name}, your programme team has shared your placement so you can prepare. This is provisional until it is released to you."
+                detail = f"Where: {where or 'to be confirmed'}\nWhen: {when}" + (f"\nMentor: {details['mentor']}" if details["mentor"] else "") + "\n\nYou do not need to do anything yet. You will get another email when your placement is released and ready to confirm."
+            else:
+                days = int(event.payload.get("days", 0))
+                subject = f"Your placement starts in {days} days"
+                title = f"Your placement starts in {days} days"
+                intro = f"Hello {recipient.first_name}, a reminder to get ready."
+                detail = f"Where: {where or 'to be confirmed'}\nWhen: {when}" + (f"\nMentor: {details['mentor']}" if details["mentor"] else "") + "\n\nCheck your MentorMAMA account for anything you still need to complete."
+            text = _email_content(
+                eyebrow="Placement update", title=title, intro=intro, action_label="Open MentorMAMA",
+                action_url=f"{settings.FRONTEND_BASE_URL}/", detail=detail, expiry="",
+            )
+            send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+            event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
+            event.save(update_fields=["delivered_to"])
     elif event.event_type in {
         "MentorAssigned", "MentorReassigned", "EscalationRaised", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "ArrangementOverridden",
         "FeedbackSubmitted", "SessionLogged", "FinalAssessmentSubmitted",

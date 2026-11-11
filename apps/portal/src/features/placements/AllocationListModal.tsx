@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Download, FileSpreadsheet, FileText, Table2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Mail, Table2 } from "lucide-react";
 import { Modal } from "../../components/kit";
 import { useToast } from "../../components/ToastProvider";
-import { downloadAllocationList } from "../../services/api";
+import { downloadAllocationList, shareAllocationWithStudents } from "../../services/api";
 import { AdminButton, SelectField } from "../programme-admin/ui/AdminKit";
 
 const FORMATS = [
@@ -12,7 +12,7 @@ const FORMATS = [
 ];
 
 /** Download where each student is placed, so facilities and students can prepare early. */
-export function AllocationListModal({ open, onClose, cohorts }: { open: boolean; onClose: () => void; cohorts: Array<{ id: string; name: string }> }) {
+export function AllocationListModal({ open, onClose, cohorts, canShare = false }: { open: boolean; onClose: () => void; cohorts: Array<{ id: string; name: string }>; canShare?: boolean }) {
   const { pushToast } = useToast();
   const [cohort, setCohort] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -29,6 +29,24 @@ export function AllocationListModal({ open, onClose, cohorts }: { open: boolean;
       pushToast({ kind: "success", title: "Allocation list downloaded", message: "It lists where each student is placed right now." });
     } catch (cause) {
       pushToast({ kind: "error", title: "Could not download", message: cause instanceof Error ? cause.message : "Try again." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function share() {
+    setBusy("share");
+    try {
+      const result = await shareAllocationWithStudents(cohort || undefined);
+      pushToast({
+        kind: "success",
+        title: "Students informed",
+        message: result.sent + result.updated === 0
+          ? `Nothing new to send${result.not_arranged ? `; ${result.not_arranged} not arranged yet` : ""}.`
+          : `${result.sent} told, ${result.updated} updated${result.not_arranged ? `; ${result.not_arranged} not arranged yet` : ""}.`,
+      });
+    } catch (cause) {
+      pushToast({ kind: "error", title: "Could not send", message: cause instanceof Error ? cause.message : "Try again." });
     } finally {
       setBusy(null);
     }
@@ -53,6 +71,15 @@ export function AllocationListModal({ open, onClose, cohorts }: { open: boolean;
           </AdminButton>
         ))}
       </div>
+      {canShare && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #eef2f6" }}>
+          <strong>Tell students early</strong>
+          <p className="pa-sub">Emails each arranged student where they are placed so they can prepare. Placements are still released separately. If you share again, only changed details are re-sent.</p>
+          <AdminButton variant="secondary" size="sm" icon={<Mail />} disabled={Boolean(busy)} onClick={() => void share()}>
+            {busy === "share" ? "Sending…" : "Email students their placement"}
+          </AdminButton>
+        </div>
+      )}
     </Modal>
   );
 }

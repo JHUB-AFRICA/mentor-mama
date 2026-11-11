@@ -682,3 +682,62 @@ def test_auto_arrange_applies_only_the_reviewed_plan_and_keeps_a_replayable_run(
     replay = manager.post("/api/v1/placements/auto-arrange", {**body, "expected_plan_hash": plan["plan_hash"]}, format="json", HTTP_IDEMPOTENCY_KEY=key)
     assert replay.json()["data"]["run_id"] == str(run.id)  # the real outcome, not an empty acknowledgement
     del ids
+
+
+def test_an_arrangement_can_be_undone_once_and_students_return_to_the_incoming_queue(program, institution, cohort, coordinator, nurse_manager, facility, ward, mentor):
+    import uuid
+
+    from rest_framework.test import APIClient
+
+    from apps.placements.models import Placement, WardAssignment
+
+    ids = _requested_drafts(program, institution, cohort, coordinator, facility, 2)
+    manager = APIClient()
+    manager.force_authenticate(nurse_manager)
+    applied = manager.post("/api/v1/placements/auto-arrange", {"seed": "seed1234"}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4())).json()["data"]
+    assert applied["summary"]["arranged"] == 2
+    runs = manager.get("/api/v1/placements/allocation-runs").json()["data"]
+    assert runs[0]["can_undo"] is True and runs[0]["arranged"] == 2
+
+    undone = manager.post(f"/api/v1/placements/allocation-runs/{applied['run_id']}/undo", {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert undone.status_code == 200 and undone.json()["data"]["reverted"] == 2
+    assert not WardAssignment.objects.filter(placement_id__in=ids, ended_at=None).exists()
+    assert set(Placement.objects.filter(id__in=ids).values_list("state", "facility_id")) == {("draft", None)}
+    assert len(manager.get("/api/v1/placements/incoming").json()["data"]) == 2  # back in the queue
+    again = manager.post(f"/api/v1/placements/allocation-runs/{applied['run_id']}/undo", {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert again.status_code in {400, 409, 422}  # cannot be undone twice
+
+
+def test_sharing_notifies_each_student_once_and_again_only_when_details_change(draft_placement, ward, facility, mentor, coordinator, nurse_manager, student):
+    import datetime as dt
+
+    from apps.core.models import OutboxEvent
+    from apps.facilities.models import Ward
+    from apps.placements import notices, services
+
+    services.allocate_ward(draft_placement.id, ward.id, actor=nurse_manager)
+    first = notices.share_with_students(actor=coordinator)
+    assert first["sent"] == 1 and first["updated"] == 0
+    again = notices.share_with_students(actor=coordinator)
+    assert again["sent"] == 0 and again["unchanged"] == 1  # nothing changed: no second email
+    other = Ward.objects.create(facility=facility, name="Moved Ward", max_students=2)
+    services.allocate_ward(draft_placement.id, other.id, actor=nurse_manager)
+    changed = notices.share_with_students(actor=coordinator)
+    assert changed["updated"] == 1
+    notices_sent = OutboxEvent.objects.filter(event_type="PlacementProvisionalNotice")
+    assert notices_sent.count() == 2 and notices_sent.filter(payload__update=True).count() == 1
+    assert str(student.id) in notices_sent.first().payload["recipient_user_ids"]
+    del mentor, dt
+
+
+def test_lead_reminders_go_to_student_and_mentor_once(scheduled_placement, student, mentor):
+    import datetime as dt
+
+    from apps.core.models import OutboxEvent
+    from apps.placements import notices
+
+    today = scheduled_placement.planned_start - dt.timedelta(days=14)
+    assert notices.send_lead_reminders(today=today) == 1
+    assert notices.send_lead_reminders(today=today) == 0  # once only
+    event = OutboxEvent.objects.get(event_type="PlacementStartsSoon")
+    assert set(event.payload["recipient_user_ids"]) == {str(student.id), str(mentor.id)} and event.payload["days"] == 14

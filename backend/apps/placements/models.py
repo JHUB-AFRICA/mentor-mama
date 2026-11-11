@@ -84,6 +84,10 @@ class Placement(BaseModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     version = models.IntegerField(default=0)
+    # What the student was last told before release, so a change triggers an update, not silence or repetition.
+    provisional_notice_hash = models.CharField(max_length=64, blank=True, default="")
+    provisional_notice_at = models.DateTimeField(null=True, blank=True)
+    lead_reminders = models.JSONField(default=list, blank=True)
     created_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="created_placements")
 
     class Meta:
