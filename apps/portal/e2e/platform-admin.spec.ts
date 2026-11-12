@@ -71,10 +71,16 @@ async function mock(page: Page, state: { signedIn: boolean; mustChange: boolean;
       return json({ ...admin, must_change_password: state.mustChange });
     }
     if (path === "/api/v1/auth/password-change") {
+      const body = request.postDataJSON() as { new_password: string };
+      if (body.new_password.startsWith("Password"))
+        return route.fulfill({ status: 400, json: { new_password: ["This password is too common."], error: { code: "ValidationError", message: "New password: This password is too common." } } });
       state.mustChange = false;
-      return route.fulfill({ status: 204, body: "" });
+      return json({ accepted: true, user: { ...admin, must_change_password: false } });
     }
-    if (path === "/api/v1/platform/overview") return json(overview);
+    if (path === "/api/v1/platform/overview") {
+      await new Promise((resolve) => setTimeout(resolve, 600)); // long enough to see the loading skeleton
+      return json(overview);
+    }
     if (path === "/api/v1/platform/programmes") return json([]);
     if (path === "/api/v1/platform/accounts") return json({ results: [account], pagination: { page: 1, pages: 1, total: 1 } });
     if (path === "/api/v1/platform/accounts/u2/status") return json({ id: "u2", status: "suspended" });
@@ -87,7 +93,8 @@ test("platform admin signs in at /platform, replaces the initial password and ma
   const state = { signedIn: false, mustChange: true, calls: [] as string[] };
   await mock(page, state);
 
-  await page.goto("/platform");
+  // Start deep inside the workspace: after the password step the person must still land on the Overview.
+  await page.goto("/platform/accounts");
   await expect(page.getByRole("heading", { name: "Platform sign-in." })).toBeVisible();
   await page.getByLabel("Email address").fill(admin.email);
   await page.getByLabel("Password", { exact: true }).fill("Initial-Password-2026!");
@@ -97,12 +104,20 @@ test("platform admin signs in at /platform, replaces the initial password and ma
   await expect(page.getByRole("heading", { name: "Choose your own password" })).toBeVisible();
   expect(state.calls.some((call) => call.includes("/platform/accounts"))).toBe(false);
   await page.getByLabel(/^Initial password/).fill("Initial-Password-2026!");
+  // A rejected password shows the server's reason inline, and the person stays on this step.
+  await page.getByLabel(/^New password/).fill("Password123456");
+  await page.getByLabel(/^Confirm new password/).fill("Password123456");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(page.getByRole("alert")).toHaveText("New password: This password is too common.");
   await page.getByLabel(/^New password/).fill("My-Own-Strong-Pass-77");
   await page.getByLabel(/^Confirm new password/).fill("My-Own-Strong-Pass-77");
-  await page.getByRole("button", { name: "Save new password" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
 
-  // Overview: status board.
+  // Straight to the Overview: skeleton first, then the status board.
+  await expect(page).toHaveURL(/\/platform$/);
+  await expect(page.getByRole("status", { name: "Loading platform overview" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose your own password" })).toHaveCount(0);
   await expect(page.getByText("Resend · delivery tracking not connected")).toBeVisible();
   await expect(page.getByText("Release abc1234")).toBeVisible();
 

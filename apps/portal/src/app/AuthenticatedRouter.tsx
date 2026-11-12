@@ -174,8 +174,8 @@ export function AuthenticatedRouter({
 }
 
 function workspaceRoleFor(role: string): PortalWorkspaceRole {
-  if (role === "platform_admin") return "program_admin";
   if (
+    role === "platform_admin" ||
     role === "program_admin" ||
     role === "coordinator" ||
     role === "nurse_manager" ||

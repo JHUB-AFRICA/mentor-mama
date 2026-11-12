@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, LogOut, MailPlus, PlayCircle, ShieldPlus, UserX, Users } from "lucide-react";
-import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
 import { Modal } from "../../components/kit";
@@ -17,6 +16,7 @@ import {
   type PlatformAccount,
 } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { TableRowsSkeleton } from "./PlatformSkeletons";
 import { EMPTY_PERSON, PersonFields, ReasonDialog, STATUS_LABEL, formatDate, invitationLabel, personProblem, statusTone } from "./platformUi";
 
 type Tab = "all" | "invitations" | "expired" | "suspended";
@@ -128,7 +128,7 @@ export function PlatformAccounts({ currentUserId, onError }: { currentUserId: st
       </Toolbar>
 
       {query.isPending ? (
-        <Skeleton className="h-72" />
+        <TableRowsSkeleton rows={8} columns={6} label="accounts" />
       ) : query.isError ? (
         <PortalErrorState onRetry={() => void query.refetch()} />
       ) : results.length === 0 ? (

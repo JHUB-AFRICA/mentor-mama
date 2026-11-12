@@ -569,7 +569,7 @@ class PasswordResetConfirmView(APIView):
 
 class PasswordChangeView(APIView):
     def post(self, request):
-        serializer = PasswordChangeSerializer(data=request.data)
+        serializer = PasswordChangeSerializer(data=request.data, context={"user": request.user})
         serializer.is_valid(raise_exception=True)
         if not authentication.change_password(
             user=request.user,
@@ -579,7 +579,9 @@ class PasswordChangeView(APIView):
         ):
             return Response({"error": {"code": "InvalidPassword", "message": "The current password is incorrect."}}, status=400)
         update_session_auth_hash(request, request.user)
-        return Response({"data": {"accepted": True}})
+        # The updated account, so the client can continue straight to the right page (for example out of the
+        # first-sign-in password step) without another round trip.
+        return Response({"data": {"accepted": True, "user": _user_payload(request.user)}})
 
 
 class MeView(APIView):

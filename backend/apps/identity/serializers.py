@@ -146,8 +146,14 @@ class PasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(trim_whitespace=False, write_only=True)
 
     def validate_new_password(self, value):
-        validate_password(value)
+        # The account's own name and email count, so "Mentormama2026" is refused for admin@mentormama...
+        validate_password(value, user=self.context.get("user"))
         return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] == attrs["current_password"]:
+            raise serializers.ValidationError({"new_password": "Choose a password different from your current one."})
+        return attrs
 
 
 class ProfileUpdateSerializer(serializers.Serializer):

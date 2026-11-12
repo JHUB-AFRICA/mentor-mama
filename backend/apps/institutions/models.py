@@ -4,6 +4,7 @@ from django.db import models
 from PIL import Image
 
 from apps.core.models import BaseModel
+from apps.core.storage import private_storage
 from apps.core.validators import validate_partner_logo
 
 
@@ -20,7 +21,7 @@ class Institution(BaseModel):
     contact_person = models.CharField(max_length=120, blank=True, default="")
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=32, blank=True, default="")
-    logo = models.ImageField(upload_to=partner_logo_upload_to, blank=True, null=True, validators=[validate_partner_logo])
+    logo = models.ImageField(upload_to=partner_logo_upload_to, storage=private_storage, blank=True, null=True, validators=[validate_partner_logo])
     is_active = models.BooleanField(default=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 

@@ -55,3 +55,21 @@
    Let every block shrink to the screen; wide content scrolls inside its own container instead. */
 .pa > * { min-width: 0; max-width: 100%; }
 .pf-grid > * { margin: 0 !important; } /* the kit spaces stacked fields with a top margin; the grid gap does that here */
+
+/* Skeletons */
+.pf-sk-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.pf-sk-stack { display: grid; gap: 8px; min-width: 0; }
+.pf-sk-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-sk-between { justify-content: space-between; flex-wrap: nowrap; }
+.pf-sk-gap { margin-top: 1.35rem; }
+.pf-sk-gap-sm { gap: 14px; }
+.pf-sk-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 1.35rem; }
+@media (max-width: 64rem) { .pf-sk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 30rem) { .pf-sk-stats { grid-template-columns: minmax(0, 1fr); } }
+.pf-sk-stat { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid #e4e8ee; border-radius: 14px; background: #fff; }
+.pf-sk-card-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid #e4e8ee; }
+.pf-sk-table { display: grid; }
+.pf-sk-table__row { display: grid; gap: 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid #eef1f5; }
+.pf-sk-table__head { padding-block: 12px; border-bottom-color: #e4e8ee; }
+@media (max-width: 40rem) { .pf-sk-table__row { grid-template-columns: minmax(0, 1fr) auto !important; } .pf-sk-table__row > :nth-child(n + 3) { display: none; } }
+.pf-alert { margin: 0; padding: 10px 14px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.875rem; }

@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, UserPlus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
 import { Field, Modal, TextArea, TextInput } from "../../components/kit";
 import { ApiError, createPlatformProgramme, getPlatformProgrammes, inviteProgrammeAdmin, type PersonInput, type PlatformProgramme } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, EmptyState, StatusPill } from "../programme-admin/ui/AdminKit";
 import { DataTable } from "../programme-admin/ui/DataTable";
+import { TableRowsSkeleton } from "./PlatformSkeletons";
 import { EMPTY_PERSON, PersonFields, formatDate, personProblem } from "./platformUi";
 
 export function PlatformProgrammes({ onError }: { onError: (message: string) => void }) {
@@ -68,7 +68,7 @@ export function PlatformProgrammes({ onError }: { onError: (message: string) => 
         }
       />
       {query.isPending ? (
-        <Skeleton className="h-64" />
+        <TableRowsSkeleton rows={4} columns={6} label="programmes" />
       ) : query.isError ? (
         <PortalErrorState onRetry={() => void query.refetch()} />
       ) : (

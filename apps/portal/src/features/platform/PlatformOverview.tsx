@@ -1,11 +1,11 @@
 import type { ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertTriangle, Building2, CheckCircle2, CircleSlash, LifeBuoy, MailWarning, RefreshCw, UserCheck, Users, XCircle } from "lucide-react";
-import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { getPlatformOverview, type SystemCheck } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, ListRow, StatCard, StatGrid, StatusPill, type PillTone } from "../programme-admin/ui/AdminKit";
 import { formatDate } from "./platformUi";
+import { OverviewSkeleton } from "./PlatformSkeletons";
 
 const STATE: Record<SystemCheck["state"], { tone: PillTone; label: string; icon: ReactElement }> = {
   ok: { tone: "success", label: "Healthy", icon: <CheckCircle2 /> },
@@ -17,14 +17,7 @@ const STATE: Record<SystemCheck["state"], { tone: PillTone; label: string; icon:
 export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "programmes" | "accounts" | "support" | "activity") => void }) {
   // Refreshes every 30 seconds so the page can be left open as a status board.
   const query = useQuery({ queryKey: ["platform-overview"], queryFn: getPlatformOverview, refetchInterval: 30_000 });
-  if (query.isPending)
-    return (
-      <AdminPage>
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-28" />
-        <Skeleton className="h-64" />
-      </AdminPage>
-    );
+  if (query.isPending) return <OverviewSkeleton />;
   if (query.isError) return <PortalErrorState onRetry={() => void query.refetch()} />;
   const data = query.data;
   const system = data.system;

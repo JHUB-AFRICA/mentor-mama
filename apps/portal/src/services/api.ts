@@ -2056,14 +2056,15 @@ export async function confirmPasswordReset(
 export async function changePassword(
   currentPassword: string,
   newPassword: string,
-): Promise<void> {
-  await request<void>("/api/v1/auth/password-change", {
+): Promise<CurrentUser | null> {
+  const response = await request<{ data?: { user?: CurrentUser } } | undefined>("/api/v1/auth/password-change", {
     method: "POST",
     body: JSON.stringify({
       current_password: currentPassword,
       new_password: newPassword,
     }),
   });
+  return response?.data?.user ?? null;
 }
 
 /**

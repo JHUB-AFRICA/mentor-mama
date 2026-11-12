@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LifeBuoy, XCircle } from "lucide-react";
-import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
 import { ApiError, getPlatformSupportRequests, resolvePlatformSupportRequest, type PlatformSupportRequest } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptyState, Notice, StatusPill } from "../programme-admin/ui/AdminKit";
 import { ReasonDialog, formatDate } from "./platformUi";
+import { SupportSkeleton } from "./PlatformSkeletons";
 
 type Pending = { decision: "recover" | "close"; request: PlatformSupportRequest } | null;
 
@@ -35,13 +35,7 @@ export function PlatformSupport({ onError }: { onError: (message: string) => voi
     onError: (cause) => onError(cause instanceof ApiError ? cause.message : "We could not review this request."),
   });
 
-  if (query.isPending)
-    return (
-      <AdminPage>
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-64" />
-      </AdminPage>
-    );
+  if (query.isPending) return <SupportSkeleton />;
   if (query.isError) return <PortalErrorState onRetry={() => void query.refetch()} />;
   const rows = query.data.filter((row) => row.status === tab);
   const waiting = query.data.filter((row) => row.status === "pending").length;

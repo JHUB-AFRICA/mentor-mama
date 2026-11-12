@@ -63,7 +63,7 @@ export function PlatformWorkspace({
   };
 
   let page: ReactNode;
-  if (user.must_change_password) page = <InitialPasswordGate onChanged={onUserUpdated} onError={onError} />;
+  if (user.must_change_password) page = <InitialPasswordGate onChanged={onUserUpdated} />;
   else if (active === "programmes") page = <PlatformProgrammes onError={onError} />;
   else if (active === "accounts") page = <PlatformAccounts currentUserId={user.id} onError={onError} />;
   else if (active === "support") page = <PlatformSupport onError={onError} />;
@@ -119,26 +119,32 @@ export function PlatformWorkspace({
   );
 }
 
-/** First sign-in with the deploy-time password: choose a new one before anything else is possible. */
-function InitialPasswordGate({ onChanged, onError }: { onChanged: (user: CurrentUser) => void; onError: (message: string) => void }) {
+/**
+ * First sign-in with the deploy-time password: choose a new one before anything else is possible.
+ * On success the updated account is applied at once and the person lands on the Overview.
+ */
+function InitialPasswordGate({ onChanged }: { onChanged: (user: CurrentUser) => void }) {
   const { pushToast } = useToast();
+  const go = useNavigate();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const problem =
     next.length < 12 ? "Use at least 12 characters." : next !== confirm ? "The new passwords do not match." : next === current ? "Choose a password different from the initial one." : null;
 
   async function submit() {
     setBusy(true);
+    setServerError(null);
     try {
-      await changePassword(current, next);
-      const session = await getSessionState();
-      if (session.user) onChanged(session.user);
-      pushToast({ kind: "success", title: "Password changed", message: "Your platform account now uses your own password." });
+      const updated = (await changePassword(current, next)) ?? (await getSessionState()).user;
+      if (!updated) throw new ApiError("Your session ended. Sign in again with your new password.", 401);
+      pushToast({ kind: "success", title: "Password changed", message: "You're all set. Welcome to platform administration." });
+      go("/platform", { replace: true });
+      onChanged({ ...updated, must_change_password: false });
     } catch (cause) {
-      onError(cause instanceof ApiError ? cause.message : "We could not change your password. Please try again.");
-    } finally {
+      setServerError(cause instanceof ApiError ? cause.message : "We could not change your password. Please try again.");
       setBusy(false);
     }
   }
@@ -155,13 +161,18 @@ function InitialPasswordGate({ onChanged, onError }: { onChanged: (user: Current
           className="pf-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!problem) void submit();
+            if (!problem && !busy) void submit();
           }}
         >
+          {serverError && (
+            <p className="pf-alert" role="alert">
+              {serverError}
+            </p>
+          )}
           <Field label="Initial password" required>
             <PasswordInput leading={<LockKeyhole />} value={current} autoComplete="current-password" onChange={(event) => setCurrent(event.target.value)} />
           </Field>
-          <Field label="New password" hint="At least 12 characters. Use a password manager." required>
+          <Field label="New password" hint="At least 12 characters, not a common password, and not similar to your name or email." required>
             <PasswordInput leading={<KeyRound />} value={next} autoComplete="new-password" onChange={(event) => setNext(event.target.value)} />
           </Field>
           <Field label="Confirm new password" required error={confirm && next !== confirm ? "The new passwords do not match." : undefined}>
@@ -169,8 +180,8 @@ function InitialPasswordGate({ onChanged, onError }: { onChanged: (user: Current
           </Field>
           <Notice icon={<LockKeyhole />}>Other devices signed in to this account are signed out when you change the password.</Notice>
           <div>
-            <AdminButton type="submit" disabled={busy || !current || Boolean(problem)}>
-              {busy ? "Saving…" : "Save new password"}
+            <AdminButton type="submit" disabled={busy || !current || Boolean(problem)} aria-busy={busy}>
+              {busy ? "Saving…" : "Save and continue"}
             </AdminButton>
           </div>
         </form>

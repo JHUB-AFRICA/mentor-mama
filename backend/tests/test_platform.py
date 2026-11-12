@@ -199,3 +199,62 @@ def test_overview_reports_counts_and_system_checks(ops, programme_admin):
     names = {check["name"] for check in data["system"]["checks"]}
     assert {"Database", "Cache", "Background jobs", "Email", "File storage", "AI assistant"} <= names
     assert next(c for c in data["system"]["checks"] if c["name"] == "Database")["state"] == "ok"
+
+
+# ------------------------------------------------------------------ fixes found on the deployed system
+
+def _png():
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), "teal").save(buffer, "PNG")
+    buffer.seek(0)
+    buffer.name = "logo.png"
+    return buffer
+
+
+def test_programme_admin_can_create_a_facility_and_institution_with_a_logo(programme_admin, settings):
+    """Logos used to be written to MEDIA_ROOT, which is not writable (or served) in the production image."""
+    from django.conf import settings as live
+
+    private_root = live.PRIVATE_CONTENT_ROOT
+    settings.MEDIA_ROOT = "/nonexistent-read-only-media"
+    client = APIClient()
+    client.force_authenticate(programme_admin)
+    for path, extra in (("/api/v1/facilities", {"level": "Level 6"}), ("/api/v1/institutions", {"type": "University"})):
+        created = client.post(path, {"name": "Partner with logo", "logo": _png(), **extra}, format="multipart", **_headers())
+        assert created.status_code == 201, created.content
+        logo_url = created.json()["data"]["logo_url"]
+        assert logo_url.startswith(f"{path}/") and "/logo" in logo_url
+        served = client.get(logo_url)
+        assert served.status_code == 200 and served["Content-Type"] == "image/png"
+        assert APIClient().get(logo_url).status_code in {401, 403}
+    from apps.facilities.models import Facility
+    from apps.institutions.models import Institution
+
+    for model in (Facility, Institution):
+        stored = model.objects.get(name="Partner with logo").logo
+        assert str(stored.storage.location) == str(private_root) and stored.storage.exists(stored.name)
+
+
+def test_validation_errors_carry_a_readable_message(programme_admin):
+    client = APIClient()
+    client.force_authenticate(programme_admin)
+    bad = client.post("/api/v1/facilities", {"name": "X", "contact_email": "not-an-email"}, format="json", **_headers())
+    body = bad.json()
+    assert bad.status_code == 400 and "name" in body  # DRF field details are kept
+    assert body["error"]["code"] == "ValidationError" and body["error"]["message"].startswith("Name:")
+
+
+def test_password_change_explains_rejections_and_returns_the_updated_account(platform_admin, ops):
+    platform_admin.must_change_password = True
+    platform_admin.save()
+    weak = ops.post("/api/v1/auth/password-change", {"current_password": STRONG, "new_password": "password1234"}, format="json")
+    assert weak.status_code == 400 and "New password:" in weak.json()["error"]["message"]
+    same = ops.post("/api/v1/auth/password-change", {"current_password": STRONG, "new_password": STRONG}, format="json")
+    assert same.status_code == 400 and "different" in same.json()["error"]["message"]
+    ok = ops.post("/api/v1/auth/password-change", {"current_password": STRONG, "new_password": "Brand-New-Pass-2026!"}, format="json")
+    assert ok.status_code == 200 and ok.json()["data"]["user"]["must_change_password"] is False
+    assert ops.get("/api/v1/platform/accounts").status_code == 200

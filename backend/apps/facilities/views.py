@@ -7,7 +7,7 @@ from apps.facilities.serializers import FacilitySerializer, FacilityUpdateSerial
 
 
 def _payload(item):
-    return {"id": str(item.id), "name": item.name, "county": item.county, "level": item.level, "maternity_unit_name": item.maternity_unit_name, "contact_person": item.contact_person, "contact_email": item.contact_email, "contact_phone": item.contact_phone, "logo_url": item.logo.url if item.logo else None, "archived_at": item.archived_at}
+    return {"id": str(item.id), "name": item.name, "county": item.county, "level": item.level, "maternity_unit_name": item.maternity_unit_name, "contact_person": item.contact_person, "contact_email": item.contact_email, "contact_phone": item.contact_phone, "logo_url": f"/api/v1/facilities/{item.id}/logo?v={int(item.updated_at.timestamp())}" if item.logo else None, "archived_at": item.archived_at}
 
 
 class FacilityListView(APIView):
@@ -39,3 +39,18 @@ class FacilityDetailView(APIView):
             return Response({"error": {"code": "UnauthorizedProgrammeAction", "message": "Facility configuration is not available."}}, status=403)
         return Response({"data": _payload(facility)})
 
+
+
+class FacilityLogoView(APIView):
+    """Partner logos are not sensitive, but are served only to signed-in people of the same programme."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, facility_id):
+        from apps.core.storage import file_response
+        from apps.facilities.models import Facility
+
+        item = Facility.objects.filter(id=facility_id, program_id=request.user.program_id).first() if request.user.program_id else None
+        if item is None or not item.logo:
+            return Response({"error": {"code": "NotFound", "message": "Logo not found."}}, status=404)
+        return file_response(item.logo, cache_seconds=86400)

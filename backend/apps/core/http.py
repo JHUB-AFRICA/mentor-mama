@@ -11,12 +11,40 @@ import logging
 from django.db import IntegrityError
 from django.db import transaction
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from apps.core import idempotency
 from apps.core.errors import DomainError, IdempotencyKeyRequired, translate_integrity_error
 
 logger = logging.getLogger(__name__)
+
+
+FIELD_LABELS = {"non_field_errors": "", "detail": "", "new_password": "New password", "current_password": "Current password"}
+
+
+def _first_text(value):
+    if isinstance(value, dict):
+        for inner in value.values():
+            text = _first_text(inner)
+            if text:
+                return text
+        return ""
+    if isinstance(value, (list, tuple)):
+        texts = [_first_text(item) for item in value]
+        return " ".join(text for text in texts if text)
+    return str(value)
+
+
+def validation_message(fields: dict) -> str:
+    """A short, readable sentence from DRF field errors: "Contact email: Enter a valid email address." """
+    for field, value in fields.items():
+        text = _first_text(value)
+        if not text:
+            continue
+        label = FIELD_LABELS.get(field, str(field).replace("_", " ").capitalize())
+        return f"{label}: {text}" if label else text
+    return "Check the highlighted information and try again."
 
 
 def domain_exception_handler(exc, context):
@@ -44,6 +72,11 @@ def domain_exception_handler(exc, context):
         }}, status=500)
     response = drf_exception_handler(exc, context)
     if response is not None:
+        if isinstance(exc, ValidationError) and isinstance(response.data, (dict, list)) and "error" not in (response.data if isinstance(response.data, dict) else {}):
+            # Keep DRF's field details (clients and tests read them) and add the envelope the portal shows,
+            # so people see the real reason ("This password is too common.") instead of a generic message.
+            fields = response.data if isinstance(response.data, dict) else {"non_field_errors": response.data}
+            response.data = {**fields, "error": {"code": "ValidationError", "message": validation_message(fields), "fields": fields}}
         return response
 
     # DRF's default handler returns None for unexpected exceptions, which lets

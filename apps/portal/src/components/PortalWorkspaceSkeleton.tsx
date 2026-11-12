@@ -1,9 +1,10 @@
 import { Skeleton } from "@mentormama/ui";
 
 export type PortalWorkspaceRole =
-  "program_admin" | "coordinator" | "nurse_manager" | "mentor" | "student";
+  "platform_admin" | "program_admin" | "coordinator" | "nurse_manager" | "mentor" | "student";
 
 const navigation: Record<PortalWorkspaceRole, string[]> = {
+  platform_admin: ["Overview", "Programmes", "Accounts & invitations", "Support requests", "Activity"],
   program_admin: [
     "Overview",
     "Placements",
@@ -148,6 +149,7 @@ function pageKind(pathname: string, role: PortalWorkspaceRole): PageKind {
   const path = pathname.toLowerCase();
   if (
     path === "/admin" ||
+    path === "/platform" ||
     path === "/coordinator" ||
     path === "/facility" ||
     path === "/mentor" ||
@@ -193,7 +195,7 @@ function pageTitle(pathname: string, role: PortalWorkspaceRole) {
   const segment = pathname.split("/").filter(Boolean).at(-1);
   if (
     !segment ||
-    ["admin", "coordinator", "facility", "mentor", "student"].includes(segment)
+    ["admin", "platform", "coordinator", "facility", "mentor", "student"].includes(segment)
   ) {
     return role === "mentor" ? "Today" : "Overview";
   }
@@ -203,7 +205,10 @@ function pageTitle(pathname: string, role: PortalWorkspaceRole) {
 function isActiveItem(label: string, pathname: string) {
   const path = pathname.toLowerCase();
   const routeTerms: Record<string, string[]> = {
-    Overview: ["/admin", "/coordinator", "/facility", "/student"],
+    Overview: ["/admin", "/platform", "/coordinator", "/facility", "/student"],
+    Programmes: ["/programmes"],
+    "Accounts & invitations": ["/accounts"],
+    "Support requests": ["/support"],
     Today: ["/mentor"],
     "People & access": ["/people"],
     "Programme setup": ["/settings"],

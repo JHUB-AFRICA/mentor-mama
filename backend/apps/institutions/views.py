@@ -7,7 +7,7 @@ from apps.institutions.serializers import CohortBulkEnrolmentSerializer, CohortE
 
 
 def _payload(item):
-    return {"id": str(item.id), "name": item.name, "type": item.type, "county": item.county, "contact_person": item.contact_person, "contact_email": item.contact_email, "contact_phone": item.contact_phone, "logo_url": item.logo.url if item.logo else None, "is_active": item.is_active, "archived_at": item.archived_at}
+    return {"id": str(item.id), "name": item.name, "type": item.type, "county": item.county, "contact_person": item.contact_person, "contact_email": item.contact_email, "contact_phone": item.contact_phone, "logo_url": f"/api/v1/institutions/{item.id}/logo?v={int(item.updated_at.timestamp())}" if item.logo else None, "is_active": item.is_active, "archived_at": item.archived_at}
 
 
 class InstitutionListView(APIView):
@@ -150,3 +150,18 @@ def _student_profile_payload(profile):
         "emergency_contact_phone": profile.emergency_contact_phone,
         "emergency_contact_relationship": profile.emergency_contact_relationship,
     }
+
+
+class InstitutionLogoView(APIView):
+    """Partner logos are not sensitive, but are served only to signed-in people of the same programme."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, institution_id):
+        from apps.core.storage import file_response
+        from apps.institutions.models import Institution
+
+        item = Institution.objects.filter(id=institution_id, program_id=request.user.program_id).first() if request.user.program_id else None
+        if item is None or not item.logo:
+            return Response({"error": {"code": "NotFound", "message": "Logo not found."}}, status=404)
+        return file_response(item.logo, cache_seconds=86400)
