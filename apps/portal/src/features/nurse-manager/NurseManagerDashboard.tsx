@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Activity, Building2, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, UserX, Users } from "lucide-react";
+import { Activity, Building2, HeartHandshake, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, UserX, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { BarList } from "../../components/charts";
 import { greetingFor } from "../../lib/greeting";
+import { getMentorActivity } from "../../services/mentor-activity";
 import { getDashboardIndicators, getFacilities, getFacilityMentors, getIncomingPlacements, getOrphanedPlacements, getPlacements, getWards, type CurrentUser } from "../../services/api";
 import {
   AdminButton,
@@ -37,6 +38,8 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
   const incoming = useQuery({ queryKey: ["facility-incoming"], queryFn: getIncomingPlacements, staleTime: 15_000 });
   const orphaned = useQuery({ queryKey: ["facility-orphaned"], queryFn: getOrphanedPlacements, staleTime: 15_000 });
   const orphans = orphaned.data ?? [];
+  const quiet = useQuery({ queryKey: ["facility-inactive-mentors", 14], queryFn: () => getMentorActivity(14), staleTime: 15_000 });
+  const quietMentors = (quiet.data?.results ?? []).filter((row) => row.inactive);
   const [arranging, setArranging] = useState(false);
   const incomingCount = incoming.data?.length ?? 0;
   const n = (key: string) => indicators.data?.indicators[key] ?? 0;
@@ -130,6 +133,36 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
                 onClick={() => go(`/placements/${row.placement_id}`)}
               />
             ))}
+          </AdminCard>
+        )}
+
+        {quiet.isPending ? (
+          <Skeleton className="h-24" />
+        ) : quiet.isError ? null : (
+          <AdminCard
+            className="nm-inactive"
+            titleId="inactive-mentors-card"
+            title={quietMentors.length ? `${quietMentors.length} ${quietMentors.length === 1 ? "mentor may" : "mentors may"} welcome a check-in` : "Mentors are logging sessions"}
+            description={quietMentors.length ? "No recent session, or not signed in yet. A short conversation can help them get going." : "Every mentor with students has logged a session recently."}
+            action={<AdminButton variant="ghost" size="sm" onClick={() => go("/facility/mentors?view=inactive")}>{quietMentors.length ? "View inactive mentors" : "View list"}</AdminButton>}
+            flush
+          >
+            {quietMentors.length === 0 ? (
+              <EmptyState icon={<HeartHandshake />} title="All clear" text="Nobody has been quiet for two weeks or more." />
+            ) : (
+              <div className="pa-list">
+                {quietMentors.slice(0, 3).map((mentor) => (
+                  <ListRow
+                    key={mentor.id}
+                    icon={<HeartHandshake />}
+                    tone="amber"
+                    title={mentor.name}
+                    meta={mentor.reasons.join(" · ")}
+                    onClick={() => go(`/facility/mentors/${mentor.id}`)}
+                  />
+                ))}
+              </div>
+            )}
           </AdminCard>
         )}
 

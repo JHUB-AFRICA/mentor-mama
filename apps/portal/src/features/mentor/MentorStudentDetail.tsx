@@ -25,6 +25,7 @@ import {
   X,
   RefreshCw,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Container } from "@mentormama/ui";
 import { useToast } from "../../components/ToastProvider";
 
@@ -47,8 +48,10 @@ import {
 import { FeedbackAndSafeguardingPanel } from "../safeguarding/FeedbackAndSafeguardingPanel";
 import { InductionChecklist } from "../induction/InductionChecklist";
 import { MentorWorkspaceFrame } from "./MentorWorkspaceFrame";
+import { followUpKeys, listFollowUps } from "../../services/follow-ups";
 
 import "./MentorStudentDetail.css";
+import "./mentor-follow-ups.css";
 
 type MentorTab = "overview" | "history" | "safeguarding";
 
@@ -176,6 +179,14 @@ export function MentorStudentDetail({
   const needsSession =
     placement.state === "active" &&
     (!lastSession || daysSince(lastSession) >= 7);
+  // Follow-ups still open for this student (the same state as the Follow-ups page).
+  const openFollowUpsQuery = useQuery({
+    queryKey: [...followUpKeys.all, "placement", placement.id],
+    queryFn: () => listFollowUps({ status: "pending", placementId: placement.id, pageSize: 50 }),
+    retry: false,
+  });
+  const openFollowUps = openFollowUpsQuery.data?.data ?? [];
+  const followUpDue = needsSession || openFollowUps.length > 0;
   const inductionStep = placement.state === "orientation" || placement.state === "induction";
   const waitingOnStudent = placement.state === "orientation" && orientationAcknowledged !== true;
   const nextStepHref = placement.state === "active"
@@ -447,14 +458,16 @@ export function MentorStudentDetail({
 
           <Stat
             label="Follow-up"
-            value={needsSession ? "Due" : "On track"}
+            value={openFollowUps.length ? `${openFollowUps.length} open` : needsSession ? "Due" : "On track"}
             detail={
-              needsSession
-                ? "Needs attention"
-                : "Within rhythm"
+              openFollowUps.length
+                ? "From earlier sessions"
+                : needsSession
+                  ? "Needs attention"
+                  : "Within rhythm"
             }
             icon={<Target size={17} />}
-            warn={needsSession}
+            warn={followUpDue}
           />
         </section>
 
@@ -495,13 +508,13 @@ export function MentorStudentDetail({
 
               <section
                 className={`student-spotlight ${
-                  needsSession
+                  followUpDue
                     ? "student-spotlight--warning"
                     : "student-spotlight--normal"
                 }`}
               >
                 <div className="student-spotlight__icon">
-                  {needsSession ? (
+                  {followUpDue ? (
                     <Clock3 size={22} />
                   ) : (
                     <CheckCircle2 size={22} />
@@ -510,7 +523,7 @@ export function MentorStudentDetail({
 
                 <div className="student-spotlight__content">
                   <p>
-                    {needsSession
+                    {followUpDue
                       ? "Follow-up due"
                       : "Placement update"}
                   </p>
@@ -521,6 +534,8 @@ export function MentorStudentDetail({
                           lastSession ??
                             placement.planned_start,
                         )} days.`
+                      : openFollowUps.length > 0
+                        ? `${openFollowUps.length} ${openFollowUps.length === 1 ? "follow-up from an earlier session is" : "follow-ups from earlier sessions are"} still open.`
                       : placement.state === "orientation"
                         ? "Check the orientation handoff, then start induction."
                       : placement.state === "induction"
@@ -533,6 +548,8 @@ export function MentorStudentDetail({
                   <span>
                     {needsSession
                       ? "Regular check-ins help keep placements on track."
+                      : openFollowUps.length > 0
+                        ? "Mark each one done on the Follow-ups page once it is finished."
                       : placementClosed
                         ? "No further sessions can be logged. The record below stays available for reference."
                         : "Use the record below to prepare for the next meaningful conversation."}
@@ -543,6 +560,14 @@ export function MentorStudentDetail({
                   <span className="student-spotlight__action" aria-live="polite">
                     {orientationCheckFailed ? "Check acknowledgement" : orientationAcknowledged === false ? "Waiting for student" : "Checking student step"}
                   </span>
+                ) : openFollowUps.length > 0 && !needsSession ? (
+                  <Link
+                    to={`/mentor?view=follow-ups&placement=${encodeURIComponent(placement.id)}`}
+                    className="student-spotlight__action"
+                  >
+                    Review follow-ups
+                    <ArrowRight size={15} />
+                  </Link>
                 ) : (
                   <Link to={nextStepHref} className="student-spotlight__action">
                     {inductionStep

@@ -12,11 +12,14 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core import audit, errors, outbox
 from apps.identity import api as identity
-from apps.mentorship import events
-from apps.mentorship.models import Session, SessionBatch, SessionBatchResult, SessionTopic, SessionType
+from apps.mentorship import events, followups
+from apps.mentorship.models import (
+    FollowUpOutcome, Session, SessionBatch, SessionBatchResult, SessionFollowUp, SessionTopic, SessionType,
+)
 from apps.placements import api as placements
 
 TABLE = "mentorship_session"
@@ -178,3 +181,54 @@ def log_session_batch(cmd: LogSessionBatch, *, actor) -> tuple[SessionBatch, lis
     audit.record(actor=actor, action="session.batch_log", entity_table="mentorship_session_batch",
                  entity_id=batch.id, changes={"selected_count": len(results)})
     return batch, results
+
+
+NOTE_MAX = 280
+
+
+def _follow_up_session(session_id: UUID, *, actor) -> Session:
+    """Lock a follow-up the actor may act on; anything else looks like it does not exist."""
+    identity.require_capability(actor, "manage_follow_ups")
+    allowed = followups.scope_queryset(actor).filter(id=session_id).values_list("id", flat=True).first()
+    if allowed is None:
+        raise errors.UnauthorizedFacilityAccess()
+    # Lock the session row so two simultaneous taps cannot both create a resolution.
+    return Session.objects.select_for_update().get(id=allowed)
+
+
+@transaction.atomic
+def resolve_follow_up(session_id: UUID, *, actor, note: str = "", outcome: str = FollowUpOutcome.DONE) -> tuple[SessionFollowUp, bool]:
+    """Mark a follow-up done.  Idempotent: a second call changes nothing and is not re-audited."""
+    note = (note or "").strip()
+    if len(note) > NOTE_MAX:
+        raise errors.SessionValidationFailed(fields={"note": f"keep the note under {NOTE_MAX} characters"})
+    if outcome not in FollowUpOutcome.values:
+        raise errors.SessionValidationFailed(fields={"outcome": "choose done or not needed"})
+    session = _follow_up_session(session_id, actor=actor)
+    existing = SessionFollowUp.objects.filter(session=session).first()
+    if existing is not None:
+        return existing, False
+    row = SessionFollowUp.objects.create(
+        session=session, outcome=outcome, note=note, resolved_by=actor, resolved_at=timezone.now(),
+    )
+    audit.record(
+        actor=actor, action="session.follow_up_resolve", entity_table=TABLE, entity_id=session.id,
+        changes={"outcome": outcome, "follow_up_action": session.follow_up_action, "has_note": bool(note)},
+    )
+    return row, True
+
+
+@transaction.atomic
+def reopen_follow_up(session_id: UUID, *, actor) -> bool:
+    """Put a resolved follow-up back on the list.  Idempotent."""
+    session = _follow_up_session(session_id, actor=actor)
+    row = SessionFollowUp.objects.filter(session=session).first()
+    if row is None:
+        return False
+    previous = row.outcome
+    row.delete()
+    audit.record(
+        actor=actor, action="session.follow_up_reopen", entity_table=TABLE, entity_id=session.id,
+        changes={"previous_outcome": previous, "follow_up_action": session.follow_up_action},
+    )
+    return True

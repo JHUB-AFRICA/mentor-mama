@@ -30,6 +30,18 @@ def test_seed_builds_every_lifecycle_state_and_rich_history(seeded):
     assert not User.objects.filter(program=seeded, role=Role.PLATFORM_ADMIN).exists()
 
 
+def test_seed_leaves_some_follow_ups_pending_and_some_done(seeded):
+    from apps.mentorship import followups
+
+    mentors = User.objects.filter(program=seeded, role=Role.MENTOR)
+    totals = {"pending": 0, "done": 0}
+    for mentor in mentors:
+        counts = followups.counts(mentor)
+        totals["pending"] += counts["pending"]
+        totals["done"] += counts["done"]
+    assert totals["pending"] > 0 and totals["done"] > 0
+
+
 def test_only_the_two_chosen_people_have_real_addresses(seeded):
     real = set(User.objects.filter(program=seeded).exclude(email__endswith="@demo.sinapstechnology.tech").values_list("email", flat=True))
     assert real == {REAL_ADMIN, REAL_STUDENT}

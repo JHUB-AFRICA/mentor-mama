@@ -1149,7 +1149,7 @@ async function ensureCsrfToken(): Promise<string | null> {
   return csrfToken();
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const method = options?.method?.toUpperCase() ?? "GET";
   const csrf =
     method === "GET" || method === "HEAD" || method === "OPTIONS"

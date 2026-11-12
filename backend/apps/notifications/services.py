@@ -51,6 +51,8 @@ EVENT_TEMPLATES = {
     "OrientationAcknowledged": "placement.orientation_acknowledged",
     "InductionCompleted": "placement.induction_completed",
     "EscalationStatusChanged": "safeguarding.status_changed",
+    "DataRequestSubmitted": "privacy.request_submitted",
+    "DataRequestStatusChanged": "privacy.request_status_changed",
 }
 
 

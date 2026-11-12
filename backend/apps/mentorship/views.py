@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 
 from apps.core.errors import DuplicateSession
 from apps.core.http import IdempotentCommand
-from apps.mentorship import serializers, services
+from apps.identity import api as identity
+from apps.mentorship import followups, serializers, services
 from apps.mentorship.models import Session, SessionBatch, SessionBatchResult
 
 
@@ -32,7 +33,7 @@ class SessionListView(APIView):
             )
         else:
             raise PermissionDenied("Only the assigned mentor or student may view mentorship sessions.")
-        sessions = sessions.prefetch_related("topics").order_by("-session_date", "-submitted_at").distinct()
+        sessions = sessions.select_related("follow_up_resolution").prefetch_related("topics").order_by("-session_date", "-submitted_at").distinct()
         return Response({"data": serializers.SessionSerializer(sessions, many=True).data})
 
     def post(self, request, placement_id):
@@ -117,3 +118,52 @@ class SessionBatchView(APIView):
                      "duplicate_count": sum(row["duplicate"] for row in sessions)},
             "meta": {"command": "log_session_batch", "idempotency_replayed": replayed},
         }, status=status.HTTP_200_OK if replayed else status.HTTP_201_CREATED)
+
+
+class FollowUpListView(APIView):
+    """The signed-in mentor's follow-ups (or, for a nurse manager, supervisor reviews on their facility)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        identity.require_capability(request.user, "manage_follow_ups")
+        query = serializers.FollowUpQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        value = query.validated_data
+        result = followups.listing(request.user, followups.Filters(
+            status=value["status"], action=value["action"],
+            placement_id=str(value["placement_id"] or ""), student_id=str(value["student_id"] or ""),
+            min_age_days=value["min_age_days"], page=value["page"], page_size=value["page_size"],
+        ))
+        return Response(result)
+
+
+class FollowUpSummaryView(APIView):
+    """Cheap counts for the sidebar badge and the overview card."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        identity.require_capability(request.user, "manage_follow_ups")
+        return Response({"data": followups.counts(request.user)})
+
+
+class FollowUpResolveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        payload = serializers.FollowUpResolveSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        _, created = services.resolve_follow_up(
+            session_id, actor=request.user, note=payload.validated_data["note"],
+            outcome=payload.validated_data["outcome"],
+        )
+        return Response({"data": followups.detail(session_id), "meta": {"changed": created}})
+
+
+class FollowUpReopenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        changed = services.reopen_follow_up(session_id, actor=request.user)
+        return Response({"data": followups.detail(session_id), "meta": {"changed": changed}})

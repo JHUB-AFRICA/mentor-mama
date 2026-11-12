@@ -25,6 +25,13 @@ def progress(placement_id: UUID) -> dict:
     }
 
 
+def follow_up_counts(actor) -> dict[str, int]:
+    """Pending / overdue / student-support follow-ups the actor may act on (no session text)."""
+    from apps.mentorship import followups
+
+    return followups.counts(actor)
+
+
 def dashboard_counts(actor) -> dict[str, int]:
     rows = Session.objects.filter(placement__cohort__institution__program_id=actor.program_id)
     if actor.role == "mentor":

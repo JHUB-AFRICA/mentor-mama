@@ -48,6 +48,8 @@ import {
   type Institution,
   type Person,
 } from "../../services/api";
+import { getDataRequestQueue } from "../../services/data-requests";
+import { DataRequestsTab } from "./DataRequestsTab";
 
 type Props = { onInvite: () => void; onOpenRecovery: () => void };
 const roleLabels: Record<string, string> = {
@@ -103,6 +105,15 @@ export function PeopleTable({ onInvite, onOpenRecovery }: Props) {
     queryKey: ["dashboard-summary"],
     queryFn: getDashboardSummary,
   });
+  // "People" or "Data requests" (formal requests to correct, show or delete a person's information).
+  const [section, setSection] = useState<"people" | "requests">(() =>
+    new URLSearchParams(window.location.search).get("section") === "requests" ? "requests" : "people",
+  );
+  const [peopleSearch, setPeopleSearch] = useState("");
+  const openRequests = useQuery({
+    queryKey: ["data-requests", { status: "open", type: "", search: "", overdue: false, page: 1 }],
+    queryFn: () => getDataRequestQueue({ status: "open" }),
+  });
   return (
     <AdminPage className="people-access-shell">
       <AdminPageHeader
@@ -120,8 +131,28 @@ export function PeopleTable({ onInvite, onOpenRecovery }: Props) {
           </>
         }
       />
-      <PeopleKpis summary={summary.data} loading={summary.isPending} error={summary.isError} />
-      <PeopleTableContent onInvite={onInvite} />
+      <AdminTabs
+        label="People and access sections"
+        value={section}
+        onChange={setSection}
+        tabs={[
+          { value: "people", label: "People" },
+          { value: "requests", label: "Data requests", count: openRequests.data?.counts.open },
+        ]}
+      />
+      {section === "people" ? (
+        <>
+          <PeopleKpis summary={summary.data} loading={summary.isPending} error={summary.isError} />
+          <PeopleTableContent onInvite={onInvite} initialSearch={peopleSearch} />
+        </>
+      ) : (
+        <DataRequestsTab
+          onFindPerson={(email) => {
+            setPeopleSearch(email);
+            setSection("people");
+          }}
+        />
+      )}
     </AdminPage>
   );
 }
@@ -179,10 +210,10 @@ function PeopleKpis({
   );
 }
 
-function PeopleTableContent({ onInvite }: Pick<Props, "onInvite">) {
+function PeopleTableContent({ onInvite, initialSearch = "" }: Pick<Props, "onInvite"> & { initialSearch?: string }) {
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  const [searchInput, setSearchInput] = useState(initialSearch);
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);

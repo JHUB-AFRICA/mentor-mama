@@ -5,6 +5,7 @@ import {
   CalendarDays,
   GraduationCap,
   LayoutDashboard,
+  ListChecks,
   Settings2,
   ShieldAlert,
   Users,
@@ -13,6 +14,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { resetScrollLockIfIdle } from "../../lib/scrollLock";
 import { logout, type CurrentUser } from "../../services/api";
+import { useFollowUpCounts } from "../../services/follow-ups";
 import "./RoleWorkspace.css";
 import { PortalSidebar, type SidebarItem } from "./PortalSidebar";
 import { PortalHeader } from "./PortalHeader";
@@ -29,6 +31,7 @@ interface RoleWorkspaceFrameProps {
     | "people"
     | "today"
     | "students"
+    | "followups"
     | "log"
     | "training"
     | "learning"
@@ -80,11 +83,14 @@ export function RoleWorkspaceFrame({
   }
 
   const isMentor = user.role === "mentor";
+  const followUpCounts = useFollowUpCounts(isMentor);
+  const pendingFollowUps = followUpCounts.data?.pending ?? 0;
 
   const navItems: SidebarItem[] = isMentor
     ? [
         { id: "today", label: "Overview", icon: <LayoutDashboard size={18} />, href: "/mentor" },
         { id: "students", label: "Students", icon: <Users size={18} />, href: "/mentor?view=students" },
+        { id: "followups", label: "Follow-ups", icon: <ListChecks size={18} />, href: "/mentor?view=follow-ups", badge: pendingFollowUps },
         { id: "log", label: "Log session", icon: <ClipboardList size={18} />, href: "/mentor?view=log" },
         { id: "training", label: "Training", icon: <GraduationCap size={18} />, href: "/mentor?view=training" },
         { id: "library", label: "Library", icon: <BookOpen size={18} />, href: "/mentor?view=library" },
@@ -182,6 +188,14 @@ export function RoleWorkspaceFrame({
           />
 
           <MobileLink
+            href="/mentor?view=follow-ups"
+            label="Follow-ups"
+            icon={<ListChecks size={19} />}
+            active={active === "followups"}
+            badge={pendingFollowUps}
+          />
+
+          <MobileLink
             href="/mentor?view=log"
             label="Log"
             icon={<ClipboardList size={19} />}
@@ -219,11 +233,13 @@ function MobileLink({
   label,
   icon,
   active,
+  badge,
 }: {
   href: string;
   label: string;
   icon: ReactNode;
   active: boolean;
+  badge?: number;
 }) {
   return (
     <Link
@@ -233,8 +249,19 @@ function MobileLink({
         active ? "workspace-mobile-link--active" : ""
       }`}
     >
-      <span className="workspace-mobile-link__icon">
+      <span className="workspace-mobile-link__icon" style={badge ? { position: "relative" } : undefined}>
         {icon}
+        {badge ? (
+          <span
+            style={{
+              position: "absolute", top: -6, right: -10, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 999,
+              background: "#1d8c8c", color: "#fff", fontSize: 10, fontWeight: 700, lineHeight: "16px", textAlign: "center",
+            }}
+          >
+            {badge > 99 ? "99+" : badge}
+            <span className="sr-only"> waiting</span>
+          </span>
+        ) : null}
       </span>
 
       <span>{label}</span>

@@ -27,6 +27,7 @@ CAPABILITY_ROLES: dict[str, frozenset[str]] = {
     "archive_placement": frozenset({Role.PROGRAM_ADMIN}),
     "withdraw_placement": frozenset({Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "log_session": frozenset({Role.MENTOR}),
+    "manage_follow_ups": frozenset({Role.MENTOR, Role.NURSE_MANAGER}),
     # Lifecycle capabilities are server-enforced even though the pilot UI does
     # not yet expose all of these actions.
     "confirm_placement": frozenset({Role.STUDENT}),
@@ -38,6 +39,11 @@ CAPABILITY_ROLES: dict[str, frozenset[str]] = {
     "review_feedback": frozenset({Role.NURSE_MANAGER, Role.COORDINATOR}),
     "export_reports": frozenset({Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}),
     "manage_content": frozenset({Role.PROGRAM_ADMIN}),
+    "manage_induction_template": frozenset({Role.PROGRAM_ADMIN}),
+    # Formal requests about a person's own data (concept note section 13). Programme administrators handle the
+    # programme's queue; their own requests go to the platform team.
+    "submit_data_request": frozenset({Role.STUDENT, Role.MENTOR, Role.NURSE_MANAGER, Role.COORDINATOR, Role.PROGRAM_ADMIN}),
+    "manage_data_requests": frozenset({Role.PROGRAM_ADMIN}),
 }
 
 ROLE_LABELS = {

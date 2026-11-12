@@ -8,6 +8,11 @@ class ChecklistItemSerializer(serializers.Serializer):
     response = serializers.CharField(allow_null=True)
     comment = serializers.CharField(allow_null=True)
     answered_at = serializers.DateTimeField(allow_null=True)
+    # Added with the template editor; old templates simply return empty values.
+    section = serializers.CharField(allow_blank=True, default="")
+    guidance = serializers.CharField(allow_blank=True, default="")
+    completed_by_role = serializers.CharField(default="mentor")
+    response_kind = serializers.CharField(default="standard")
 
 
 class ChecklistSerializer(serializers.Serializer):
@@ -46,3 +51,24 @@ class OrientationAcknowledgementSerializer(serializers.Serializer):
         if not all(attrs.get(field) for field in required):
             raise serializers.ValidationError("Confirm each orientation statement before continuing.")
         return attrs
+
+
+class TemplateItemInputSerializer(serializers.Serializer):
+    """Shape only. Content rules (length, duplicates, identifiers) are judged by validate_content."""
+    section = serializers.CharField(required=False, allow_blank=True, default="", max_length=400)
+    label = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+    guidance = serializers.CharField(required=False, allow_blank=True, default="", max_length=4000)
+    is_required = serializers.BooleanField(required=False, default=True)
+    completed_by_role = serializers.CharField(required=False, default="mentor", max_length=40)
+    response_kind = serializers.CharField(required=False, default="standard", max_length=40)
+
+
+class TemplateDraftSerializer(serializers.Serializer):
+    title = serializers.CharField(required=False, allow_blank=True, default="", max_length=500)
+    notes = serializers.CharField(required=False, allow_blank=True, default="", max_length=5000)
+    items = TemplateItemInputSerializer(many=True, max_length=200)
+
+
+class CreateTemplateDraftSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=["blank", "clone", "enhanced"])
+    from_version_id = serializers.UUIDField(required=False, allow_null=True, default=None)

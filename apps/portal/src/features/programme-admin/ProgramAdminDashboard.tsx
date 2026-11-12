@@ -95,6 +95,12 @@ const ContentAuthoringWorkspace = lazy(() =>
   })),
 );
 
+const InductionTemplateEditor = lazy(() =>
+  import("./InductionTemplateEditor").then((module) => ({
+    default: module.InductionTemplateEditor,
+  })),
+);
+
 type AdminView =
   | "overview"
   | "people"
@@ -106,6 +112,7 @@ type AdminView =
   | "reports"
   | "safeguarding"
   | "consent"
+  | "induction"
   | "activity"
   | "account";
 type AccountTab =
@@ -116,6 +123,7 @@ type AccountTab =
   | "preferences"
   | "devices"
   | "support"
+  | "privacy"
   | "recovery";
 type SetupSection = "identity" | "directory" | "access";
 type SetupStep = {
@@ -159,6 +167,7 @@ function viewFromPath(pathname: string): AdminView {
   if (pathname.endsWith("/reports")) return "reports";
   if (pathname.endsWith("/safeguarding")) return "safeguarding";
   if (pathname.endsWith("/consent")) return "consent";
+  if (pathname.startsWith("/admin/induction-checklist")) return "induction";
   if (pathname.endsWith("/content")) return "content";
   if (pathname.endsWith("/account")) return "account";
   if (pathname.endsWith("/settings")) return "setup";
@@ -182,6 +191,8 @@ function titleForView(view: AdminView) {
             ? "Reports"
             : view === "consent"
               ? "Consent"
+            : view === "induction"
+              ? "Induction checklist"
             : view === "safeguarding"
               ? "Safeguarding"
               : view === "account"
@@ -196,6 +207,7 @@ function accountTabFromUrl(search: string): AccountTab {
     value === "preferences" ||
     value === "devices" ||
     value === "support" ||
+    value === "privacy" ||
     value === "notifications" ||
     value === "recovery"
     ? value
@@ -232,6 +244,8 @@ export function ProgramAdminDashboard({
         ? "/admin"
         : destination === "placements"
           ? "/placements"
+          : destination === "induction"
+            ? "/admin/induction-checklist"
           : destination === "setup"
             ? "/admin/settings"
             : `/admin/${destination}`;
@@ -304,6 +318,8 @@ export function ProgramAdminDashboard({
       <ConcernQueue user={user} onError={onError} />
     ) : view === "consent" ? (
       <ConsentEditor onError={onError} />
+    ) : view === "induction" ? (
+      <InductionTemplateEditor onError={onError} />
     ) : view === "activity" ? (
       <ActivityTimeline />
     ) : (

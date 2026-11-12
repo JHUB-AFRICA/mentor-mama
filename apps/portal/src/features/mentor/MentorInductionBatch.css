@@ -230,3 +230,22 @@
   .mentor-induction-batch__actions button { width: 100%; }
   .mentor-induction-batch__answers button { flex: 1 1 auto; }
 }
+
+.mentor-induction-batch__group-heading {
+  margin: 1rem 0 0;
+  font-size: .78rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #147d7a;
+}
+.mentor-induction-batch__guidance { margin: .15rem 0 0; color: #607392; font-size: .85rem; }
+.mentor-induction-batch__comment input[type="datetime-local"] {
+  display: block;
+  margin-top: .35rem;
+  min-height: 2.8rem;
+  padding: 0 .75rem;
+  border: 1px solid #dbe4ed;
+  border-radius: .6rem;
+  font: inherit;
+}

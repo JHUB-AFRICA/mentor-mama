@@ -41,6 +41,8 @@ def _email_content(*, eyebrow: str, title: str, intro: str, action_label: str,
 MANDATORY_EVENTS = {
     "EscalationRaised", "EscalationStatusChanged", "SecurityNotificationRequested", "PasswordResetRequested",
     "IdentityInvitationRequested", "EmailVerificationRequested", "EmailMFAChallengeRequested", "PlacementInvitationIssued",
+    # A person's right to hear what happened to their own data request is not an optional update.
+    "DataRequestStatusChanged",
 }
 
 
@@ -211,6 +213,50 @@ def deliver_outbox_event(event) -> None:
             detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
         )
         _send(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, user, event)
+    elif event.event_type == "DataRequestStatusChanged" and user:
+        # Sent whatever the account's state: someone whose account was just deactivated at their own request
+        # still needs to hear that it was completed. The response note stays in the app.
+        kind = {"correction": "correction", "access": "request to see your information", "erasure": "request about your account"}.get(
+            event.payload.get("request_type"), "request")
+        outcome = {
+            "in_review": ("We are looking at your request", f"Your programme team has started reviewing your {kind}.",
+                          "You do not need to do anything. You will hear from us again when there is a decision."),
+            "completed": ("Your request is complete", f"Your programme team has finished your {kind}.",
+                          "Sign in to read what was done."),
+            "declined": ("Your request has been answered", f"Your programme team has replied to your {kind} without making the change.",
+                         "Sign in to read the reason and what you can do next."),
+        }.get(event.payload.get("request_status"))
+        if outcome is None:
+            return
+        title, intro, detail = outcome
+        text = _email_content(
+            eyebrow="Privacy and data", title=title, intro=f"Hello {user.first_name}, {intro}",
+            action_label="See your request",
+            action_url=portal_url({"coordinator": "/coordinator/account", "nurse_manager": "/facility/account", "program_admin": "/admin/account"}.get(user.role, "/account") + "?tab=privacy"),
+            detail=detail, expiry="This message is about a request you made. It contains no personal details.",
+        )
+        _send(f"MentorMAMA: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, user, event)
+    elif event.event_type == "DataRequestSubmitted":
+        kind = {"correction": "a correction", "access": "a copy of the information held about them", "erasure": "the deletion or deactivation of their account"}.get(
+            event.payload.get("request_type"), "a change to their information")
+        for recipient_id in event.payload.get("recipient_user_ids", []):
+            if str(recipient_id) in (event.delivered_to or []):
+                continue
+            recipient = identity.user_of(recipient_id)
+            if not recipient or recipient.status != identity.STATUSES.ACTIVE:
+                continue
+            if not _optional_email_enabled(user_id=recipient.id, event_type=event.event_type):
+                continue
+            text = _email_content(
+                eyebrow="Privacy and data", title="A data request needs a reply",
+                intro=f"Hello {recipient.first_name}, someone in your programme has asked for {kind}.",
+                action_label="Open data requests", action_url=portal_url("/admin/people?section=requests"),
+                detail="Open People & access, then Data requests, to read it and respond. Programmes aim to reply within 30 days.",
+                expiry="No personal details are included in this email.",
+            )
+            _send("A MentorMAMA data request needs a reply", text, settings.DEFAULT_FROM_EMAIL, recipient, event)
+            event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
+            event.save(update_fields=["delivered_to"])
     elif event.event_type in {"PlacementProvisionalNotice", "PlacementStartsSoon"}:
         from apps.placements import api as placements_api
 

@@ -19,7 +19,7 @@ import { TrainingWorkspace } from "../training/TrainingWorkspace";
 import { ContentLibrary } from "../content/ContentLibrary";
 import { ContentDetailScreen } from "../content/ContentDetailScreen";
 
-type AccountTab = "security" | "profile" | "notifications" | "recovery";
+type AccountTab = "security" | "profile" | "notifications" | "privacy" | "recovery";
 
 interface Route {
   nav: CoordinatorNav;
@@ -30,7 +30,7 @@ interface Route {
 
 function accountTab(search: string): AccountTab {
   const value = new URLSearchParams(search).get("tab");
-  return value === "profile" || value === "notifications" || value === "recovery" ? value : "security";
+  return value === "profile" || value === "notifications" || value === "privacy" || value === "recovery" ? value : "security";
 }
 
 /**

@@ -27,6 +27,8 @@ const titles: Record<string, string> = {
   "placement.completed": "A placement is complete",
   "safeguarding.concern_raised": "A safeguarding concern needs review",
   "safeguarding.status_changed": "A safeguarding report has an update",
+  "privacy.request_submitted": "A data request needs a reply",
+  "privacy.request_status_changed": "Your data request has an update",
   "feedback.received": "Confidential feedback is ready for review",
   "mentorship.follow_up": "A mentor follow-up needs review",
   "assessment.final_submitted": "A placement is ready for close-out",
@@ -81,6 +83,14 @@ export function NotificationPopover() {
       }
     }
     const placementId = item.payload.placement_id;
+    if (item.template_key.startsWith("privacy.")) {
+      const area = window.location.pathname.split("/")[1];
+      navigate(item.template_key === "privacy.request_submitted"
+        ? "/admin/people?section=requests"
+        : `${["admin", "coordinator", "facility"].includes(area) ? `/${area}` : ""}/account?tab=privacy`);
+      setOpen(false);
+      return;
+    }
     if (typeof placementId === "string" && placementId) {
       const mentorPath = window.location.pathname.startsWith("/mentor");
       navigate(mentorPath

@@ -48,3 +48,5 @@
   .ss .pa-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
   .ss .pa-stat { flex-direction: column; align-items: flex-start; gap: 0.6rem; padding: 0.85rem; }
 }
+.ss-chip--followup { background: #fff1db; color: #9a4b00; }
+.ss-chip--followup-done { background: #e4f6ec; color: #1f7a4f; }

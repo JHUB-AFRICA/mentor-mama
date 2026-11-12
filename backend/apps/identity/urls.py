@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.identity import demo, views
+from apps.identity import demo, privacy_views, views
 
 urlpatterns = [
     path("auth/csrf", views.CSRFCookieView.as_view(), name="auth-csrf"),
@@ -51,4 +51,11 @@ urlpatterns = [
     path("auth/users/<uuid:user_id>/sessions/revoke", views.AccountSessionsRevokeView.as_view(), name="account-sessions-revoke"),
     path("auth/users/<uuid:user_id>/access", views.AccountAccessView.as_view(), name="account-access"),
     path("me", views.MeView.as_view(), name="me"),
+    path("privacy/requests", privacy_views.OwnRequestsView.as_view(), name="privacy-requests"),
+    path("privacy/requests/admin", privacy_views.AdminRequestsView.as_view(), name="privacy-requests-admin"),
+    path("privacy/requests/admin/<uuid:request_id>", privacy_views.AdminRequestDetailView.as_view(), name="privacy-request-admin-detail"),
+    path("privacy/requests/admin/<uuid:request_id>/review", privacy_views.AdminRequestActionView.as_view(action="review"), name="privacy-request-review"),
+    path("privacy/requests/admin/<uuid:request_id>/complete", privacy_views.AdminRequestActionView.as_view(action="complete"), name="privacy-request-complete"),
+    path("privacy/requests/admin/<uuid:request_id>/decline", privacy_views.AdminRequestActionView.as_view(action="decline"), name="privacy-request-decline"),
+    path("privacy/requests/<uuid:request_id>/withdraw", privacy_views.OwnRequestWithdrawView.as_view(), name="privacy-request-withdraw"),
 ]

@@ -322,6 +322,8 @@ REST_FRAMEWORK = {
         "public_enquiry_global": "400/hour",
         "public_enquiry_status": "30/hour",
         "auth_demo": "60/hour",
+        # Formal data requests (correct / show / delete my data): per signed-in person.
+        "privacy_request": "10/hour",
     },
 }
 

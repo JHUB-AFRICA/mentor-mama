@@ -3,7 +3,7 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from apps.identity.models import Role, Status
+from apps.identity.models import DataRequest, Role, Status
 
 
 class LoginSerializer(serializers.Serializer):
@@ -204,3 +204,29 @@ class MentorProfileSerializer(serializers.Serializer):
     mentorship_experience_years = serializers.IntegerField(min_value=0, max_value=70, required=False, allow_null=True)
     cpd_identifier = serializers.CharField(max_length=64, required=False, allow_blank=True)
     digital_literacy = serializers.IntegerField(min_value=1, max_value=5, required=False, allow_null=True)
+
+
+class DataRequestCreateSerializer(serializers.Serializer):
+    request_type = serializers.ChoiceField(choices=DataRequest.Type.choices)
+    subject_area = serializers.ChoiceField(choices=DataRequest.Area.choices)
+    description = serializers.CharField(min_length=10, max_length=2000, trim_whitespace=True)
+    requested_change = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="", trim_whitespace=True)
+    reason = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="", trim_whitespace=True)
+
+    def validate(self, attrs):
+        if attrs["request_type"] == DataRequest.Type.CORRECTION and not attrs.get("requested_change", "").strip():
+            raise serializers.ValidationError({"requested_change": "Say what it should say instead."})
+        return attrs
+
+
+class DataRequestQuerySerializer(serializers.Serializer):
+    page = serializers.IntegerField(min_value=1, default=1)
+    page_size = serializers.IntegerField(min_value=1, max_value=50, default=20)
+    status = serializers.ChoiceField(choices=["open", "all", *DataRequest.Status.values], default="open")
+    request_type = serializers.ChoiceField(choices=DataRequest.Type.choices, required=False, allow_blank=True, default="")
+    search = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    overdue = serializers.BooleanField(required=False, default=False)
+
+
+class DataRequestNoteSerializer(serializers.Serializer):
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="", trim_whitespace=True)

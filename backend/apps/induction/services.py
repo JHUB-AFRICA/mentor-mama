@@ -81,6 +81,13 @@ def answer_item(checklist_id: UUID, template_item_id: UUID, response: str, *, ac
         # INV-06: items are writable only while the placement is in induction.
         if placements.state_of(checklist.placement_id) != "induction":
             raise errors.InvalidTransition("The induction checklist is not open.")
+        item = TemplateItem.objects.filter(id=template_item_id, template_id=checklist.template_id).first()
+        if item is None:
+            raise errors.UnauthorizedFacilityAccess()
+        if item.response_kind == "scheduled_date" and response == "yes" and not (comment or "").strip():
+            raise errors.SessionValidationFailed(
+                "Add the agreed date and time before marking this as done.", fields={"comment": "date and time required"},
+            )
         row, _ = ItemResponse.objects.update_or_create(
             checklist=checklist, template_item_id=template_item_id,
             defaults={"response": response, "comment": comment, "answered_by": actor},

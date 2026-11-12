@@ -4,9 +4,12 @@ from rest_framework.views import APIView
 
 from apps.core.http import IdempotentCommand
 from apps.core import audit, outbox
-from apps.induction import services
+from apps.induction import services, template_editor
 from apps.induction.models import Checklist, ChecklistTemplate, InductionBatch, InductionBatchResult, ItemResponse, OrientationAcknowledgement
-from apps.induction.serializers import AnswerItemSerializer, ChecklistSerializer, OpenInductionBatchSerializer, OrientationAcknowledgementSerializer
+from apps.induction.serializers import (
+    AnswerItemSerializer, ChecklistSerializer, CreateTemplateDraftSerializer, OpenInductionBatchSerializer,
+    OrientationAcknowledgementSerializer, TemplateDraftSerializer,
+)
 from apps.placements import api as placements, events as placement_events
 from apps.core.errors import UnauthorizedFacilityAccess
 from apps.identity import api as identity
@@ -23,6 +26,8 @@ def _payload(checklist):
         "template_id": str(checklist.template_id),
         "signed_by": checklist.signed_by.full_name if checklist.signed_by else None,
         "items": [{"id": item.id, "label": item.label, "is_required": item.is_required,
+                   "section": item.section, "guidance": item.guidance,
+                   "completed_by_role": item.completed_by_role, "response_kind": item.response_kind,
                    "response": responses.get(item.id).response if responses.get(item.id) else None,
                    "comment": responses.get(item.id).comment if responses.get(item.id) else None,
                    "answered_at": responses.get(item.id).answered_at if responses.get(item.id) else None}
@@ -246,10 +251,100 @@ def _batch_payload(batch):
     return {
         "id": str(batch.id),
         "template_version": batch.template.version,
-        "items": [{"id": str(item.id), "label": item.label, "required": item.is_required}
+        "items": [{"id": str(item.id), "label": item.label, "required": item.is_required,
+                   "section": item.section, "guidance": item.guidance,
+                   "completed_by_role": item.completed_by_role, "response_kind": item.response_kind}
                   for item in batch.template.items.all()],
         "students": [{
             "placement_id": str(result.placement_id),
             "checklist": ChecklistSerializer(_payload(result.checklist)).data,
         } for result in results],
     }
+
+
+# -- programme-admin template editor ------------------------------------------------------------
+class TemplateCollectionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"data": template_editor.list_versions(request.user)})
+
+    def post(self, request):
+        payload = CreateTemplateDraftSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with IdempotentCommand(request, "create_induction_template_draft") as command:
+            if command.replayed:
+                data = template_editor.get_version(request.user, command.result_ref)
+            else:
+                data = template_editor.create_draft(
+                    request.user, mode=payload.validated_data["mode"],
+                    from_version_id=payload.validated_data["from_version_id"],
+                )
+                command.record(data["id"])
+        return Response({"data": data}, status=200 if command.replayed else 201)
+
+
+class EnhancedDraftView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"data": template_editor.enhanced_draft_preview(request.user)})
+
+
+class TemplateDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, template_id):
+        return Response({"data": template_editor.get_version(request.user, template_id)})
+
+    def put(self, request, template_id):
+        payload = TemplateDraftSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with IdempotentCommand(request, "save_induction_template_draft") as command:
+            if command.replayed:
+                data = template_editor.get_version(request.user, template_id)
+            else:
+                data = template_editor.update_draft(request.user, template_id, **payload.validated_data)
+                command.record(template_id)
+        return Response({"data": data})
+
+
+class TemplateValidateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, template_id):
+        return Response({"data": template_editor.validate_draft(request.user, template_id)})
+
+
+def _template_action(request, template_id, command_type, action):
+    with IdempotentCommand(request, command_type) as command:
+        if command.replayed:
+            data = template_editor.get_version(request.user, command.result_ref)
+        else:
+            data = action(request.user, template_id)
+            command.record(data["id"])
+    return data, command.replayed
+
+
+class TemplatePublishView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, template_id):
+        data, _ = _template_action(request, template_id, "publish_induction_template", template_editor.publish)
+        return Response({"data": data})
+
+
+class TemplateDiscardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, template_id):
+        data, _ = _template_action(request, template_id, "discard_induction_template_draft", template_editor.discard)
+        return Response({"data": data})
+
+
+class TemplateRestoreView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, template_id):
+        data, replayed = _template_action(request, template_id, "restore_induction_template", template_editor.restore)
+        return Response({"data": data}, status=200 if replayed else 201)

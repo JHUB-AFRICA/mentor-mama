@@ -31,7 +31,16 @@ import "./student-sessions.css";
 
 type StudentSession = MentorshipSession & {
   placement: Placement;
+  /** Read-only state of the mentor's follow-up; the mentor's notes are never sent to students. */
+  follow_up_status?: "pending" | "done" | null;
 };
+
+function followUpStatusLabel(session: StudentSession) {
+  if (!session.follow_up_action || session.follow_up_action === "none") return null;
+  if (session.follow_up_status === "done") return "Done";
+  if (session.follow_up_status === "pending") return "Pending";
+  return null;
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -385,6 +394,11 @@ function SessionRow({ session, onOpen }: { session: StudentSession; onOpen: (ses
               </span>
             ))}
             {topics.length > 3 && <span className="ss-chip ss-chip--more">+{topics.length - 3}</span>}
+            {followUpStatusLabel(session) && (
+              <span className={`ss-chip ss-chip--followup ss-chip--followup-${session.follow_up_status}`}>
+                Follow-up {followUpStatusLabel(session)?.toLowerCase()}
+              </span>
+            )}
           </span>
         )}
       </span>
@@ -402,9 +416,10 @@ function SessionDetailModal({
   onClose: () => void;
   onOpenPlacement: () => void;
 }) {
+  const followUpState = session ? followUpStatusLabel(session) : null;
   const followUp =
     session?.follow_up_action && session.follow_up_action !== "none"
-      ? formatSessionType(session.follow_up_action)
+      ? `${formatSessionType(session.follow_up_action)}${followUpState ? ` · ${followUpState}` : ""}`
       : "No follow-up recorded";
   return (
     <Modal

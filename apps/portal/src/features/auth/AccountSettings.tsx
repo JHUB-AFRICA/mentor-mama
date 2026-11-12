@@ -11,6 +11,7 @@ import {
   Loader2,
   MonitorSmartphone,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   UserRound,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import { NotificationPreferences } from "./NotificationPreferences";
 import { useToast } from "../../components/ToastProvider";
 import { StudentProfileSettings } from "./StudentProfileSettings";
 import { MentorProfileSettings } from "./MentorProfileSettings";
+import { PrivacyAndData } from "./PrivacyAndData";
 import { Field, FieldRow, SelectInput, TextArea, TextInput } from "../../components/kit";
 import {
   AdminButton,
@@ -46,6 +48,7 @@ type SettingsTab =
   | "preferences"
   | "devices"
   | "support"
+  | "privacy"
   | "recovery";
 
 const accountRoleLabels: Record<string, string> = {
@@ -67,6 +70,7 @@ function isSettingsTab(value: unknown): value is SettingsTab {
     value === "preferences" ||
     value === "devices" ||
     value === "support" ||
+    value === "privacy" ||
     value === "security" ||
     value === "profile" ||
     value === "notifications" ||
@@ -86,6 +90,7 @@ const navItems: Array<{
   { value: "devices", label: "Connected devices", description: "Where you’re signed in", Icon: MonitorSmartphone },
   { value: "notifications", label: "Notifications", description: "Choose what reaches you", Icon: Bell },
   { value: "preferences", label: "Preferences", description: "Language, zone and theme", Icon: SlidersHorizontal },
+  { value: "privacy", label: "Privacy and data", description: "Correct or ask about your information", Icon: ShieldCheck },
   { value: "support", label: "Support", description: "Help and account recovery", Icon: CircleHelp },
 ];
 
@@ -151,7 +156,7 @@ export function AccountSettings({
         </StickyHeader>
         <div className="acct-layout">
           <nav className="acct-nav" aria-label="Settings sections">
-            {navItems.map(({ value, label, description, Icon }) => (
+            {navItems.filter((item) => item.value !== "privacy" || user.capabilities?.submit_data_request).map(({ value, label, description, Icon }) => (
               <button
                 key={value}
                 type="button"
@@ -186,6 +191,7 @@ export function AccountSettings({
               )}
               {tab === "notifications" && <NotificationPreferences onError={onError} />}
               {tab === "preferences" && <PreferencesPanel />}
+              {tab === "privacy" && <PrivacyAndData onError={onError} />}
               {(tab === "support" || tab === "recovery") && <MfaRecovery onError={onError} />}
             </motion.div>
         </div>
@@ -275,6 +281,7 @@ function SettingsOverview({
         <ListRow icon={<MonitorSmartphone />} tone="blue" title="Connected devices" meta="Review and sign out devices" onClick={() => onSelect("devices")} />
         <ListRow icon={<Bell />} tone="amber" title="Notifications" meta="Email and programme updates" onClick={() => onSelect("notifications")} />
         <ListRow icon={<SlidersHorizontal />} tone="violet" title="Preferences" meta="Language, time zone, and theme" onClick={() => onSelect("preferences")} />
+        {user.capabilities?.submit_data_request && <ListRow icon={<ShieldCheck />} tone="green" title="Privacy and data" meta="Correct your information or ask what we hold" onClick={() => onSelect("privacy")} />}
         <ListRow icon={<CircleHelp />} tone="slate" title="Support" meta="Request account recovery" onClick={() => onSelect("support")} />
       </AdminCard>
     </>

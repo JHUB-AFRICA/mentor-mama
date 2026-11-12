@@ -6,6 +6,18 @@ tier_reason: User-visible learning-module creation bug spans the portal form and
 last_updated: 2026-11-11T00:00:00Z
 ---
 
+## Current session update — Concept-note gaps closed and placement overlap fixed (2026-11-12)
+
+Five areas built in parallel (separate agents, isolated test databases via `scripts/pytest-isolated.sh`, integrated and verified together).
+
+1. **Students blocked by finished placements (bug).** Cause: nothing ever wrote `StudentAssignment.ended_on`, so the exclusion constraint `student_no_overlapping_placements` held `[start, forever)` for every placement whatever its state; withdrawn, archived, completed and past placements all blocked later ones. Bulk create and eligibility also used different rules; `update_cohort`'s overlap check never fired. Fix: `ended_on` now records the dates actually held (`student_hold_end`, `sync_student_hold`, re-derived on every state change and on resume), one shared `student_holds` query for single create, bulk and eligibility, cohort overlap rewritten, data-repair migration `placements.0012`. Live overlaps are still rejected by the constraint. Verified on the seeded dev data: completed-then-later allowed, withdrawn and archived dates released, live overlap blocked.
+2. **Induction checklist editor** (`induction.0004`): draft/publish/retire versions, immutable published versions, in-flight checklists keep their version, sections, guidance, a date-time item, validation (rejects wording that asks for patient identifiers), Programme Admin page `/admin/induction-checklist`, and an enhanced 40-item draft (8 sections, researched, sources in docs/product/induction-checklist-enhanced-draft.md), never auto-published.
+3. **Nurse manager inactive mentors** (`GET /api/v1/mentors/activity`): definition in `analytics/mentor_activity.py`, dashboard card, Inactive tab with 7-60 day selector, reasons, CSV.
+4. **Data requests** (`identity.0018`): correction, access and erasure requests from Account settings; admin queue as a "Data requests" tab in People & access with SLA; programme admins' own requests go to the platform Messages inbox; notifications and audit.
+5. **Mentor follow-ups** (`mentorship.0006`): one combined Pending/Done list with overdue rules, mark done/reopen, sidebar badge, overview card, student-side status; nurse-manager API for supervisor follow-ups exists but has no screen yet.
+
+Verified: full backend suite 485 passed, 23 mocked-API Chrome specs, Ruff, tsc, ESLint, portal build, no migration drift, all four migrations applied to the dev database. Not verified: any of this on Render (migrations run on the next deploy via `predeploy`), real-browser runs of the new screens against the real API, the new admin screens by keyboard/screen reader. Decisions recorded in docs/OPEN-QUESTIONS.md.
+
 ## Current session update — Demo access card can be minimised (2026-11-12)
 
 The "Explore demo accounts" card on the sign-in page is now a disclosure: the header is a button (`aria-expanded`, chevron) that minimises it to a slim bar and reopens it; open by default, and the choice is remembered for the browser tab (sessionStorage). Verified: new Chrome spec (minimise, form untouched, remembered after reload, reopen) plus the earlier two, and a real-browser run against seeded data (minimised bar renders, reopening and "Use this account" still signs in at /mentor). Not verified: keyboard arrow navigation between role tabs.

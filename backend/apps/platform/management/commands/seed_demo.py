@@ -42,7 +42,7 @@ from apps.induction.models import TemplateItem
 from apps.institutions.models import Cohort, CohortMembership, Institution, StudentProfile
 from apps.learning import certificates, versioning
 from apps.learning.models import Lesson, ModuleCompletion, Quiz, QuizAttempt, QuizQuestion, TrainingModule
-from apps.mentorship.models import Session, SessionTopic
+from apps.mentorship.models import Session, SessionFollowUp, SessionTopic
 from apps.notifications import services as notification_services
 from apps.placements import services as placement_services
 from apps.placements.models import MentorAssignment, Placement, State, StudentAssignment, WardAssignment
@@ -516,6 +516,14 @@ class Command(BaseCommand):
             SessionTopic.objects.bulk_create([SessionTopic(session=session, topic=t) for t in topics])
             submitted = timezone.make_aware(dt.datetime.combine(when, dt.time(self.rng.choice([9, 11, 14, 16]), self.rng.randint(0, 59))))
             Session.objects.filter(id=session.id).update(submitted_at=submitted, created_at=submitted)
+            # Older follow-ups were mostly dealt with; recent and every second old one stay pending, so the
+            # mentor's Follow-ups page shows both lists.
+            if follow != "none" and (self.today - when).days > 10 and number % 2 == 0:
+                SessionFollowUp.objects.create(
+                    session=session, outcome="done", resolved_by=mentor,
+                    note="Covered on the next shift." if follow == "review_next_shift" else "",
+                    resolved_at=submitted + dt.timedelta(days=2),
+                )
 
     # ------------------------------------------------------------------ feedback and concerns
 

@@ -37,7 +37,6 @@ from apps.placements.models import (
 )
 
 TABLE = "placements_placement"
-PLACEMENT_IN_PROGRESS_STATES = [state for state in State.values if state not in TERMINAL_STATES and state != State.COMPLETED]
 
 
 def _institution_scope(actor, institution_id):
@@ -114,6 +113,51 @@ class BulkCreatePlacements:
     all_eligible: bool = False
 
 
+_ONE_DAY = dt.timedelta(days=1)
+
+
+def student_holds(student_ids, start: dt.date, end: dt.date | None = None):
+    """Student assignments that still hold the student's time within [start, end] (end inclusive).
+
+    This mirrors the database exclusion constraint ``student_no_overlapping_placements``
+    exactly: a hold is the half-open range [started_on, ended_on) and a row with no
+    ``ended_on`` is open-ended. Terminal placements are released by ``sync_student_hold``
+    (empty range) and completed ones are trimmed to their real end, so state is never
+    consulted here: the dates are the single source of truth.
+    """
+    query = StudentAssignment.objects.filter(student_id__in=student_ids).filter(
+        models.Q(ended_on=None) | models.Q(ended_on__gt=models.F("started_on"))
+    ).filter(models.Q(ended_on=None) | models.Q(ended_on__gt=start))
+    if end is not None:
+        query = query.filter(started_on__lt=end + _ONE_DAY)
+    return query
+
+
+def student_hold_end(placement: Placement, started_on: dt.date) -> dt.date:
+    """Exclusive end of the dates a placement holds for its student.
+
+    Withdrawn and archived placements hold nothing (empty range). A completed one holds
+    up to its real end: the earlier of the completion day and its (possibly pause-extended)
+    end date. A live one holds up to its effective end date. The end day is a working day,
+    so it is held (inclusive) and the exclusive bound is the day after.
+    """
+    if placement.state in TERMINAL_STATES:
+        return started_on
+    last_day = placement.actual_end or placement.planned_end
+    if placement.state == State.COMPLETED and placement.completed_at is not None:
+        last_day = min(last_day, timezone.localtime(placement.completed_at).date())
+    return max(started_on, last_day + _ONE_DAY)
+
+
+def sync_student_hold(placement: Placement) -> None:
+    """Re-derive the student's held date range from the placement (call whenever state/end moves)."""
+    for assignment in StudentAssignment.objects.select_for_update().filter(placement=placement):
+        ended_on = student_hold_end(placement, assignment.started_on)
+        if assignment.ended_on != ended_on:
+            assignment.ended_on = ended_on
+            assignment.save(update_fields=["ended_on", "updated_at"])
+
+
 def placement_eligible_students(*, actor, cohort_id: UUID, planned_start=None, planned_end=None, page=1, page_size=25, search="") -> dict:
     """Return cohort students split by placement eligibility for the actor's institution."""
     identity.require_capability(actor, "create_placement")
@@ -124,20 +168,12 @@ def placement_eligible_students(*, actor, cohort_id: UUID, planned_start=None, p
     students = institutions.cohort_students(
         cohort_id=cohort_id, program_id=actor.program_id, institution_id=institution_id
     )
-    existing_query = StudentAssignment.objects.filter(
-        student_id__in=students.values_list("id", flat=True),
-        placement__state__in=PLACEMENT_IN_PROGRESS_STATES,
-    )
-    if planned_start and planned_end:
-        existing_query = existing_query.filter(
-            placement__planned_start__lt=planned_end,
-            placement__planned_end__gt=planned_start,
-        )
+    window_start, window_end = (planned_start, planned_end) if planned_start and planned_end else (timezone.localdate(), None)
     existing = {
         row["student_id"]: row
-        for row in existing_query.values(
-            "student_id", "placement__id", "placement__planned_start", "placement__planned_end"
-        )
+        for row in student_holds(
+            students.values_list("id", flat=True), window_start, window_end
+        ).values("student_id", "placement__id", "placement__planned_start", "placement__planned_end")
     }
     eligible, excluded = [], []
     for student in students:
@@ -182,6 +218,7 @@ def create_placement(cmd: CreatePlacement, *, actor) -> Placement:
             placement=placement,
             student_id=cmd.student_id,
             started_on=cmd.planned_start,
+            ended_on=cmd.planned_end + _ONE_DAY,
             created_by=actor,
         )
         audit.record(actor=actor, action="placement.create", entity_table=TABLE, entity_id=placement.id,
@@ -216,10 +253,7 @@ def bulk_create_placements(cmd: BulkCreatePlacements, *, actor) -> dict:
         ).filter(id__in=candidate_ids).values_list("id", flat=True)
     )
     existing = set(
-        StudentAssignment.objects.filter(
-            student_id__in=candidate_ids,
-            placement__state__in=PLACEMENT_IN_PROGRESS_STATES,
-        ).values_list("student_id", flat=True)
+        student_holds(candidate_ids, cmd.planned_start, cmd.planned_end).values_list("student_id", flat=True)
     )
     skipped = []
     for student_id in candidate_ids:
@@ -243,6 +277,7 @@ def bulk_create_placements(cmd: BulkCreatePlacements, *, actor) -> dict:
                 placement=placement,
                 student_id=student_id,
                 started_on=cmd.planned_start,
+                ended_on=cmd.planned_end + _ONE_DAY,
                 created_by=actor,
             )
             audit.record(actor=actor, action="placement.create", entity_table=TABLE, entity_id=placement.id,
@@ -644,6 +679,7 @@ def resume(placement_id: UUID, *, actor, ended_on: dt.date | None = None) -> Pla
         placement.state = State.ACTIVE
         placement.version += 1
         placement.save(update_fields=["state", "actual_end", "version", "updated_at"])
+        sync_student_hold(placement)
 
         audit.record(actor=actor, action="placement.resume", entity_table=TABLE, entity_id=placement.id,
                      scope=_facility_scope(placement),
@@ -792,6 +828,7 @@ def _apply(placement: Placement, target: State, *, actor, reason: str | None) ->
         fields.append("archived_at")
 
     placement.save(update_fields=fields)
+    sync_student_hold(placement)
 
     event = {
         State.ACTIVE: events.PlacementActivated(placement_id=placement.id),

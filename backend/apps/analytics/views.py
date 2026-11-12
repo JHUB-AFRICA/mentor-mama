@@ -82,6 +82,27 @@ class ReportInsightsView(APIView):
         return Response({"data": data})
 
 
+class MentorActivityView(APIView):
+    """Mentors who may need support (inactive-mentors list); nurse managers and programme admins only."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import uuid
+
+        from apps.analytics import mentor_activity
+
+        facility_id = None
+        raw = request.query_params.get("facility_id")
+        if raw:
+            try:
+                facility_id = uuid.UUID(raw)
+            except ValueError:
+                facility_id = None
+        data = mentor_activity.mentor_activity(actor=request.user, days=request.query_params.get("days"), facility_id=facility_id)
+        return Response({"data": data})
+
+
 class InterruptionDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 

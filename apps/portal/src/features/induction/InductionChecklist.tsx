@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button, Card } from "@mentormama/ui";
 import type { InductionChecklist as Checklist } from "../../services/api";
+import { agreedDateText, itemExtras } from "../../services/induction-templates";
 import "./InductionChecklist.css";
 
 export function InductionChecklist({
@@ -35,11 +36,18 @@ export function InductionChecklist({
         <div className="mentor-induction-checklist__progress"><strong>{completed}/{required.length}</strong><span>required items answered</span></div>
       </div>
       <div className="mentor-induction-checklist__items">
-        {checklist.items.map((item, index) => (
-          <section key={item.id} className="mentor-induction-checklist__item">
+        {checklist.items.map((item, index) => {
+          const extras = itemExtras(item);
+          const scheduled = extras.response_kind === "scheduled_date";
+          const previousSection = index > 0 ? itemExtras(checklist.items[index - 1]).section ?? "" : "";
+          const heading = extras.section && extras.section !== previousSection ? extras.section : null;
+          return (
+          <Fragment key={item.id}>
+            {heading && <h4 className="mentor-induction-checklist__section">{heading}</h4>}
+          <section className="mentor-induction-checklist__item">
             <div className="mentor-induction-checklist__item-title">
               <span>{String(index + 1).padStart(2, "0")}</span>
-              <div><h4>{item.label}{item.required && <sup aria-label="Required">*</sup>}</h4>{item.required && <small>Required before the placement can become active.</small>}</div>
+              <div><h4>{item.label}{item.required && <sup aria-label="Required">*</sup>}</h4>{item.required && <small>Required before the placement can become active.</small>}{extras.guidance && <small className="mentor-induction-checklist__guidance">Guidance: {extras.guidance}</small>}</div>
               {item.response && <span className="mentor-induction-checklist__saved">Saved</span>}
             </div>
             <p className="mentor-induction-checklist__answer-label">What happened?</p>
@@ -48,8 +56,8 @@ export function InductionChecklist({
                 <button
                   key={response}
                   type="button"
-                  disabled={busy}
-                  onClick={() => void onAnswer(item.id, response)}
+                  disabled={busy || (scheduled && response === "yes" && !comments[item.id]?.trim())}
+                  onClick={() => void onAnswer(item.id, response, scheduled ? comments[item.id] : undefined)}
                   aria-pressed={item.response === response}
                   className={item.response === response ? "is-active" : ""}
                 >
@@ -57,10 +65,13 @@ export function InductionChecklist({
                 </button>
               ))}
             </div>
-            <label className="mentor-induction-checklist__note">Note or next action <span>(optional)</span><textarea value={comments[item.id] ?? ""} onChange={(event) => setComments((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="For example, what still needs to happen?" /></label>
+            {scheduled && <label className="mentor-induction-checklist__note">Agreed date and time <span>(required)</span><input type="datetime-local" value={(comments[item.id] ?? "").replace(" ", "T")} onChange={(event) => setComments((current) => ({ ...current, [item.id]: agreedDateText(event.target.value) }))} /></label>}
+            {!scheduled && <label className="mentor-induction-checklist__note">Note or next action <span>(optional)</span><textarea value={comments[item.id] ?? ""} onChange={(event) => setComments((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="For example, what still needs to happen?" /></label>}
             {item.response && comments[item.id] !== (item.comment ?? "") && <Button type="button" variant="tertiary" size="sm" className="mt-2" disabled={busy} onClick={() => void onAnswer(item.id, item.response as "yes" | "no" | "not_applicable", comments[item.id])}>Save note</Button>}
           </section>
-        ))}
+          </Fragment>
+          );
+        })}
       </div>
       <div className="mentor-induction-checklist__footer">
         <p>

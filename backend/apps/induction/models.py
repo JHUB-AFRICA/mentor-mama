@@ -10,11 +10,40 @@ class ChecklistTemplate(BaseModel):
     version = models.IntegerField()
     published_at = models.DateTimeField(null=True, blank=True)
     retired_at = models.DateTimeField(null=True, blank=True)
+    # Editor metadata. All optional so templates created before the editor existed stay valid.
+    title = models.CharField(max_length=120, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    source = models.CharField(max_length=40, blank=True, default="")
+    created_by = models.ForeignKey(
+        "identity.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Live"
+        RETIRED = "retired", "Retired"
+        DISCARDED = "discarded", "Discarded"
+
+    @property
+    def status(self) -> str:
+        """draft = never published; live = published and not retired; discarded = a draft that was thrown away."""
+        if self.published_at is None:
+            return self.Status.DISCARDED if self.retired_at else self.Status.DRAFT
+        return self.Status.RETIRED if self.retired_at else self.Status.PUBLISHED
 
     class Meta:
         db_table = "induction_checklist_template"
         constraints = [
-            models.UniqueConstraint(fields=["program", "version"], name="one_template_version_per_program")
+            models.UniqueConstraint(fields=["program", "version"], name="one_template_version_per_program"),
+            # At most one open draft and one live version per programme.
+            models.UniqueConstraint(
+                fields=["program"], condition=models.Q(published_at__isnull=True, retired_at__isnull=True),
+                name="one_draft_template_per_program",
+            ),
+            models.UniqueConstraint(
+                fields=["program"], condition=models.Q(published_at__isnull=False, retired_at__isnull=True),
+                name="one_live_template_per_program",
+            ),
         ]
 
 
@@ -49,6 +78,11 @@ class TemplateItem(BaseModel):
     label = models.TextField()
     is_required = models.BooleanField(default=True)
     completed_by_role = models.CharField(max_length=32, default="mentor")
+    # Presentation only. Empty section / guidance reproduces the original flat list.
+    section = models.CharField(max_length=80, blank=True, default="")
+    guidance = models.TextField(blank=True, default="")
+    # "standard" = yes / no / not applicable. "scheduled_date" also needs the agreed date and time in the note.
+    response_kind = models.CharField(max_length=20, default="standard")
 
     class Meta:
         db_table = "induction_template_item"

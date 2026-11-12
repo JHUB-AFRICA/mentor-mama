@@ -270,3 +270,70 @@ class ConsentRecord(BaseModel):
     class Meta:
         db_table = "identity_consent_record"
         constraints = [models.UniqueConstraint(fields=["user", "consent_version"], name="consent_once_per_version")]
+
+
+class DataRequest(BaseModel):
+    """A person's formal request about the information held about them (concept note section 13).
+
+    A correction, a copy of what is held, or deletion/deactivation. A human works every one of them: nothing here
+    changes or deletes data by itself. Requests normally go to the programme's administrators; a programme
+    administrator's own request goes to the platform team's Messages inbox (`routed_to`, `enquiry_reference`).
+    Free text must never hold patient information; the forms say so.
+    """
+
+    class Type(models.TextChoices):
+        CORRECTION = "correction", "Correct my information"
+        ACCESS = "access", "Show me what you hold about me"
+        ERASURE = "erasure", "Delete or deactivate my account"
+
+    class Area(models.TextChoices):
+        PROFILE = "profile", "My profile details"
+        PLACEMENT = "placement", "My placement details"
+        SESSION = "session", "A session record"
+        FEEDBACK = "feedback", "Feedback I gave"
+        OTHER = "other", "Something else"
+
+    class Status(models.TextChoices):
+        RECEIVED = "received", "Received"
+        IN_REVIEW = "in_review", "In review"
+        COMPLETED = "completed", "Completed"
+        DECLINED = "declined", "Declined"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    class Route(models.TextChoices):
+        PROGRAMME = "programme", "Programme administrators"
+        PLATFORM = "platform", "Platform team"
+
+    OPEN_STATUSES = (Status.RECEIVED, Status.IN_REVIEW)
+
+    requester = models.ForeignKey(User, on_delete=models.CASCADE, related_name="data_requests")
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="data_requests")
+    request_type = models.CharField(max_length=16, choices=Type.choices)
+    subject_area = models.CharField(max_length=16, choices=Area.choices)
+    description = models.TextField(max_length=2000)
+    requested_change = models.TextField(max_length=2000, blank=True, default="")
+    reason = models.TextField(max_length=1000, blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RECEIVED)
+    response_note = models.TextField(max_length=2000, blank=True, default="")
+    routed_to = models.CharField(max_length=16, choices=Route.choices, default=Route.PROGRAMME)
+    # Set when the request went to the platform inbox; that enquiry's progress is mirrored onto this row.
+    enquiry_reference = models.CharField(max_length=24, blank=True, default="")
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    due_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "identity_data_request"
+        indexes = [
+            models.Index(fields=["program", "routed_to", "status", "due_at"]),
+            models.Index(fields=["requester", "-created_at"]),
+        ]
+        constraints = [
+            # One open request of each kind per person; the service checks first, this stops two taps at once.
+            models.UniqueConstraint(
+                fields=["requester", "request_type"],
+                condition=models.Q(status__in=["received", "in_review"]),
+                name="one_open_data_request_per_type",
+            ),
+        ]

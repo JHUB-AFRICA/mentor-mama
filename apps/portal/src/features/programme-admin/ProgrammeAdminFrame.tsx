@@ -7,6 +7,7 @@ import {
   BookOpen,
   ClipboardList,
   LayoutDashboard,
+  ListChecks,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -31,6 +32,7 @@ export type ProgrammeAdminNav =
   | "reports"
   | "safeguarding"
   | "consent"
+  | "induction"
   | "activity"
   | "settings";
 
@@ -158,6 +160,7 @@ export function ProgrammeAdminFrame({
               { id: "setup", label: "Programme setup", icon: <Building2 />, onSelect: () => navigate("setup") },
               { id: "content", label: "Content library", icon: <BookOpen />, onSelect: () => navigate("content") },
               { id: "consent", label: "Consent", icon: <ShieldCheck />, onSelect: () => navigate("consent") },
+              { id: "induction", label: "Induction checklist", icon: <ListChecks />, onSelect: () => navigate("induction") },
             ],
           },
           {

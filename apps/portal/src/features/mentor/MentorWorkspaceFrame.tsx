@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { CurrentUser } from "../../services/api";
 import { RoleWorkspaceFrame } from "../workspaces/RoleWorkspaceFrame";
 
-export type MentorView = "today" | "students" | "log" | "training" | "library" | "more";
+export type MentorView = "today" | "students" | "followups" | "log" | "training" | "library" | "more";
 
 interface MentorWorkspaceFrameProps {
   user: CurrentUser;

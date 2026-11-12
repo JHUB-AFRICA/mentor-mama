@@ -11,6 +11,7 @@ import {
   Check,
   ClipboardCheck,
   Clock3,
+  ListChecks,
   Search,
   Wifi,
   WifiOff,
@@ -25,6 +26,7 @@ import type {
 } from "../../services/api";
 
 import { getPlacementProgress } from "../../services/api";
+import { useFollowUpCounts } from "../../services/follow-ups";
 import { OfflineSessionQueue } from "../mentorship/OfflineSessionQueue";
 import { MentorWorkspaceFrame } from "./MentorWorkspaceFrame";
 import { MentorFeedbackSummary } from "../assessments/MentorFeedbackSummary";
@@ -65,6 +67,8 @@ export function MentorToday({
   const [online, setOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
+
+  const followUps = useFollowUpCounts(true);
 
   const [search, setSearch] = useState("");
   const [queueFilter, setQueueFilter] =
@@ -415,14 +419,26 @@ export function MentorToday({
             />
 
             <SummaryCard
-              icon={<Check size={19} />}
-              label="Placement coverage"
-              value={
-                loading
-                  ? null
-                  : activePlacements.length
+              icon={<ListChecks size={19} />}
+              label="Follow-ups due"
+              href="/mentor?view=follow-ups"
+              value={followUps.isPending ? null : followUps.data?.pending ?? 0}
+              detail={
+                followUps.isError
+                  ? "Could not load follow-ups"
+                  : !followUps.data?.pending
+                    ? "You're all caught up"
+                    : followUps.data.student_support
+                      ? `${followUps.data.student_support} may need student support`
+                      : followUps.data.overdue
+                        ? `${followUps.data.overdue} overdue`
+                        : "Open to review"
               }
-              detail="Currently active placements"
+              tone={
+                followUps.data?.pending
+                  ? "attention"
+                  : "default"
+              }
             />
           </section>
 
@@ -703,14 +719,16 @@ function SummaryCard({
   value,
   detail,
   tone = "default",
+  href,
 }: {
   icon: ReactNode;
   label: string;
   value: number | null;
   detail: string;
   tone?: "default" | "attention";
+  href?: string;
 }) {
-  return (
+  const card = (
     <article
       className={`mentor-summary-card ${
         tone === "attention"
@@ -738,6 +756,14 @@ function SummaryCard({
         <p>{detail}</p>
       </div>
     </article>
+  );
+
+  return href ? (
+    <Link to={href} className="mentor-summary-link" aria-label={`${label}: ${value ?? "loading"}. ${detail}`}>
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }
 

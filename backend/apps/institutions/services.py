@@ -158,12 +158,16 @@ def update_cohort(*, actor, cohort_id, **data):
     start, end = data.get("start_date", cohort.start_date), data.get("end_date", cohort.end_date)
     if start >= end:
         raise InvalidCohortDates()
-    if CohortMembership.objects.filter(cohort=cohort, removed_at=None, cohort__institution_id=actor.institution_id).filter(
-        student__cohort_memberships__removed_at__isnull=True,
-        student__cohort_memberships__cohort__archived_at__isnull=True,
-        student__cohort_memberships__cohort__start_date__lt=end,
-        student__cohort_memberships__cohort__end_date__gt=start,
-    ).exclude(student__cohort_memberships__cohort=cohort).exists():
+    # Only live clashes count: removed memberships and archived cohorts are ignored, and
+    # a cohort that ends before the new window starts (or starts after it ends) is no clash.
+    if CohortMembership.objects.filter(
+        student_id__in=CohortMembership.objects.filter(cohort=cohort, removed_at=None).values("student_id"),
+        removed_at__isnull=True,
+        cohort__institution_id=actor.institution_id,
+        cohort__archived_at__isnull=True,
+        cohort__start_date__lt=end,
+        cohort__end_date__gt=start,
+    ).exclude(cohort_id=cohort.id).exists():
         raise CohortOverlap()
     changed = {}
     for key, value in data.items():

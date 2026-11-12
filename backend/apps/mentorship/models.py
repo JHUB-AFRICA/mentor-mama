@@ -94,6 +94,30 @@ class Session(BaseModel):
         super().save(*args, **kwargs)
 
 
+class FollowUpOutcome(models.TextChoices):
+    DONE = "done", "Done"
+    NOT_NEEDED = "not_needed", "Not needed"
+
+
+class SessionFollowUp(BaseModel):
+    """Resolution of the follow-up a session asked for.
+
+    A session's ``follow_up_action`` is pending until a row exists here; reopening
+    deletes the row (the audit trail keeps the history).  Kept off ``Session`` so
+    the session record itself is never rewritten.
+    """
+
+    session = models.OneToOneField(Session, on_delete=models.PROTECT, related_name="follow_up_resolution")
+    outcome = models.CharField(max_length=16, choices=FollowUpOutcome.choices, default=FollowUpOutcome.DONE)
+    note = models.CharField(max_length=280, blank=True, default="")
+    resolved_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="+")
+    resolved_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "mentorship_session_follow_up"
+        indexes = [models.Index(fields=["resolved_at"])]
+
+
 class SessionTopic(models.Model):
     """Rows, not an array: WFR-009 needs at least one, and dashboards group by it."""
 

@@ -5,9 +5,11 @@ import { Gauge, Mail, RefreshCw, Send, UserPlus, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { useToast } from "../../components/ToastProvider";
+import { getMentorActivity } from "../../services/mentor-activity";
 import { getFacilityMentors, resendInvitation, type CurrentUser, type FacilityMentor } from "../../services/api";
-import { AdminButton, AdminPage, AdminPageHeader, EmptyState, SearchField, SelectField, StatCard, StatGrid, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { AdminButton, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatCard, StatGrid, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
 import { ServerPager } from "../programme-admin/ui/DataTable";
+import { InactiveMentorsPanel, inactiveQueryKey } from "./InactiveMentorsPanel";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 
 const STATUSES = [
@@ -26,6 +28,7 @@ export function NurseManagerMentorOperations({ user, onError }: { user: CurrentU
   const search = params.get("search") ?? "";
   const status = params.get("status") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
+  const view = params.get("view") === "inactive" ? "inactive" : "all";
   const [text, setText] = useState(search);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -49,6 +52,7 @@ export function NurseManagerMentorOperations({ user, onError }: { user: CurrentU
     placeholderData: (previous) => previous,
     staleTime: 15_000,
   });
+  const inactiveCount = useQuery({ queryKey: inactiveQueryKey(14), queryFn: () => getMentorActivity(14), staleTime: 15_000 });
   const rows = mentors.data?.results ?? [];
   const active = rows.filter((mentor) => mentor.status === "active").length;
   const full = rows.filter((mentor) => mentor.active_placements >= mentor.max_active_placements).length;
@@ -87,6 +91,19 @@ export function NurseManagerMentorOperations({ user, onError }: { user: CurrentU
             </>
           }
         />
+        <AdminTabs
+          label="Mentor views"
+          value={view}
+          onChange={(next) => patch({ view: next === "inactive" ? "inactive" : "", page: "" })}
+          tabs={[
+            { value: "all", label: "All mentors" },
+            { value: "inactive", label: "Inactive", count: inactiveCount.data?.summary.inactive },
+          ]}
+        />
+        {view === "inactive" ? (
+          <InactiveMentorsPanel />
+        ) : (
+        <>
         <StatGrid>
           <StatCard icon={<Users />} tone="teal" value={mentors.data?.pagination.total_count ?? rows.length} label="Mentors" hint="Facility register" loading={mentors.isPending} />
           <StatCard icon={<Users />} tone="green" value={active} label="Active" hint="On this page" loading={mentors.isPending} />
@@ -187,6 +204,8 @@ export function NurseManagerMentorOperations({ user, onError }: { user: CurrentU
             </div>
             {mentors.data && <ServerPager pagination={mentors.data.pagination} onPage={(next) => patch({ page: String(next) })} noun="mentors" />}
           </div>
+        )}
+        </>
         )}
       </AdminPage>
     </FacilityWorkspaceFrame>

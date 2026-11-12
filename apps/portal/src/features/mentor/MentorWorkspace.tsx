@@ -3,6 +3,7 @@ import type { WorkspaceProps } from "../workspaces/WorkspaceTypes";
 import { MentorToday } from "./MentorToday";
 import { MentorStudents } from "./MentorStudents";
 import { MentorLog } from "./MentorLog";
+import { MentorFollowUps } from "./MentorFollowUps";
 import { MentorInductionBatch } from "./MentorInductionBatch";
 import { MentorStudentDetail } from "./MentorStudentDetail";
 import { MentorMore } from "./MentorMore";
@@ -46,6 +47,9 @@ export function MentorWorkspace(props: WorkspaceProps & { onSignedOut: () => voi
   }
   if (view === "log") {
     return <MentorLog user={props.user} placements={props.placements} onError={props.onError} />;
+  }
+  if (view === "follow-ups") {
+    return <MentorFollowUps user={props.user} />;
   }
   if (view === "induction-batch") {
     return <MentorInductionBatch user={props.user} placements={props.placements} onError={props.onError} onPlacementUpdated={props.onPlacementsUpdated} />;

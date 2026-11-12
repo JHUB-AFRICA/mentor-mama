@@ -1,0 +1,85 @@
+/* Mentor follow-ups: built on the Programme Admin kit tokens, phone first. */
+.mfu-wrap { width: 100%; max-width: 62rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+.mfu-skeleton { display: grid; gap: 0.75rem; }
+.mfu-list { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+
+.mfu-card {
+  display: grid; gap: 0.5rem; border: 1px solid var(--pa-line); border-left-width: 4px; border-radius: 0.9rem;
+  background: var(--pa-surface); padding: 1rem;
+}
+.mfu-card--overdue { border-left-color: #d97706; }
+.mfu-card--support { border-left-color: #be3a6b; background: #fff9fb; }
+.mfu-card--done { border-left-color: #2f9e6b; background: #fbfdfc; }
+.mfu-card__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.5rem 1rem; }
+.mfu-card__who { min-width: 0; }
+.mfu-card__who h3 { margin: 0; font: 700 1rem/1.3 "Inter", sans-serif; color: var(--pa-ink); overflow-wrap: anywhere; }
+.mfu-card__who h3 a { color: inherit; text-decoration: none; }
+.mfu-card__who h3 a:hover { text-decoration: underline; }
+.mfu-card__who p { margin: 0.15rem 0 0; color: var(--pa-muted); font: 400 0.8rem/1.4 "Inter", sans-serif; }
+.mfu-card__chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.mfu-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 999px; background: #eef2f6; padding: 0.3rem 0.65rem;
+  color: #4b5f7c; font: 600 0.72rem/1 "Inter", sans-serif;
+}
+.mfu-chip svg { width: 0.85rem; height: 0.85rem; }
+.mfu-chip--overdue { background: #fff1db; color: #9a4b00; }
+.mfu-chip--support { background: #fde7ef; color: #9b2656; }
+.mfu-chip--done { background: #e4f6ec; color: #1f7a4f; }
+.mfu-card__what { margin: 0.2rem 0 0; color: var(--pa-ink); font: 700 0.95rem/1.35 "Inter", sans-serif; }
+.mfu-card__next { margin: 0; color: var(--pa-ink-2); font: 400 0.86rem/1.55 "Inter", sans-serif; }
+.mfu-card__topics { margin: 0; color: var(--pa-muted); font: 400 0.78rem/1.4 "Inter", sans-serif; }
+.mfu-card__resolved { margin: 0; color: var(--pa-ink-2); font: 400 0.84rem/1.5 "Inter", sans-serif; overflow-wrap: anywhere; }
+
+.mfu-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.mfu-actions .pa-btn { min-height: 2.75rem; }
+.mfu-note { display: grid; gap: 0.35rem; margin-top: 0.4rem; }
+.mfu-note label { color: var(--pa-ink); font: 600 0.84rem/1.3 "Inter", sans-serif; }
+.mfu-note label span { color: var(--pa-muted); font-weight: 400; }
+.mfu-note textarea {
+  width: 100%; resize: vertical; border: 1px solid var(--pa-line); border-radius: 0.7rem; padding: 0.6rem 0.75rem;
+  font: 400 0.9rem/1.5 "Inter", sans-serif; color: var(--pa-ink);
+}
+.mfu-note textarea:focus-visible { outline: 2px solid var(--pa-teal); outline-offset: 1px; }
+.mfu-note p { margin: 0; color: var(--pa-muted); font: 400 0.74rem/1.4 "Inter", sans-serif; }
+
+.mfu-support {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; border: 1px solid #f3c4d6; border-radius: 0.9rem;
+  background: #fff4f8; padding: 0.85rem 1rem; color: #7d1f49;
+}
+.mfu-support > svg { width: 1.3rem; height: 1.3rem; flex: none; }
+.mfu-support div { display: grid; flex: 1 1 14rem; gap: 0.15rem; font: 400 0.82rem/1.4 "Inter", sans-serif; }
+.mfu-support strong { font-weight: 700; font-size: 0.9rem; }
+.mfu-support__action {
+  min-height: 2.75rem; border: 1px solid #e3a2bd; border-radius: 0.7rem; background: #fff; padding: 0 1rem; color: #7d1f49;
+  font: 700 0.82rem/1 "Inter", sans-serif; cursor: pointer;
+}
+.mfu-support__action:focus-visible, .mfu-undo button:focus-visible, .mfu-error button:focus-visible { outline: 2px solid var(--pa-teal); outline-offset: 2px; }
+
+.mfu-live:empty { display: none; }
+.mfu-undo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; border: 1px solid #bfe3d0; border-radius: 0.9rem;
+  background: #eef8f3; padding: 0.7rem 1rem; color: #1f5f41; font: 400 0.86rem/1.4 "Inter", sans-serif;
+}
+.mfu-undo > svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.mfu-undo span { flex: 1 1 10rem; }
+.mfu-undo button {
+  display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.75rem; border: 1px solid #9fd2b9; border-radius: 0.7rem;
+  background: #fff; padding: 0 0.9rem; color: #1f5f41; font: 700 0.82rem/1 "Inter", sans-serif; cursor: pointer;
+}
+.mfu-undo button svg { width: 0.95rem; height: 0.95rem; }
+.mfu-error {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; border: 1px solid #f0cecb; border-radius: 0.9rem;
+  background: #fff2f1; padding: 0.7rem 1rem; color: #a63b3b; font: 500 0.86rem/1.4 "Inter", sans-serif;
+}
+.mfu-error > svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.mfu-error span { flex: 1 1 10rem; }
+.mfu-error button { min-height: 2.75rem; border: 0; background: transparent; color: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
+
+.mfu-pager { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; color: var(--pa-muted); font: 500 0.82rem/1 "Inter", sans-serif; }
+
+@media (min-width: 640px) {
+  .mfu-wrap { padding: 2rem 2rem 3rem; }
+  .mfu-card { padding: 1.15rem 1.25rem; }
+}
+.mfu-scoped { margin: 0; color: var(--pa-ink-2); font: 500 0.84rem/1.4 "Inter", sans-serif; }
+.mfu-scoped button { min-height: 2.75rem; border: 0; background: transparent; color: var(--pa-teal-ink); font-weight: 700; text-decoration: underline; cursor: pointer; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CheckCircle2, ClipboardCheck, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button, Card, Container } from "@mentormama/ui";
@@ -15,6 +15,7 @@ import {
   type InductionReadiness,
   type Placement,
 } from "../../services/api";
+import { agreedDateText, itemExtras } from "../../services/induction-templates";
 import { MentorWorkspaceFrame } from "./MentorWorkspaceFrame";
 import "./MentorInductionBatch.css";
 
@@ -262,13 +263,22 @@ export function MentorInductionBatch({
                 const count = responses.filter(Boolean).length;
                 const unique = [...new Set(responses)];
                 const current = unique.length === 1 ? unique[0] : null;
-                return <section key={item.id} className="mentor-induction-batch__item">
-                  <div className="mentor-induction-batch__item-heading"><span>{String(index + 1).padStart(2, "0")}</span><div><h3>{item.label}{item.required && <sup>*</sup>}</h3><p>{count} of {students.length} students answered{unique.length > 1 ? " · responses differ" : ""}</p></div></div>
-                  <label className="mentor-induction-batch__comment">Shared note <span>(optional)</span><textarea value={comments[item.id] ?? ""} onChange={(event) => setComments((value) => ({ ...value, [item.id]: event.target.value }))} placeholder="Add the same practical detail for everyone in this group" /></label>
+                const extras = itemExtras(item);
+                const scheduled = extras.response_kind === "scheduled_date";
+                const previousSection = index > 0 ? itemExtras(batch.items[index - 1]).section ?? "" : "";
+                const heading = extras.section && extras.section !== previousSection ? extras.section : null;
+                return <Fragment key={item.id}>
+                  {heading && <h3 className="mentor-induction-batch__group-heading">{heading}</h3>}
+                  <section className="mentor-induction-batch__item">
+                  <div className="mentor-induction-batch__item-heading"><span>{String(index + 1).padStart(2, "0")}</span><div><h3>{item.label}{item.required && <sup>*</sup>}</h3>{extras.guidance && <p className="mentor-induction-batch__guidance">Guidance: {extras.guidance}</p>}<p>{count} of {students.length} students answered{unique.length > 1 ? " · responses differ" : ""}</p></div></div>
+                  {scheduled
+                    ? <label className="mentor-induction-batch__comment">Agreed date and time <span>(required)</span><input type="datetime-local" value={(comments[item.id] ?? "").replace(" ", "T")} onChange={(event) => setComments((value) => ({ ...value, [item.id]: agreedDateText(event.target.value) }))} /></label>
+                    : <label className="mentor-induction-batch__comment">Shared note <span>(optional)</span><textarea value={comments[item.id] ?? ""} onChange={(event) => setComments((value) => ({ ...value, [item.id]: event.target.value }))} placeholder="Add the same practical detail for everyone in this group" /></label>}
                   <div className="mentor-induction-batch__answers" role="group" aria-label={`Answer for ${item.label}`}>
-                    {([ ["yes", "Done"], ["no", "Not yet"], ["not_applicable", "Does not apply"] ] as const).map(([value, label]) => <button key={value} type="button" className={current === value ? "is-active" : ""} disabled={saving || Boolean(completedCount)} onClick={() => void applyAnswer(item.id, value)} aria-pressed={current === value}>{label}</button>)}
+                    {([ ["yes", "Done"], ["no", "Not yet"], ["not_applicable", "Does not apply"] ] as const).map(([value, label]) => <button key={value} type="button" className={current === value ? "is-active" : ""} disabled={saving || Boolean(completedCount) || (scheduled && value === "yes" && !comments[item.id]?.trim())} onClick={() => void applyAnswer(item.id, value)} aria-pressed={current === value}>{label}</button>)}
                   </div>
-                </section>;
+                </section>
+                </Fragment>;
               })}
             </div>
             <div className="mentor-induction-batch__actions mentor-induction-batch__sign">
