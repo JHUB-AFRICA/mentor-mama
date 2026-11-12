@@ -158,7 +158,8 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class ProfileUpdateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=120)
-    last_name = serializers.CharField(max_length=120)
+    # Some people have one name (and pilot requesters may give only one), so a last name is optional.
+    last_name = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
 
 

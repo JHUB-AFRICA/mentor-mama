@@ -355,7 +355,7 @@ function ProfileSettings({
       const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
       const updated = await updateProfile({
         first_name: firstName,
-        last_name: lastNameParts.join(" ") || firstName,
+        last_name: lastNameParts.join(" "),
         phone,
       });
       onUserUpdated(updated);

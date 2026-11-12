@@ -270,7 +270,8 @@ class EnquiryEmailResendView(_Action):
 class ConvertAdminSerializer(serializers.Serializer):
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=120)
-    last_name = serializers.CharField(max_length=120)
+    # People often give one name on the pilot form, so a last name is welcome but not required here.
+    last_name = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
 
 

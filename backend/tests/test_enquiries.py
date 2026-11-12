@@ -440,3 +440,28 @@ def test_a_signed_in_person_can_ask_for_help_with_their_account_attached(program
     admin_client = APIClient()
     admin_client.force_authenticate(ops)
     assert admin_client.post("/api/v1/support/help", {"message": "A message from the platform."}, format="json").status_code == 403
+
+
+def test_a_pilot_request_with_a_single_name_can_still_become_a_programme(ops):
+    enquiry = make(kind="pilot", topic="pilot", name="Ric", email="ric@example.org", organisation="Greenfield Hospital",
+                   message="We would like to pilot MentorMAMA in our maternity unit.")
+    body = {"name": "Greenfield Pilot", "admin": {"email": "ric@example.org", "first_name": "Ric"}}  # no last name at all
+    response = ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/convert", body, format="json")
+    assert response.status_code == 200, response.content
+    admin = User.objects.get(email="ric@example.org")
+    assert admin.first_name == "Ric" and admin.last_name == "" and admin.full_name == "Ric" and admin.role == Role.PROGRAM_ADMIN
+    assert response.json()["data"]["converted_programme"]["name"] == "Greenfield Pilot"
+    # An explicitly blank last name is accepted too.
+    other = make(kind="pilot", topic="pilot", name="Amina", email="amina2@example.org", message="Another unit that would like to pilot.")
+    body = {"name": "Second Pilot", "admin": {"email": "amina2@example.org", "first_name": "Amina", "last_name": ""}}
+    assert ops.post(f"/api/v1/platform/enquiries/{other.id}/convert", body, format="json").status_code == 200
+
+
+def test_a_person_with_one_name_can_save_their_profile_without_gaining_a_second_name(db, program):
+    solo = User.objects.create_user("solo@example.org", "pw", first_name="Ric", last_name="", role=Role.PROGRAM_ADMIN, status=Status.ACTIVE, program=program)
+    client = APIClient()
+    client.force_authenticate(solo)
+    response = client.patch("/api/v1/me", {"first_name": "Ric", "last_name": "", "phone": "+254700000001"}, format="json")
+    assert response.status_code == 200, response.content
+    solo.refresh_from_db()
+    assert solo.full_name == "Ric" and solo.phone == "+254700000001"

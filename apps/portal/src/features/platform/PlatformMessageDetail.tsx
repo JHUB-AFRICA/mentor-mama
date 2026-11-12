@@ -582,7 +582,8 @@ function ConvertDialog({ item, onClose, onDone, onError }: { item: EnquiryDetail
   const [year, setYear] = useState(String(item.details?.start_term ?? "").match(/\d{4}/)?.[0] ?? "");
   const [admin, setAdmin] = useState<PersonInput>({ email: item.email, first_name: first, last_name: rest.join(" "), phone: item.phone });
   const [note, setNote] = useState("");
-  const problem = !name.trim() ? "Give the programme a name." : !admin.first_name.trim() || !admin.last_name.trim() ? "Add the administrator’s first and last name." : null;
+  // A pilot requester may have given only one name, so only the first name is required.
+  const problem = !name.trim() ? "Give the programme a name." : !admin.first_name.trim() ? "Add the administrator’s name." : null;
   const create = useMutation({
     mutationFn: () => convertPlatformEnquiry(item.id, { name: name.trim(), academic_year: year.trim(), note: note.trim(), admin: { ...admin, email: admin.email.trim() } }),
     onSuccess: onDone,
@@ -610,7 +611,7 @@ function ConvertDialog({ item, onClose, onDone, onError }: { item: EnquiryDetail
           <Field label="Programme name" required><TextInput value={name} maxLength={120} onChange={(event) => setName(event.target.value)} /></Field>
           <Field label="Academic year" optional><TextInput value={year} maxLength={20} placeholder="2027" onChange={(event) => setYear(event.target.value)} /></Field>
           <Field label="Administrator first name" required><TextInput value={admin.first_name} onChange={(event) => setAdmin({ ...admin, first_name: event.target.value })} /></Field>
-          <Field label="Administrator last name" required><TextInput value={admin.last_name} onChange={(event) => setAdmin({ ...admin, last_name: event.target.value })} /></Field>
+          <Field label="Administrator last name" optional><TextInput value={admin.last_name} onChange={(event) => setAdmin({ ...admin, last_name: event.target.value })} /></Field>
           <Field label="Administrator email" required><TextInput type="email" value={admin.email} onChange={(event) => setAdmin({ ...admin, email: event.target.value })} /></Field>
           <Field label="Phone" optional><TextInput type="tel" value={admin.phone ?? ""} onChange={(event) => setAdmin({ ...admin, phone: event.target.value })} /></Field>
         </div>

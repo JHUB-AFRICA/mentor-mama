@@ -173,6 +173,9 @@ test.describe("platform messages", () => {
     await expect(dialog.getByLabel(/Programme name/)).toHaveValue("Nakuru Level 5 Hospital");
     await expect(dialog.getByLabel(/Administrator email/)).toHaveValue("brian@nakuru.example");
     await expect(dialog.getByLabel(/Administrator first name/)).toHaveValue("Brian");
+    // The requester gave only one name: a last name is optional.
+    await dialog.getByLabel(/Administrator last name/).fill("");
+    await expect(dialog.getByRole("button", { name: "Create and invite" })).toBeEnabled();
     await dialog.getByRole("button", { name: "Create and invite" }).click();
     await expect(page.getByText(/was created from this request/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Create the programme" })).toHaveCount(0);

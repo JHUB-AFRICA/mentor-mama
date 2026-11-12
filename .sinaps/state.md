@@ -6,6 +6,10 @@ tier_reason: User-visible learning-module creation bug spans the portal form and
 last_updated: 2026-11-11T00:00:00Z
 ---
 
+## Current session update — Single-name pilot requesters (2026-11-12)
+
+The "Create the programme" dialog and `POST /platform/enquiries/<id>/convert` required a last name, but a pilot requester may type one name. Last name is now optional there (stored as an empty string; the display name is just the first name). Related: the profile endpoint (`PATCH /api/v1/me`) also accepts an empty last name, and the portal's Account settings no longer copies the first name into the last name for one-word names (it would have turned "Ric" into "Ric Ric"). Ordinary invitations still ask for both names. Verified: new backend tests (single name converts; profile saves without gaining a second name), enquiry, platform, account and identity suites, portal tsc/ESLint, Chrome spec updated to clear the last name and still create the programme. Not run: the full backend suite after this small change.
+
 ## Current session update — Not-found pages, brand link, AfyaVentures URL (2026-11-12)
 
 Website: new `NotFound` page for any unknown address (route `*`, noindex, links to How it works / Resources / Support / Contact). Portal: new `NotFoundScreen` for addresses outside the app (first path segment not one of admin, coordinator, facility, mentor, student, placements, account, platform, settings, activate, reset-password, account-status); known areas still fall through, so a signed-out deep link like /admin/people signs in and lands there. The MentorMAMA brand on every signed-out screen (desktop panel, mobile bar, not-found) now links to the main website (`lib/site.ts` `websiteUrl`, `VITE_WEBSITE_URL`, set in `render.yaml` for the portal build; the in-app sidebar logo still goes to the workspace home). AfyaVentures now links to https://afyaventures.amref.org/.
