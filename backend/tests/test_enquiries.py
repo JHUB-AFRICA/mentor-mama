@@ -318,3 +318,125 @@ def test_enquiry_actions_appear_in_platform_activity(ops):
     ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/reply", {"body": "Thanks, we will be in touch."}, format="json")
     titles = [(a["title"], a["subject"]) for a in ops.get("/api/v1/platform/activity").json()["data"]]
     assert ("Replied to a message", enquiry.reference) in titles
+
+
+# ------------------------------------------------------------------ gaps closed: alerts, assignment, retention, export, status, inbound
+
+def test_exhausted_emails_are_counted_for_the_overview_and_the_inbox(ops, platform_admin):
+    enquiry = make()
+    assert ops.get("/api/v1/platform/overview").json()["data"]["enquiry_emails_failed"] == 0
+    EnquiryEvent.objects.filter(enquiry=enquiry, email_template="acknowledgement").update(email_status="failed")
+    assert ops.get("/api/v1/platform/overview").json()["data"]["enquiry_emails_failed"] == 1
+    assert ops.get("/api/v1/platform/enquiries").json()["data"]["counts"]["email_trouble"] == 1
+
+
+def test_assigning_to_a_colleague_emails_them_but_self_assignment_does_not(ops, platform_admin):
+    enquiry = make()
+    other = User.objects.create_superuser("two@example.test", STRONG, first_name="Two", last_name="Admin")
+    EnquiryEvent.objects.all().delete()
+    ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/assign", {"user_id": str(platform_admin.id)}, format="json")
+    assert not EnquiryEvent.objects.filter(email_template="assigned").exists()
+    ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/assign", {"user_id": str(other.id)}, format="json")
+    enquiries.send_pending_emails()
+    note = sent_to("two@example.test")[0]
+    assert enquiry.reference in note.subject and f"/platform/messages/{enquiry.id}" in note.body
+
+
+def test_retention_deletes_old_spam_and_old_closed_messages_only(ops, platform_admin):
+    spam, old_closed, recent_closed, open_one = (make(email=f"{i}@example.org", message=f"Message number {i} for retention.") for i in range(4))
+    now = timezone.now()
+    Enquiry.objects.filter(id=spam.id).update(status="spam", last_activity_at=now - timedelta(days=31))
+    Enquiry.objects.filter(id=old_closed.id).update(status="closed", closed_at=now - timedelta(days=800))
+    Enquiry.objects.filter(id=recent_closed.id).update(status="resolved", closed_at=now - timedelta(days=100))
+    assert enquiries.purge_old() == {"spam": 1, "closed": 1}
+    assert set(Enquiry.objects.values_list("id", flat=True)) == {recent_closed.id, open_one.id}
+
+
+def test_csv_export_is_safe_audited_and_follows_the_filters(ops):
+    make(name="=HYPERLINK(\"http://evil\")", email="x@example.org", message="A message with a formula in the name.")
+    make(kind="support", topic="sign_in", email="y@example.org", message="I cannot sign in to my account.")
+    response = ops.get("/api/v1/platform/enquiries/export?kind=contact")
+    assert response.status_code == 200 and response["Content-Type"].startswith("text/csv")
+    text = response.content.decode("utf-8-sig")
+    assert "'=HYPERLINK" in text and "y@example.org" not in text and text.count("CON-") == 1
+    assert AuditEntry.objects.filter(action="platform.enquiries_exported").exists()
+    assert APIClient().get("/api/v1/platform/enquiries/export").status_code in {401, 403}
+
+
+def test_saved_replies_can_be_created_updated_and_deleted(ops):
+    created = ops.post("/api/v1/platform/saved-replies", {"title": "Pilot next steps", "body": "Hi {{name}}, thanks for your interest."}, format="json")
+    assert created.status_code == 201
+    ops.post("/api/v1/platform/saved-replies", {"title": "Pilot next steps", "body": "Updated text for {{name}}."}, format="json")
+    listed = ops.get("/api/v1/platform/saved-replies").json()["data"]
+    assert [r["body"] for r in listed] == ["Updated text for {{name}}."]
+    assert ops.delete(f"/api/v1/platform/saved-replies/{listed[0]['id']}").status_code == 204
+    assert ops.get("/api/v1/platform/saved-replies").json()["data"] == []
+
+
+def test_a_sender_can_check_progress_with_reference_and_email_and_learns_nothing_else(ops):
+    enquiry = make()
+    ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/notes", {"body": "Internal: they are difficult."}, format="json")
+    client = APIClient()
+    url = "/api/v1/public/enquiries/status"
+    ok = client.post(url, {"reference": enquiry.reference.lower(), "email": "AMINA@example.org"}, format="json")
+    assert ok.status_code == 200 and ok.json()["data"]["label"] == "Received"
+    assert "difficult" not in ok.content.decode() and "assigned" not in ok.content.decode()
+    wrong = client.post(url, {"reference": enquiry.reference, "email": "other@example.org"}, format="json")
+    missing = client.post(url, {"reference": "CON-2026-9999", "email": "amina@example.org"}, format="json")
+    assert wrong.status_code == missing.status_code == 404 and wrong.json() == missing.json()
+    ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/status", {"status": "spam"}, format="json")
+    assert client.post(url, {"reference": enquiry.reference, "email": "amina@example.org"}, format="json").status_code == 404
+
+
+def test_emails_link_to_the_status_page(ops, platform_admin):
+    make()
+    enquiries.send_pending_emails()
+    assert "/status" in sent_to("amina@example.org")[0].body
+
+
+def test_inbound_replies_are_threaded_reopen_the_message_and_alert_the_team(ops, platform_admin, settings):
+    settings.ENQUIRY_INBOUND_SECRET = "s3cret"
+    enquiry = make()
+    ops.post(f"/api/v1/platform/enquiries/{enquiry.id}/reply", {"body": "Can you share your cohort size please?"}, format="json")
+    enquiries.send_pending_emails()
+    mail.outbox.clear()
+    client = APIClient()
+    url = "/api/v1/public/enquiries/inbound"
+    payload = {"data": {"from": "Amina Otieno <amina@example.org>", "subject": f"Re: Re: question [{enquiry.reference}]",
+                        "text": "We have 30 students per cohort.\n\nOn Mon, MentorMAMA wrote:\n> Can you share your cohort size please?"}}
+    assert client.post(url, payload, format="json").status_code == 404  # no secret
+    assert client.post(url, payload, format="json", HTTP_X_INBOUND_SECRET="nope").status_code == 404
+    assert client.post(url, payload, format="json", HTTP_X_INBOUND_SECRET="s3cret").json()["data"]["accepted"] is True
+    detail = ops.get(f"/api/v1/platform/enquiries/{enquiry.id}").json()["data"]
+    inbound = [e for e in detail["timeline"] if e["type"] == "inbound"]
+    assert inbound and inbound[0]["body"] == "We have 30 students per cohort." and detail["status"] == "in_progress"
+    enquiries.send_pending_emails()
+    assert any(enquiry.reference in m.subject and "replied" in m.body for m in sent_to("ops@example.test"))
+    # A stranger quoting the reference is ignored.
+    stranger = {"from": "evil@example.org", "subject": f"[{enquiry.reference}]", "text": "hello"}
+    assert client.post(url, stranger, format="json", HTTP_X_INBOUND_SECRET="s3cret").json()["data"]["accepted"] is False
+
+
+def test_turnstile_is_enforced_only_when_configured(db, settings):
+    client = APIClient()
+    settings.TURNSTILE_SECRET_KEY = "secret"
+    blocked = client.post(PUBLIC, contact_payload(), format="json")
+    assert blocked.status_code == 400 and blocked.json()["error"]["code"] == "CheckFailed"
+    settings.TURNSTILE_SECRET_KEY = ""
+    assert client.post(PUBLIC, contact_payload(), format="json").status_code == 201
+
+
+def test_a_signed_in_person_can_ask_for_help_with_their_account_attached(program):
+    mentor = User.objects.create_user("m@example.test", STRONG, first_name="Mary", last_name="Mentor", role=Role.PROGRAM_ADMIN, status=Status.ACTIVE, program=program)
+    client = APIClient()
+    assert client.post("/api/v1/support/help", {"message": "I cannot log my session."}, format="json").status_code in {401, 403}
+    client.force_authenticate(mentor)
+    response = client.post("/api/v1/support/help", {"topic": "report_problem", "message": "I cannot log my session today.", "page": "/mentor/sessions"}, format="json")
+    assert response.status_code == 201 and response.json()["data"]["reference"].startswith("SUP-")
+    enquiry = Enquiry.objects.get()
+    assert enquiry.email == "m@example.test" and enquiry.name == "Mary Mentor" and enquiry.details["account_role"] == "program_admin"
+    assert enquiry.organisation == program.name and enquiry.source_page.endswith("/mentor/sessions")
+    ops = User.objects.create_superuser("ops@example.test", STRONG, first_name="Ops", last_name="Admin")
+    admin_client = APIClient()
+    admin_client.force_authenticate(ops)
+    assert admin_client.post("/api/v1/support/help", {"message": "A message from the platform."}, format="json").status_code == 403

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertTriangle, Building2, CheckCircle2, CircleSlash, Inbox, LifeBuoy, MailWarning, RefreshCw, UserCheck, Users, XCircle } from "lucide-react";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { getPlatformOverview, type SystemCheck } from "../../services/api";
-import { AdminButton, AdminCard, AdminPage, AdminPageHeader, ListRow, StatCard, StatGrid, StatusPill, type PillTone } from "../programme-admin/ui/AdminKit";
+import { AdminButton, AdminCard, AdminPage, AdminPageHeader, ListRow, Notice, StatCard, StatGrid, StatusPill, type PillTone } from "../programme-admin/ui/AdminKit";
 import { formatDate } from "./platformUi";
 import { OverviewSkeleton } from "./PlatformSkeletons";
 
@@ -41,6 +41,12 @@ export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "messages" 
         }
       />
 
+      {data.enquiry_emails_failed > 0 && (
+        <Notice icon={<MailWarning />}>
+          {data.enquiry_emails_failed === 1 ? "A message has" : `${data.enquiry_emails_failed} messages have`} an email that could not be delivered after several tries.{" "}
+          <button type="button" className="pf-link pf-link--button" onClick={() => onNavigate("messages")}>Open Messages</button>
+        </Notice>
+      )}
       <StatGrid columns={3}>
         <StatCard icon={<Building2 />} tone="teal" value={data.programmes} label="Programmes"
           hint={data.programmes_without_admin ? `${data.programmes_without_admin} without an administrator` : "All have an administrator"}
@@ -53,6 +59,8 @@ export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "messages" 
           hint={data.enquiries_overdue ? `${data.enquiries_overdue} overdue for a reply` : data.enquiries_new ? "From the website" : "Nothing waiting"} onClick={() => onNavigate("messages")} />
         <StatCard icon={<LifeBuoy />} tone={data.support_pending ? "rose" : "slate"} value={data.support_pending} label="Sign-in help requests"
           hint={data.support_pending ? "Waiting for review" : "Nothing waiting"} onClick={() => onNavigate("support")} />
+        <StatCard icon={<MailWarning />} tone={data.enquiry_emails_failed ? "rose" : "slate"} value={data.enquiry_emails_failed} label="Undelivered emails"
+          hint={data.enquiry_emails_failed ? "Needs a resend" : "All delivered"} onClick={() => onNavigate("messages")} />
       </StatGrid>
 
       <div className="pf-columns">

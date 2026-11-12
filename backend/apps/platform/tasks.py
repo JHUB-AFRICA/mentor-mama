@@ -9,3 +9,11 @@ def send_enquiry_emails_task():
     from apps.platform.enquiries import send_pending_emails
 
     return send_pending_emails()
+
+
+@shared_task
+def purge_old_enquiries_task():
+    """Daily retention sweep: spam after 30 days, resolved/closed enquiries after 24 months."""
+    from apps.platform.enquiries import purge_old
+
+    return purge_old()

@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useScrollReveal } from "../hooks/useScrollReveal";
 import { Mail, MapPin, LifeBuoy } from "lucide-react";
+import { contactEmail } from "../lib/site";
 import EnquiryForm from "../components/EnquiryForm";
 
 export default function Contact() {
@@ -33,7 +34,7 @@ export default function Contact() {
                 <div>
                   <h4 className="text-[14px] font-semibold text-navy">Email Us</h4>
                   <p className="text-body-small text-charcoal-muted mt-1">
-                    info@mentormama.org
+                    {contactEmail}
                   </p>
                 </div>
               </div>

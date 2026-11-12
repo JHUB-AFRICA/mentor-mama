@@ -6,17 +6,26 @@ Platform: `/api/v1/platform/enquiries...` for administrators to read, assign, re
 
 from __future__ import annotations
 
+import csv
+import hmac
 import time
+import urllib.parse
+import urllib.request
 
+from django.conf import settings
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
 
+from apps.core import audit
+from apps.core.documents import csvsafe
 from apps.identity.models import Role, Status, User
 from apps.platform import enquiries, selectors
-from apps.platform.models import Enquiry
+from apps.platform.models import Enquiry, SavedReply
 from apps.platform.views import PlatformView, _error, guarded
 
 MIN_FILL_SECONDS = 1.5
@@ -63,6 +72,7 @@ class PublicEnquirySerializer(serializers.Serializer):
     details = PilotDetailsSerializer(required=False)
     source_page = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
     website = serializers.CharField(required=False, allow_blank=True, default="", max_length=200)  # honeypot
+    turnstile_token = serializers.CharField(required=False, allow_blank=True, default="", max_length=4096)
     started_at = serializers.IntegerField(required=False, allow_null=True, default=None)  # when the form was opened (ms)
 
     def validate(self, attrs):
@@ -80,6 +90,24 @@ class PublicEnquirySerializer(serializers.Serializer):
         return attrs
 
 
+def _turnstile_ok(token: str, request) -> bool:
+    """Cloudflare Turnstile, only when TURNSTILE_SECRET_KEY is set. If Cloudflare cannot be reached we let people through
+    (the rate limits still apply) rather than blocking real senders."""
+    secret = settings.TURNSTILE_SECRET_KEY
+    if not secret:
+        return True
+    if not token:
+        return False
+    try:
+        data = urllib.parse.urlencode({"secret": secret, "response": token}).encode()
+        with urllib.request.urlopen("https://challenges.cloudflare.com/turnstile/v0/siteverify", data=data, timeout=5) as response:  # noqa: S310
+            import json
+
+            return bool(json.load(response).get("success"))
+    except Exception:  # noqa: BLE001
+        return True
+
+
 class PublicEnquiryView(APIView):
     authentication_classes: list = []  # no cookies are read, so there is nothing for a forged page to ride on
     permission_classes = [AllowAny]
@@ -94,6 +122,8 @@ class PublicEnquiryView(APIView):
         if data["website"] or too_fast:
             # A bot filled the hidden field or submitted instantly. Look successful; store nothing.
             return Response({"data": {"reference": "", "received": True}}, status=202)
+        if not _turnstile_ok(data.get("turnstile_token", ""), request):
+            return Response({"error": {"code": "CheckFailed", "message": "We could not confirm you are a person. Reload the page and try again."}}, status=400)
         if not enquiries.email_allowance(data["email"]):
             return Response({"error": {"code": "TooManyRequests", "message": "You have sent several messages from this address recently. We will reply to them soon."}},
                             status=429)
@@ -257,3 +287,157 @@ class EnquiryConvertView(_Action):
 
     def run(self, request, enquiry, data):
         enquiries.convert_to_programme(actor=request.user, enquiry=enquiry, **data)
+
+
+# ------------------------------------------------------------------ public status lookup and inbound replies
+
+class StatusThrottle(AnonRateThrottle):
+    scope = "public_enquiry_status"
+
+
+class StatusQuerySerializer(serializers.Serializer):
+    reference = serializers.CharField(max_length=24)
+    email = serializers.EmailField(max_length=254)
+
+
+class PublicEnquiryStatusView(APIView):
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [StatusThrottle]
+
+    def post(self, request):
+        query = StatusQuerySerializer(data=request.data)
+        query.is_valid(raise_exception=True)
+        result = enquiries.public_status(**query.validated_data)
+        if result is None:  # wrong reference, wrong address and spam all look the same
+            return Response({"error": {"code": "NotFound", "message": "We could not find a request with that reference and email address."}}, status=404)
+        return Response({"data": result})
+
+
+class InboundEnquiryReplyView(APIView):
+    """Receives a sender's emailed reply from an inbound-mail provider. Closed unless ENQUIRY_INBOUND_SECRET is set.
+
+    Accepts `{"from": "a@b.c" | "Name <a@b.c>", "subject": "Re: ... [CON-2026-0001]", "text": "..."}`, either at the top level
+    or under `data` (Resend's envelope). The secret goes in the `X-Inbound-Secret` header or `?secret=`."""
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [GlobalEnquiryThrottle]
+
+    def post(self, request):
+        import re
+        from email.utils import parseaddr
+
+        secret = settings.ENQUIRY_INBOUND_SECRET
+        given = request.headers.get("X-Inbound-Secret") or request.query_params.get("secret", "")
+        if not secret or not hmac.compare_digest(given.encode(), secret.encode()):
+            return Response(status=404)
+        body = request.data.get("data") if isinstance(request.data.get("data"), dict) else request.data
+        sender = parseaddr(str(body.get("from") or ""))[1]
+        match = re.search(r"\b((?:CON|PIL|SUP)-\d{4}-\d{4})\b", str(body.get("subject") or ""))
+        text = str(body.get("text") or body.get("body") or "").strip()
+        if not (sender and match and text):
+            return Response({"data": {"accepted": False}}, status=202)
+        # Drop the quoted history: keep what is above the first "On ... wrote:" or ">" line.
+        lines = []
+        for line in text.splitlines():
+            if line.startswith(">") or re.match(r"^On .+ wrote:\s*$", line):
+                break
+            lines.append(line)
+        reply = "\n".join(lines).strip() or text[:2000]
+        accepted = enquiries.receive_reply(reference=match.group(1), from_email=sender, body=reply) is not None
+        return Response({"data": {"accepted": accepted}}, status=202)
+
+
+# ------------------------------------------------------------------ platform: export and saved replies
+
+class EnquiriesExportView(PlatformView):
+    @guarded
+    def get(self, request):
+        query = EnquiriesQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        params = {**query.validated_data, "page": 1, "page_size": 100}
+        rows = []
+        for page in range(1, 51):  # at most 5,000 rows
+            chunk = selectors.enquiries(actor=request.user, **{**params, "page": page})
+            rows += chunk["results"]
+            if page >= chunk["pagination"]["pages"]:
+                break
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="mentormama-messages-{timezone.now():%Y-%m-%d}.csv"'
+        response["Cache-Control"] = "no-store"
+        response.write(csvsafe.BOM)
+        writer = csv.writer(response)
+        writer.writerow(["Reference", "Type", "Topic", "Status", "Priority", "Name", "Email", "Organisation", "Owner", "Received", "Last activity", "Overdue"])
+        for row in rows:
+            writer.writerow(csvsafe.row([
+                row["reference"], row["kind"], row["topic"], row["status"], row["priority"], row["name"], row["email"], row["organisation"],
+                (row["assigned_to"] or {}).get("name", ""), row["created_at"].isoformat(), row["last_activity_at"].isoformat(), "yes" if row["overdue"] else "no"]))
+        audit.record(actor=request.user, action="platform.enquiries_exported", entity_table="platform_enquiry", entity_id=request.user.id,
+                     scope={"platform": True}, changes={"rows": len(rows), "view": params["view"]})
+        return response
+
+
+class SavedReplySerializer(serializers.Serializer):
+    title = serializers.CharField(min_length=2, max_length=80)
+    body = serializers.CharField(min_length=2, max_length=5000)
+
+
+def _reply_row(reply):
+    return {"id": str(reply.id), "title": reply.title, "body": reply.body}
+
+
+class SavedRepliesView(PlatformView):
+    @guarded
+    def get(self, request):
+        return Response({"data": [_reply_row(r) for r in SavedReply.objects.all()]})
+
+    @guarded
+    def post(self, request):
+        payload = SavedReplySerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        reply, _ = SavedReply.objects.update_or_create(title=payload.validated_data["title"].strip(),
+                                                       defaults={"body": payload.validated_data["body"].strip(), "created_by": request.user})
+        audit.record(actor=request.user, action="platform.saved_reply_saved", entity_table="platform_saved_reply", entity_id=reply.id,
+                     scope={"platform": True}, changes={"title": reply.title})
+        return Response({"data": _reply_row(reply)}, status=201)
+
+
+class SavedReplyDetailView(PlatformView):
+    @guarded
+    def delete(self, request, reply_id):
+        reply = SavedReply.objects.filter(id=reply_id).first()
+        if reply is None:
+            return _missing()
+        audit.record(actor=request.user, action="platform.saved_reply_deleted", entity_table="platform_saved_reply", entity_id=reply.id,
+                     scope={"platform": True}, changes={"title": reply.title})
+        reply.delete()
+        return Response(status=204)
+
+
+# ------------------------------------------------------------------ signed-in help
+
+class HelpRequestSerializer(serializers.Serializer):
+    topic = serializers.ChoiceField(choices=sorted(TOPICS[Enquiry.Kind.SUPPORT]), default="using_platform")
+    message = serializers.CharField(min_length=10, max_length=5000, trim_whitespace=True)
+    page = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+
+
+class HelpRequestView(APIView):
+    """A signed-in person asks for help. Name, email, role and programme come from the account, not the form."""
+
+    def post(self, request):
+        if request.user.role == Role.PLATFORM_ADMIN:
+            return Response({"error": {"code": "NotForPlatformAdmins", "message": "Platform administrators answer help requests."}}, status=403)
+        payload = HelpRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        user = request.user
+        if not enquiries.email_allowance(f"help:{user.email}", limit=5):
+            return Response({"error": {"code": "TooManyRequests", "message": "You have sent several requests recently. We will reply to them soon."}}, status=429)
+        programme = user.program.name if user.program_id else ""
+        enquiry, _ = enquiries.submit(
+            kind=Enquiry.Kind.SUPPORT, topic=data["topic"], name=user.full_name or user.email, email=user.email, organisation=programme,
+            message=data["message"], source_page=("portal" + data["page"])[:120], user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            details={"account_role": user.role, "account_id": str(user.id), "programme": programme, "portal_page": data["page"]})
+        return Response({"data": {"reference": enquiry.reference}}, status=201)

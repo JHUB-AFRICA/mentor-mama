@@ -18,6 +18,10 @@ app.conf.beat_schedule = {
         "task": "apps.platform.tasks.send_enquiry_emails_task",
         "schedule": 30.0,
     },
+    "purge-old-enquiries-daily": {
+        "task": "apps.platform.tasks.purge_old_enquiries_task",
+        "schedule": 86400.0,
+    },
     "refresh-analytics-hourly": {
         "task": "apps.analytics.tasks.refresh_projections_task",
         "schedule": 3600.0,

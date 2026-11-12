@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { CheckCircle2, Send } from "lucide-react";
 import { EnquiryError, sendEnquiry, type EnquiryKind } from "../lib/enquiries";
+import Turnstile, { turnstileSiteKey } from "./Turnstile";
 
 const input =
   "w-full px-5 py-3 rounded-pill bg-cream/50 border border-cream-dark/50 text-navy placeholder:text-charcoal-muted/50 text-body-small focus:outline-none focus:ring-2 focus:ring-sage/30 transition-all";
@@ -76,6 +78,7 @@ export default function EnquiryForm({ kind, sourcePage }: { kind: EnquiryKind; s
     role_title: "", organisation_type: "health_facility", county: "", mentors: "", students: "", start_term: "",
   });
   const [consent, setConsent] = useState(false);
+  const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -108,7 +111,7 @@ export default function EnquiryForm({ kind, sourcePage }: { kind: EnquiryKind; s
                 mentors: number(values.mentors), students: number(values.students), start_term: values.start_term.trim(),
               }
             : undefined,
-        source_page: sourcePage, website: values.website, started_at: opened.current,
+        source_page: sourcePage, website: values.website, started_at: opened.current, turnstile_token: token,
       });
       setReference(ref);
     } catch (cause) {
@@ -136,7 +139,9 @@ export default function EnquiryForm({ kind, sourcePage }: { kind: EnquiryKind; s
             <li key={step}>{step}</li>
           ))}
         </ol>
-        <p className="text-body-small text-charcoal-muted">Can’t find the email? Check your spam folder.</p>
+        <p className="text-body-small text-charcoal-muted">
+          Can’t find the email? Check your spam folder. You can also <Link to={`/status${reference ? `?ref=${reference}` : ""}`} className="text-sage font-semibold underline underline-offset-2">check progress</Link> any time.
+        </p>
       </div>
     );
   }
@@ -235,9 +240,13 @@ export default function EnquiryForm({ kind, sourcePage }: { kind: EnquiryKind; s
       </div>
       <label className="flex items-start gap-3 text-body-small text-charcoal-muted cursor-pointer">
         <input type="checkbox" required checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 h-4 w-4 accent-sage" aria-invalid={invalid("consent")} />
-        <span>I agree that MentorMAMA may use these details to contact me about this {kind === "support" ? "request" : "enquiry"}.</span>
+        <span>
+          I agree that MentorMAMA may use these details to contact me about this {kind === "support" ? "request" : "enquiry"}. Read our{" "}
+          <Link to="/privacy" target="_blank" className="text-sage font-semibold underline underline-offset-2">privacy notice</Link>.
+        </span>
       </label>
-      <button type="submit" disabled={busy} aria-busy={busy} className="w-full px-8 py-3.5 rounded-pill bg-sage text-white font-semibold text-body-small hover:bg-sage/90 transition-colors flex items-center justify-center gap-2 group disabled:opacity-60 disabled:cursor-not-allowed">
+      <Turnstile onToken={setToken} />
+      <button type="submit" disabled={busy || (Boolean(turnstileSiteKey) && !token)} aria-busy={busy} className="w-full px-8 py-3.5 rounded-pill bg-sage text-white font-semibold text-body-small hover:bg-sage/90 transition-colors flex items-center justify-center gap-2 group disabled:opacity-60 disabled:cursor-not-allowed">
         {busy ? "Sending…" : copy.submit}
         {!busy && <Send size={14} className="group-hover:translate-x-0.5 transition-transform" />}
       </button>

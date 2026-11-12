@@ -9,6 +9,9 @@ import {
   Clock,
   Flag,
   Inbox,
+  BookmarkPlus,
+  CornerDownLeft,
+  Trash2,
   Mail,
   MailCheck,
   MailWarning,
@@ -27,6 +30,9 @@ import { DetailList, Field, Modal, SelectInput, TextArea, TextInput } from "../.
 import {
   ApiError,
   addPlatformEnquiryNote,
+  deleteSavedReply,
+  getSavedReplies,
+  saveSavedReply,
   assignPlatformEnquiry,
   convertPlatformEnquiry,
   getPlatformEnquiry,
@@ -70,6 +76,8 @@ export function PlatformMessageDetail({ id, onError }: { id: string; onError: (m
   const [text, setText] = useState("");
   const [statusAction, setStatusAction] = useState<StatusAction | null>(null);
   const [converting, setConverting] = useState(false);
+  const [savingReply, setSavingReply] = useState(false);
+  const [replyTitle, setReplyTitle] = useState("");
 
   const key = ["platform-enquiry", id];
   const query = useQuery({ queryKey: key, queryFn: () => getPlatformEnquiry(id), refetchInterval: 30_000 });
@@ -80,6 +88,23 @@ export function PlatformMessageDetail({ id, onError }: { id: string; onError: (m
     void queryClient.invalidateQueries({ queryKey: ["platform-overview"] });
   };
   const fail = (fallback: string) => (cause: unknown) => onError(cause instanceof ApiError ? cause.message : fallback);
+
+  const savedReplies = useQuery({ queryKey: ["platform-saved-replies"], queryFn: getSavedReplies, staleTime: 5 * 60_000 });
+  const saveReply = useMutation({
+    mutationFn: () => saveSavedReply(replyTitle.trim(), text.trim()),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["platform-saved-replies"] });
+      pushToast({ kind: "success", title: "Saved reply added", message: "Insert it from “Saved replies” on any message." });
+      setSavingReply(false);
+      setReplyTitle("");
+    },
+    onError: fail("We could not save this reply."),
+  });
+  const removeReply = useMutation({
+    mutationFn: (replyId: string) => deleteSavedReply(replyId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["platform-saved-replies"] }),
+    onError: fail("We could not delete this saved reply."),
+  });
 
   const send = useMutation({
     mutationFn: () => (composer === "reply" ? replyToPlatformEnquiry(id, text.trim()) : addPlatformEnquiryNote(id, text.trim())),
@@ -224,6 +249,22 @@ export function PlatformMessageDetail({ id, onError }: { id: string; onError: (m
                   if (text.trim().length >= 2 && !send.isPending) send.mutate();
                 }}
               >
+                {composer === "reply" && (savedReplies.data?.length ?? 0) > 0 && (
+                  <Field label="Saved replies" optional>
+                    <SelectInput
+                      value=""
+                      onChange={(event) => {
+                        const chosen = savedReplies.data?.find((reply) => reply.id === event.target.value);
+                        if (chosen) setText(chosen.body.replaceAll("{{name}}", item.name.split(" ")[0] ?? item.name));
+                      }}
+                    >
+                      <option value="">Insert a saved reply…</option>
+                      {savedReplies.data?.map((reply) => (
+                        <option key={reply.id} value={reply.id}>{reply.title}</option>
+                      ))}
+                    </SelectInput>
+                  </Field>
+                )}
                 <Field label={composer === "reply" ? "Your reply" : "Note"} hint={composer === "reply" ? "Write it as an email. Your first name signs it for you." : undefined}>
                   <TextArea rows={composer === "reply" ? 6 : 3} value={text} maxLength={5000} onChange={(event) => setText(event.target.value)} />
                 </Field>
@@ -232,6 +273,11 @@ export function PlatformMessageDetail({ id, onError }: { id: string; onError: (m
                   <AdminButton type="submit" size="sm" icon={composer === "reply" ? <Send /> : <NotebookPen />} disabled={send.isPending || text.trim().length < 2} aria-busy={send.isPending}>
                     {send.isPending ? "Saving…" : composer === "reply" ? "Send reply" : "Add note"}
                   </AdminButton>
+                  {composer === "reply" && (
+                    <AdminButton variant="ghost" size="sm" icon={<BookmarkPlus />} disabled={text.trim().length < 2} onClick={() => setSavingReply(true)}>
+                      Save as template
+                    </AdminButton>
+                  )}
                   <small className="pf-muted">{text.length} / 5000</small>
                 </div>
               </form>
@@ -298,6 +344,40 @@ export function PlatformMessageDetail({ id, onError }: { id: string; onError: (m
         </div>
       </div>
 
+      {savingReply && (
+        <Modal
+          open
+          onClose={() => setSavingReply(false)}
+          dismissible={!saveReply.isPending}
+          size="sm"
+          title="Save as a template"
+          description="Anyone on the platform team can insert it into a reply. Use {{name}} where the sender’s first name should go."
+          footer={
+            <>
+              <AdminButton variant="secondary" size="sm" disabled={saveReply.isPending} onClick={() => setSavingReply(false)}>Cancel</AdminButton>
+              <AdminButton size="sm" disabled={saveReply.isPending || replyTitle.trim().length < 2} onClick={() => saveReply.mutate()}>
+                {saveReply.isPending ? "Saving…" : "Save template"}
+              </AdminButton>
+            </>
+          }
+        >
+          <div className="pf-form">
+            <Field label="Title" required hint="Saving with an existing title replaces it.">
+              <TextInput value={replyTitle} maxLength={80} onChange={(event) => setReplyTitle(event.target.value)} />
+            </Field>
+            {(savedReplies.data?.length ?? 0) > 0 && (
+              <ul className="pf-saved">
+                {savedReplies.data?.map((reply) => (
+                  <li key={reply.id}>
+                    <span>{reply.title}</span>
+                    <AdminButton variant="ghost" size="sm" icon={<Trash2 />} aria-label={`Delete ${reply.title}`} disabled={removeReply.isPending} onClick={() => removeReply.mutate(reply.id)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Modal>
+      )}
       {statusAction && (
         <StatusDialog
           action={statusAction}
@@ -381,6 +461,7 @@ function pilotRows(item: EnquiryDetail) {
 const ENTRY_ICON: Record<EnquiryTimelineEntry["type"], ReactNode> = {
   received: <Inbox />,
   reply: <Send />,
+  inbound: <CornerDownLeft />,
   note: <StickyNote />,
   status: <Flag />,
   assignment: <UserCheck />,
@@ -402,6 +483,7 @@ function TimelineItem({ entry, senderName, onResend, resending }: { entry: Enqui
   switch (entry.type) {
     case "received": title = <>{senderName} sent this message</>; break;
     case "reply": title = <><strong>{who}</strong> replied to {senderName}</>; break;
+    case "inbound": title = <><strong>{senderName}</strong> replied by email</>; break;
     case "note": title = <><strong>{who}</strong> added an internal note</>; break;
     case "status": title = <><strong>{who}</strong>: {entry.text}</>; break;
     case "assignment": title = <><strong>{who}</strong>: {entry.body}</>; break;

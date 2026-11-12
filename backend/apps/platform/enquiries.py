@@ -202,6 +202,8 @@ def assign(*, actor, enquiry: Enquiry, assignee) -> Enquiry:
         enquiry=enquiry, type=EnquiryEvent.Type.ASSIGNMENT, actor=actor,
         body=f"Assigned to {assignee.full_name or assignee.email}" if assignee else "Unassigned",
     )
+    if assignee is not None and assignee.id != actor.id and assignee.email:
+        _queue_email(enquiry, "assigned", type=EnquiryEvent.Type.STAFF_ALERT, actor=actor, meta={"to": assignee.email})
     _log(actor, "platform.enquiry_assigned", enquiry, {"assigned_to": assignee.email if assignee else None})
     _touch(enquiry, "assigned_to")
     return enquiry
@@ -309,3 +311,61 @@ def is_overdue(enquiry: Enquiry, now=None) -> bool:
     """No first response within the promised two working days (counted as 48 hours)."""
     return (enquiry.first_response_at is None and enquiry.status in Enquiry.OPEN_STATUSES
             and (now or timezone.now()) - enquiry.created_at > SERVICE_LEVEL)
+
+
+# --------------------------------------------------------------------------- replies from the sender
+
+def receive_reply(*, reference: str, from_email: str, body: str) -> Enquiry | None:
+    """A sender answered one of our emails. Returns the enquiry, or None when nothing matches (reference and the
+    original sender's address must both match, so a stranger cannot write into someone else's thread)."""
+    enquiry = Enquiry.objects.filter(reference__iexact=reference.strip(), email__iexact=from_email.strip()).first()
+    if enquiry is None or enquiry.status == Enquiry.Status.SPAM:
+        return None
+    with transaction.atomic():
+        EnquiryEvent.objects.create(enquiry=enquiry, type=EnquiryEvent.Type.INBOUND, body=body.strip()[:5000])
+        enquiry.seen_at = None
+        fields = ["seen_at"]
+        if enquiry.status in (Enquiry.Status.WAITING, Enquiry.Status.RESOLVED, Enquiry.Status.CLOSED):
+            enquiry.status, enquiry.closed_at = Enquiry.Status.IN_PROGRESS, None
+            fields += ["status", "closed_at"]
+        _queue_email(enquiry, "staff_alert", type=EnquiryEvent.Type.STAFF_ALERT, meta={"inbound": True})
+        _touch(enquiry, *fields)
+    return enquiry
+
+
+# --------------------------------------------------------------------------- status lookup, retention, saved replies
+
+PUBLIC_STATUS = {
+    "new": ("Received", "We have your message and a team member will read it soon."),
+    "in_progress": ("In progress", "A team member is working on it."),
+    "waiting": ("Waiting for you", "We replied and are waiting to hear back. Check your email."),
+    "resolved": ("Resolved", "We marked this as resolved. Reply to our email if something is still not right."),
+    "closed": ("Closed", "This request is closed. Send a new message if you still need help."),
+}
+
+
+def public_status(*, reference: str, email: str) -> dict | None:
+    """What a sender may see about their own request: the stage and the dates. Never notes, owner or message text.
+    Needs the reference and the email address it was sent from; anything else looks the same as 'not found'."""
+    enquiry = Enquiry.objects.filter(reference__iexact=reference.strip(), email__iexact=email.strip()).exclude(status=Enquiry.Status.SPAM).first()
+    if enquiry is None:
+        return None
+    label, text = PUBLIC_STATUS[enquiry.status]
+    replied = enquiry.events.filter(type=EnquiryEvent.Type.REPLY).order_by("-created_at").values_list("created_at", flat=True).first()
+    return {"reference": enquiry.reference, "status": enquiry.status, "label": label, "text": text,
+            "received_at": enquiry.created_at, "last_update_at": enquiry.last_activity_at, "last_reply_at": replied}
+
+
+def purge_old(now=None) -> dict:
+    """Retention: spam after 30 days, resolved/closed after 24 months (settings). Returns counts."""
+    from django.conf import settings
+
+    now = now or timezone.now()
+    spam_rows = Enquiry.objects.filter(status=Enquiry.Status.SPAM,
+                                       last_activity_at__lt=now - timedelta(days=settings.ENQUIRY_RETENTION_SPAM_DAYS))
+    closed_rows = Enquiry.objects.filter(status__in=[Enquiry.Status.RESOLVED, Enquiry.Status.CLOSED],
+                                         closed_at__lt=now - timedelta(days=settings.ENQUIRY_RETENTION_CLOSED_DAYS))
+    spam, closed = spam_rows.count(), closed_rows.count()
+    spam_rows.delete()  # their timeline rows go with them
+    closed_rows.delete()
+    return {"spam": spam, "closed": closed}

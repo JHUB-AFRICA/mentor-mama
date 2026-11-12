@@ -59,6 +59,9 @@ envVarGroups:
       # administrator) and the address senders reply to from the emails they get (empty = the sender address).
       # - key: PLATFORM_NOTIFY_EMAILS
       # - key: SUPPORT_REPLY_TO
+      # - key: WEBSITE_BASE_URL        # public site, for the "check progress" link in enquiry emails
+      # - key: ENQUIRY_INBOUND_SECRET  # opens POST /api/v1/public/enquiries/inbound for emailed replies (header X-Inbound-Secret)
+      # - key: TURNSTILE_SECRET_KEY    # with VITE_TURNSTILE_SITE_KEY on the website, turns on Cloudflare Turnstile
       # Email: Resend, one sender for the whole product.
       - key: EMAIL_PROVIDER
         value: resend

@@ -5,9 +5,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, LogOut, Menu, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, LifeBuoy, LogOut, Menu, Search } from "lucide-react";
 import { getAIStatus } from "../../services/api";
 import { openMenta } from "../assistant/events";
+import { HelpDialog } from "./HelpDialog";
 import { NotificationPopover } from "../notifications/NotificationPopover";
 import "./PortalHeader.css";
 
@@ -28,6 +29,7 @@ export function PortalHeader({
   user,
   accountItems = [],
   onSignOut,
+  help = true,
 }: {
   onOpenNav: () => void;
   /** Breadcrumb trail; the last entry is the current page. */
@@ -39,10 +41,13 @@ export function PortalHeader({
   user: { name: string; email?: string; roleLabel: string };
   accountItems?: HeaderAccountItem[];
   onSignOut?: () => void;
+  /** Show "Get help" in the account menu (everyone except platform administrators, who answer the requests). */
+  help?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const ai = useQuery({ queryKey: ["ai-status"], queryFn: getAIStatus, staleTime: 5 * 60_000, retry: false });
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // Browser tab: "Placement details · MentorMAMA". The page name comes first so it survives tab truncation.
   const pageName = title ?? crumbs?.[crumbs.length - 1];
   useEffect(() => {
@@ -177,6 +182,20 @@ export function PortalHeader({
                       {item.label}
                     </button>
                   ))}
+                  {help && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="portal-header__menu-item"
+                      onClick={() => {
+                        setOpen(false);
+                        setHelpOpen(true);
+                      }}
+                    >
+                      <LifeBuoy aria-hidden="true" />
+                      Get help
+                    </button>
+                  )}
                   {onSignOut && (
                     <>
                       <span className="portal-header__menu-sep" aria-hidden="true" />
@@ -200,6 +219,7 @@ export function PortalHeader({
           </div>
         </div>
       </div>
+      {help && <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />}
     </header>
   );
 }

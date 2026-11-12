@@ -50,6 +50,14 @@ async function mock(page: Page, state: ReturnType<typeof makeState>) {
       item.unread = false;
       return detail();
     }
+    if (path === "/api/v1/platform/saved-replies" && request.method() === "GET")
+      return json([{ id: "r1", title: "Pilot next steps", body: "Hi {{name}}, thanks for your interest. Could you share your cohort size?" }]);
+    if (path === "/api/v1/platform/saved-replies" && request.method() === "POST") {
+      state.calls.push("SAVED_REPLY_CREATED");
+      return json({ id: "r2", ...(request.postDataJSON() as object) }, 201);
+    }
+    if (path === "/api/v1/platform/enquiries/export")
+      return route.fulfill({ status: 200, contentType: "text/csv", body: "Reference\nPIL-2026-0001\n" });
     if (path === "/api/v1/platform/enquiries/e1/reply") {
       const body = (request.postDataJSON() as { body: string }).body;
       item.status = "waiting";
@@ -133,6 +141,27 @@ test.describe("platform messages", () => {
     await expect.poll(() => state.calls.includes("POST /api/v1/platform/enquiries/e1/status")).toBe(true);
     await expect(page.getByText("Resolved").first()).toBeVisible();
     await page.screenshot({ path: "test-results/messages-detail-resolved.png", fullPage: true });
+  });
+
+  test("saved replies fill the reply with the sender's first name, new ones can be saved, and the inbox exports", async ({ page }) => {
+    const state = makeState();
+    state.item.timeline.push({ id: "tin", type: "inbound", actor: null, body: "We have 30 students per cohort.", text: "", meta: {}, created_at: "2026-11-12T09:30:00Z", email: null });
+    await mock(page, state);
+    await page.goto("/platform/messages/e1");
+    await expect(page.getByText("Brian Mwangi replied by email")).toBeVisible();
+    await expect(page.getByText("We have 30 students per cohort.")).toBeVisible();
+    await page.getByLabel("Saved replies").selectOption({ label: "Pilot next steps" });
+    await expect(page.getByLabel("Your reply")).toHaveValue("Hi Brian, thanks for your interest. Could you share your cohort size?");
+    await page.getByRole("button", { name: "Save as template" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel(/^Title/).fill("Cohort question");
+    await dialog.getByRole("button", { name: "Save template" }).click();
+    await expect.poll(() => state.calls.includes("SAVED_REPLY_CREATED")).toBe(true);
+
+    await page.goto("/platform/messages");
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export CSV" }).click();
+    expect((await download).suggestedFilename()).toMatch(/^mentormama-messages-open-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 
   test("a pilot request becomes a programme", async ({ page }) => {

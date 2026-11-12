@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Inbox } from "lucide-react";
+import { AlertTriangle, Download, Inbox, MailWarning } from "lucide-react";
 import { PortalErrorState } from "../../components/PortalErrorState";
-import { getPlatformEnquiries } from "../../services/api";
-import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptyState, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
+import { useToast } from "../../components/ToastProvider";
+import { saveBlob, datedFilename } from "../../lib/download";
+import { ApiError, exportPlatformEnquiries, getPlatformEnquiries } from "../../services/api";
+import { AdminButton, AdminCard, AdminPage, AdminPageHeader, AdminTabs, EmptyState, Notice, SearchField, SelectField, StatusPill, Toolbar } from "../programme-admin/ui/AdminKit";
 import { ENQUIRY_STATUS_LABEL, ENQUIRY_STATUS_TONE, KIND_LABEL, KIND_TONE, PRIORITY_LABEL, TOPIC_LABEL, formatDate, timeAgo } from "./platformUi";
 import { TableRowsSkeleton } from "./PlatformSkeletons";
 
 type View = "open" | "done" | "spam";
 
 /** The inbox for the website's contact, pilot access and support forms. */
-export function PlatformMessages() {
+export function PlatformMessages({ onError }: { onError: (message: string) => void }) {
+  const { pushToast } = useToast();
+  const [exporting, setExporting] = useState(false);
   const go = useNavigate();
   const [view, setView] = useState<View>("open");
   const [kind, setKind] = useState("");
@@ -33,6 +37,17 @@ export function PlatformMessages() {
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      saveBlob(await exportPlatformEnquiries({ view, kind, assigned, search: debounced }), datedFilename("messages", "csv", [view]));
+      pushToast({ kind: "success", title: "Export ready", message: "The messages in this view were downloaded as a spreadsheet." });
+    } catch (cause) {
+      onError(cause instanceof ApiError ? cause.message : "We could not export the messages.");
+    } finally {
+      setExporting(false);
+    }
+  }
   const counts = query.data?.counts;
   const results = query.data?.results ?? [];
   const pagination = query.data?.pagination;
@@ -43,6 +58,11 @@ export function PlatformMessages() {
         eyebrow="Platform administration"
         title="Messages"
         description="Everything sent from the website: contact messages, pilot access requests and support requests. Senders get a confirmation straight away and an email at each step."
+        actions={
+          <AdminButton variant="secondary" size="sm" icon={<Download />} disabled={exporting} onClick={() => void exportCsv()}>
+            {exporting ? "Exporting…" : "Export CSV"}
+          </AdminButton>
+        }
         meta={
           counts?.overdue ? (
             <span className="pf-meta pf-meta--warn">
@@ -51,6 +71,11 @@ export function PlatformMessages() {
           ) : undefined
         }
       />
+      {counts?.email_trouble ? (
+        <Notice icon={<MailWarning />}>
+          {counts.email_trouble === 1 ? "One message has" : `${counts.email_trouble} messages have`} an email that could not be delivered. Open it and use “Send again”.
+        </Notice>
+      ) : null}
       <AdminTabs
         label="Message views"
         value={view}

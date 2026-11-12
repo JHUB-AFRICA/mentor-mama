@@ -78,7 +78,7 @@ export function PlatformWorkspace({
   let page: ReactNode;
   if (user.must_change_password) page = <InitialPasswordGate onChanged={onUserUpdated} />;
   else if (active === "messages")
-    page = messageId ? <PlatformMessageDetail key={messageId} id={messageId} onError={onError} /> : <PlatformMessages />;
+    page = messageId ? <PlatformMessageDetail key={messageId} id={messageId} onError={onError} /> : <PlatformMessages onError={onError} />;
   else if (active === "programmes") page = <PlatformProgrammes onError={onError} />;
   else if (active === "accounts") page = <PlatformAccounts currentUserId={user.id} onError={onError} />;
   else if (active === "support") page = <PlatformSupport onError={onError} />;
@@ -126,6 +126,7 @@ export function PlatformWorkspace({
           user={{ name: user.name, email: user.email, roleLabel: ROLE_LABEL }}
           accountItems={[{ label: "Account & security", icon: <KeyRound aria-hidden="true" />, onSelect: () => open("account") }]}
           onSignOut={() => void signOut()}
+          help={false}
         />
         <main className="min-h-[calc(100vh-4.25rem)] bg-white">
           <div className="programme-admin-content w-full py-6 sm:py-7 lg:py-8">{page}</div>

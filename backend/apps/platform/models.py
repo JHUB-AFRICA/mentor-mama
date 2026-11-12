@@ -83,6 +83,7 @@ class EnquiryEvent(BaseModel):
         ASSIGNMENT = "assignment", "Assignment"
         PRIORITY = "priority", "Priority"
         CONVERTED = "converted", "Programme created"
+        INBOUND = "inbound", "Reply from the sender"
         EMAIL = "email", "Automatic email"
         STAFF_ALERT = "staff_alert", "Alert to the team"  # not shown on the timeline
 
@@ -110,3 +111,15 @@ class EnquiryEvent(BaseModel):
         db_table = "platform_enquiry_event"
         ordering = ["created_at"]
         indexes = [models.Index(fields=["email_status", "email_next_attempt_at"])]
+
+
+class SavedReply(BaseModel):
+    """A canned answer platform administrators can insert into a reply. `{{name}}` becomes the sender's first name."""
+
+    title = models.CharField(max_length=80, unique=True)
+    body = models.TextField(max_length=5000)
+    created_by = models.ForeignKey("identity.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        db_table = "platform_saved_reply"
+        ordering = ["title"]

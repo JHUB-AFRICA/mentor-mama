@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import ScrollManager from "./components/ScrollManager";
 import Preloader from "./components/Preloader";
 import Home from "./pages/Home";
 import About from "./pages/About";
@@ -10,6 +11,8 @@ import Resources from "./pages/Resources";
 import Community from "./pages/Community";
 import Contact from "./pages/Contact";
 import Support from "./pages/Support";
+import Privacy from "./pages/Privacy";
+import Status from "./pages/Status";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -17,8 +20,9 @@ function App() {
   return (
     <div className="min-h-screen bg-white">
       {loading && <Preloader onComplete={() => setLoading(false)} />}
+      <ScrollManager />
       <Navbar />
-      <main>
+      <main id="main">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
@@ -27,6 +31,8 @@ function App() {
           <Route path="/community" element={<Community />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/status" element={<Status />} />
         </Routes>
       </main>
       <Footer />

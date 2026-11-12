@@ -29,6 +29,7 @@ def _quote(text: str) -> str:
 def _footer(enquiry: Enquiry) -> str:
     return (
         f"Your reference: {enquiry.reference}\n"
+        f"Check progress any time: {settings.WEBSITE_BASE_URL.rstrip('/')}/status\n"
         "To add something, reply to this email and keep the reference in the subject line.\n"
         "MentorMAMA will never ask for your password or a sign-in code by email."
     )
@@ -134,6 +135,23 @@ def staff_alert(enquiry: Enquiry) -> tuple[str, str]:
     return f"New {label.lower()}: {enquiry.subject or enquiry.name} [{enquiry.reference}]", body
 
 
+def assigned(enquiry: Enquiry, event: EnquiryEvent) -> tuple[str, str]:
+    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/platform/messages/{enquiry.id}"
+    who = event.actor.full_name if event.actor and event.actor.full_name else "A colleague"
+    body = "\n\n".join([
+        f"{who} assigned you {enquiry.reference} from {enquiry.name}.",
+        shorten(enquiry.message.replace("\n", " "), width=300, placeholder=" …"),
+        f"Open it: {link}",
+    ])
+    return f"Assigned to you: {enquiry.subject or enquiry.name} [{enquiry.reference}]", body
+
+
+def inbound_alert(enquiry: Enquiry) -> tuple[str, str]:
+    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/platform/messages/{enquiry.id}"
+    body = "\n\n".join([f"{enquiry.name} replied to {enquiry.reference}.", f"Open it: {link}"])
+    return f"Reply from {enquiry.name} [{enquiry.reference}]", body
+
+
 def staff_recipients() -> list[str]:
     configured = [address.strip() for address in settings.PLATFORM_NOTIFY_EMAILS if address.strip()]
     if configured:
@@ -146,7 +164,7 @@ def send(event: EnquiryEvent) -> None:
     enquiry = event.enquiry
     template = event.email_template
     if template == "staff_alert":
-        subject, text = staff_alert(enquiry)
+        subject, text = inbound_alert(enquiry) if event.meta.get("inbound") else staff_alert(enquiry)
         recipients = staff_recipients()
         sent_to = set(event.meta.get("sent_to", []))
         for address in recipients:
@@ -157,6 +175,12 @@ def send(event: EnquiryEvent) -> None:
             sent_to.add(address)
             event.meta = {**event.meta, "sent_to": sorted(sent_to)}
             event.save(update_fields=["meta", "updated_at"])
+        return
+    if template == "assigned":
+        subject, text = assigned(enquiry, event)
+        EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [event.meta["to"]]).send()
+        if event.email_subject != subject:
+            event.email_subject = subject[:200]
         return
     subject, text = {"acknowledgement": lambda: acknowledgement(enquiry), "reply": lambda: reply(enquiry, event),
                      "progress": lambda: progress(enquiry, event)}[template]()

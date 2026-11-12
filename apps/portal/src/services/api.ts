@@ -3244,6 +3244,7 @@ export type PlatformOverview = {
   support_pending: number;
   enquiries_new: number;
   enquiries_overdue: number;
+  enquiry_emails_failed: number;
   programmes_without_admin: number;
   signins_last_7_days: number;
   system: SystemStatus;
@@ -3400,7 +3401,7 @@ export type EnquiryRow = {
   created_at: string;
   last_activity_at: string;
 };
-export type EnquiryCounts = { open: number; new: number; done: number; spam: number; unread: number; overdue: number };
+export type EnquiryCounts = { open: number; new: number; done: number; spam: number; unread: number; overdue: number; email_trouble: number };
 export type EnquiryEmail = {
   template: string;
   status: "queued" | "sent" | "failed";
@@ -3412,7 +3413,7 @@ export type EnquiryEmail = {
 };
 export type EnquiryTimelineEntry = {
   id: string;
-  type: "received" | "note" | "reply" | "status" | "assignment" | "priority" | "converted" | "email";
+  type: "received" | "note" | "reply" | "inbound" | "status" | "assignment" | "priority" | "converted" | "email";
   actor: EnquiryPerson | null;
   body: string;
   text: string;
@@ -3460,3 +3461,32 @@ export const convertPlatformEnquiry = (
   id: string,
   input: { name: string; short_name?: string; academic_year?: string; note?: string; admin: PersonInput },
 ) => enquiryAction(id, "convert", input);
+
+export type SavedReply = { id: string; title: string; body: string };
+export async function getSavedReplies(): Promise<SavedReply[]> {
+  return (await request<{ data: SavedReply[] }>("/api/v1/platform/saved-replies")).data;
+}
+export async function saveSavedReply(title: string, body: string): Promise<SavedReply> {
+  return (await request<{ data: SavedReply }>("/api/v1/platform/saved-replies", { method: "POST", body: JSON.stringify({ title, body }) })).data;
+}
+export async function deleteSavedReply(id: string): Promise<void> {
+  await request<void>(`/api/v1/platform/saved-replies/${id}`, { method: "DELETE" });
+}
+
+/** Downloads the current inbox view as CSV. */
+export async function exportPlatformEnquiries(params: Record<string, string | number>): Promise<Blob> {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== "").map(([key, value]) => [key, String(value)]));
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/platform/enquiries/export?${query.toString()}`, { credentials: "include" });
+  } catch {
+    throw new ApiError("We couldn’t reach MentorMAMA. Check your connection and try again.", 0, { retryable: true });
+  }
+  if (!response.ok) throw new ApiError("We could not export the messages.", response.status);
+  return response.blob();
+}
+
+/** A signed-in person asks the MentorMAMA team for help. Account details are attached on the server. */
+export async function sendHelpRequest(input: { topic: string; message: string; page: string }): Promise<{ reference: string }> {
+  return (await request<{ data: { reference: string } }>("/api/v1/support/help", { method: "POST", body: JSON.stringify(input) })).data;
+}

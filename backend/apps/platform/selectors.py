@@ -55,6 +55,7 @@ def overview() -> dict:
         },
         "enquiries_new": _enquiries_new(),
         "enquiries_overdue": enquiry_overdue_count(),
+        "enquiry_emails_failed": enquiry_emails_failed(),
         "support_pending": MFARecoveryRequest.objects.filter(status=MFARecoveryRequest.Status.PENDING).count(),
         "programmes_without_admin": Program.objects.exclude(
             users__role=Role.PROGRAM_ADMIN, users__status__in=[Status.ACTIVE, Status.INVITED]).count(),
@@ -145,6 +146,9 @@ ACTIVITY_TITLES = {
     "platform.enquiry_status": "Changed a message's status",
     "platform.enquiry_converted": "Created a programme from a pilot request",
     "platform.enquiry_email_resent": "Sent an email again",
+    "platform.enquiries_exported": "Exported messages",
+    "platform.saved_reply_saved": "Saved a reply template",
+    "platform.saved_reply_deleted": "Deleted a reply template",
 }
 
 
@@ -229,7 +233,15 @@ def enquiry_counts() -> dict:
     open_total = sum(by_status.get(s, 0) for s in Enquiry.OPEN_STATUSES)
     return {"open": open_total, "new": by_status.get("new", 0), "done": by_status.get("resolved", 0) + by_status.get("closed", 0),
             "spam": by_status.get("spam", 0), "unread": Enquiry.objects.filter(seen_at=None).exclude(status="spam").count(),
-            "overdue": enquiry_overdue_count()}
+            "overdue": enquiry_overdue_count(), "email_trouble": enquiry_emails_failed()}
+
+
+def enquiry_emails_failed() -> int:
+    """Emails that ran out of retries in the last 30 days for enquiries still being worked."""
+    from apps.platform.models import Enquiry, EnquiryEvent
+
+    return (EnquiryEvent.objects.filter(email_status=EnquiryEvent.EmailStatus.FAILED, updated_at__gte=timezone.now() - timedelta(days=30))
+            .exclude(enquiry__status=Enquiry.Status.SPAM).values("enquiry_id").distinct().count())
 
 
 def enquiry_overdue_count() -> int:

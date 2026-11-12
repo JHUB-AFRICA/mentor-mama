@@ -1,3 +1,4 @@
+import Partners from "../components/Partners";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import gsap from "gsap";
@@ -317,6 +318,7 @@ export default function Home() {
       <Hero />
       <FeaturesOverview />
       <PlatformShowcase />
+      <Partners />
       <ClosingCTA />
     </>
   );

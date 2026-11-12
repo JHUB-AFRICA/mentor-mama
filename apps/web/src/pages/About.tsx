@@ -1,3 +1,4 @@
+import Partners from "../components/Partners";
 import { useScrollReveal, useImageReveal } from "../hooks/useScrollReveal";
 import {
   Heart,
@@ -322,6 +323,7 @@ export default function About() {
       <VisionMission />
       <Values />
       <Team />
+      <Partners tone="cream" />
     </>
   );
 }

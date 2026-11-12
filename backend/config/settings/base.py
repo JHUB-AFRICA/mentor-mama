@@ -206,6 +206,13 @@ FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:5173")
 # address senders can reply to from the emails they receive (empty = they reply to the sender address).
 PLATFORM_NOTIFY_EMAILS = env.list("PLATFORM_NOTIFY_EMAILS", default=[])
 SUPPORT_REPLY_TO = env("SUPPORT_REPLY_TO", default="").strip()
+# Public website address (used for the progress-check link in enquiry emails).
+WEBSITE_BASE_URL = env("WEBSITE_BASE_URL", default="http://localhost:5173")
+# Shared secret for the inbound-reply endpoint (empty = endpoint closed) and optional Cloudflare Turnstile on the public forms.
+ENQUIRY_INBOUND_SECRET = env("ENQUIRY_INBOUND_SECRET", default="")
+TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
+ENQUIRY_RETENTION_SPAM_DAYS = env.int("ENQUIRY_RETENTION_SPAM_DAYS", default=30)
+ENQUIRY_RETENTION_CLOSED_DAYS = env.int("ENQUIRY_RETENTION_CLOSED_DAYS", default=730)
 EXPORT_ROOT = env("EXPORT_ROOT", default="/tmp/mentormama-exports")
 # "r2" = Cloudflare R2 (the production store). "s3" is accepted as an alias: R2 speaks the S3 API, so any
 # S3-compatible bucket works with the same code. Both are normalised to "r2" below.
@@ -301,6 +308,7 @@ REST_FRAMEWORK = {
         # Public website forms: per visitor address, and a ceiling across everyone so a flood cannot fill the inbox.
         "public_enquiry": "10/hour",
         "public_enquiry_global": "400/hour",
+        "public_enquiry_status": "30/hour",
     },
 }
 
