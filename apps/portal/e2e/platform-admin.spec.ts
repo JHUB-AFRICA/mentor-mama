@@ -23,6 +23,8 @@ const overview = {
     ],
   },
   support_pending: 1,
+  enquiries_new: 2,
+  enquiries_overdue: 0,
   programmes_without_admin: 0,
   signins_last_7_days: 9,
   system: {

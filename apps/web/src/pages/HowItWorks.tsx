@@ -276,7 +276,7 @@ function ForInstitutions() {
             </div>
 
             <Link
-              to="/contact"
+              to="/contact?type=pilot"
               className="inline-flex items-center gap-2 bg-sage text-white px-7 py-3 rounded-pill text-[14px] font-semibold hover:bg-sage/90 transition-colors"
             >
               Discuss a Pilot Partnership <ArrowRight size={16} />

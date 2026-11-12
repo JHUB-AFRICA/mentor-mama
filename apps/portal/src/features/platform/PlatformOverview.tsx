@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Building2, CheckCircle2, CircleSlash, LifeBuoy, MailWarning, RefreshCw, UserCheck, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, Building2, CheckCircle2, CircleSlash, Inbox, LifeBuoy, MailWarning, RefreshCw, UserCheck, Users, XCircle } from "lucide-react";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { getPlatformOverview, type SystemCheck } from "../../services/api";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, ListRow, StatCard, StatGrid, StatusPill, type PillTone } from "../programme-admin/ui/AdminKit";
@@ -14,7 +14,7 @@ const STATE: Record<SystemCheck["state"], { tone: PillTone; label: string; icon:
   off: { tone: "neutral", label: "Off", icon: <CircleSlash /> },
 };
 
-export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "programmes" | "accounts" | "support" | "activity") => void }) {
+export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "messages" | "programmes" | "accounts" | "support" | "activity") => void }) {
   // Refreshes every 30 seconds so the page can be left open as a status board.
   const query = useQuery({ queryKey: ["platform-overview"], queryFn: getPlatformOverview, refetchInterval: 30_000 });
   if (query.isPending) return <OverviewSkeleton />;
@@ -41,7 +41,7 @@ export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "programmes
         }
       />
 
-      <StatGrid columns={4}>
+      <StatGrid columns={3}>
         <StatCard icon={<Building2 />} tone="teal" value={data.programmes} label="Programmes"
           hint={data.programmes_without_admin ? `${data.programmes_without_admin} without an administrator` : "All have an administrator"}
           onClick={() => onNavigate("programmes")} />
@@ -49,7 +49,9 @@ export function PlatformOverview({ onNavigate }: { onNavigate: (nav: "programmes
           hint={`${data.signins_last_7_days} signed in this week`} onClick={() => onNavigate("accounts")} />
         <StatCard icon={<MailWarning />} tone={data.accounts.invitations_expired ? "amber" : "blue"} value={data.accounts.invited} label="Open invitations"
           hint={data.accounts.invitations_expired ? `${data.accounts.invitations_expired} expired` : "None expired"} onClick={() => onNavigate("accounts")} />
-        <StatCard icon={<LifeBuoy />} tone={data.support_pending ? "rose" : "slate"} value={data.support_pending} label="Support requests"
+        <StatCard icon={<Inbox />} tone={data.enquiries_overdue ? "rose" : data.enquiries_new ? "amber" : "slate"} value={data.enquiries_new} label="New messages"
+          hint={data.enquiries_overdue ? `${data.enquiries_overdue} overdue for a reply` : data.enquiries_new ? "From the website" : "Nothing waiting"} onClick={() => onNavigate("messages")} />
+        <StatCard icon={<LifeBuoy />} tone={data.support_pending ? "rose" : "slate"} value={data.support_pending} label="Sign-in help requests"
           hint={data.support_pending ? "Waiting for review" : "Nothing waiting"} onClick={() => onNavigate("support")} />
       </StatGrid>
 

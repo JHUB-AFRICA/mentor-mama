@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Field, Modal, TextArea, TextInput } from "../../components/kit";
 import { AdminButton, type PillTone } from "../programme-admin/ui/AdminKit";
-import type { PersonInput, PlatformAccount } from "../../services/api";
+import type { EnquiryKind, EnquiryPriority, EnquiryStatus, PersonInput, PlatformAccount } from "../../services/api";
 
 export function formatDate(value: string | null | undefined, withTime = false): string {
   if (!value) return "—";
@@ -109,4 +109,48 @@ export function PersonFields({ value, onChange }: { value: PersonInput; onChange
       </Field>
     </div>
   );
+}
+
+// ---- Website messages (contact, pilot access, support)
+
+
+export const KIND_LABEL: Record<EnquiryKind, string> = { contact: "Contact", pilot: "Pilot access", support: "Support" };
+export const KIND_TONE: Record<EnquiryKind, PillTone> = { contact: "info", pilot: "teal", support: "warning" };
+export const ENQUIRY_STATUS_LABEL: Record<EnquiryStatus, string> = {
+  new: "New",
+  in_progress: "In progress",
+  waiting: "Waiting for sender",
+  resolved: "Resolved",
+  closed: "Closed",
+  spam: "Spam",
+};
+export const ENQUIRY_STATUS_TONE: Record<EnquiryStatus, PillTone> = {
+  new: "danger",
+  in_progress: "info",
+  waiting: "warning",
+  resolved: "success",
+  closed: "neutral",
+  spam: "neutral",
+};
+export const PRIORITY_LABEL: Record<EnquiryPriority, string> = { low: "Low", normal: "Normal", high: "High" };
+export const TOPIC_LABEL: Record<string, string> = {
+  general: "General question",
+  partnership: "Partnership",
+  press: "Press",
+  pilot: "Pilot access",
+  sign_in: "Can’t sign in",
+  account: "Account or invitation",
+  using_platform: "Using MentorMAMA",
+  report_problem: "Something not working",
+  other: "Something else",
+};
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", else the date. */
+export function timeAgo(value: string): string {
+  const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)} day${seconds >= 2 * 86400 ? "s" : ""} ago`;
+  return formatDate(value);
 }

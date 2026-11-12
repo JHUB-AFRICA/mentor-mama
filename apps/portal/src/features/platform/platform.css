@@ -73,3 +73,58 @@
 .pf-sk-table__head { padding-block: 12px; border-bottom-color: #e4e8ee; }
 @media (max-width: 40rem) { .pf-sk-table__row { grid-template-columns: minmax(0, 1fr) auto !important; } .pf-sk-table__row > :nth-child(n + 3) { display: none; } }
 .pf-alert { margin: 0; padding: 10px 14px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.875rem; }
+
+/* Messages: inbox and detail */
+.pf-meta--warn { display: inline-flex; align-items: center; gap: 6px; color: #a35f00; font-weight: 600; }
+.pf-meta--warn svg { width: 14px; height: 14px; }
+.pf-warn { color: #a35f00; font-weight: 600; }
+.pf-link { color: #0f6b6b; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.pf-link:hover { text-decoration: underline; }
+.pf-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.pf-clip { display: block; max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-table--rows tbody tr { cursor: pointer; }
+.pf-row--unread td { background: #f5fbfb; }
+.pf-row--unread .pf-link { font-weight: 700; }
+.pf-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: #1d8c8c; flex: none; }
+@media (max-width: 40rem) { .pf-clip { max-width: 14rem; } }
+
+.pf-back { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: #52616f; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+.pf-back:hover { color: #0f6b6b; }
+.pf-back svg { width: 16px; height: 16px; }
+.pf-detail-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.pf-detail-head__copy { display: grid; gap: 8px; min-width: 0; flex: 1 1 24rem; }
+.pf-detail-head .pa-title { overflow-wrap: anywhere; }
+.pf-actions--start { justify-content: flex-start; }
+.pf-columns--detail { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); }
+@media (max-width: 64rem) { .pf-columns--detail { grid-template-columns: minmax(0, 1fr); } }
+.pf-stack { display: grid; gap: 16px; min-width: 0; }
+.pf-message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.pf-detail-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid #eef1f5; }
+.pf-subhead { margin: 0 0 6px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #52616f; }
+.pf-composer { margin-top: 14px; }
+
+.pf-activity { list-style: none; margin: 0; padding: 6px 20px; }
+.pf-activity__item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #eef1f5; }
+.pf-activity__item:first-child { border-top: 0; }
+.pf-activity__icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #eef6f6; color: #0f6b6b; }
+.pf-activity__icon svg { width: 15px; height: 15px; }
+.pf-activity__item--reply .pf-activity__icon { background: #e8f1fb; color: #1d5fa3; }
+.pf-activity__item--note .pf-activity__icon { background: #fff6dc; color: #946200; }
+.pf-activity__item--converted .pf-activity__icon { background: #e4f4ec; color: #2f845d; }
+.pf-activity__body { display: grid; gap: 4px; min-width: 0; }
+.pf-activity__body time { font-size: 0.75rem; color: #52616f; }
+.pf-activity__title, .pf-activity__text { margin: 0; overflow-wrap: anywhere; }
+.pf-activity__text { white-space: pre-wrap; padding: 8px 12px; border-left: 3px solid #cbd5e1; background: #f8fafb; border-radius: 0 8px 8px 0; }
+.pf-activity__item--note .pf-activity__text { border-left-color: #f0c35a; background: #fffbef; }
+.pf-activity__item--reply .pf-activity__text { border-left-color: #8db7e6; background: #f4f8fd; }
+.pf-email { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 0.8125rem; }
+.pf-email svg { width: 14px; height: 14px; flex: none; }
+.pf-email--sent { color: #2f845d; }
+.pf-email--queued { color: #52616f; }
+.pf-email--failed { color: #b83e3e; font-weight: 600; }
+.pf-btn-quiet { color: #52616f; }
+
+.pf-kv { margin: 0; display: grid; gap: 10px; }
+.pf-kv > div { display: grid; gap: 2px; }
+.pf-kv dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #52616f; }
+.pf-kv dd { margin: 0; overflow-wrap: anywhere; }

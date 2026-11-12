@@ -53,10 +53,18 @@ def overview() -> dict:
             "deactivated": users.filter(status=Status.DEACTIVATED).count(),
             "by_role": [{"role": role, "label": ROLE_LABELS.get(role, role), "active": by_role.get(role, 0)} for role in Role],
         },
+        "enquiries_new": _enquiries_new(),
+        "enquiries_overdue": enquiry_overdue_count(),
         "support_pending": MFARecoveryRequest.objects.filter(status=MFARecoveryRequest.Status.PENDING).count(),
         "programmes_without_admin": Program.objects.exclude(
             users__role=Role.PROGRAM_ADMIN, users__status__in=[Status.ACTIVE, Status.INVITED]).count(),
     }
+
+
+def _enquiries_new() -> int:
+    from apps.platform.models import Enquiry
+
+    return Enquiry.objects.filter(status=Enquiry.Status.NEW).count()
 
 
 def programmes() -> list[dict]:
@@ -130,6 +138,13 @@ ACTIVITY_TITLES = {
     "account.mfa_recovery_override": "Reset an authenticator",
     "account.password_changed": "Changed their password",
     "account.password_reset": "Reset their password",
+    "platform.enquiry_assigned": "Assigned a message",
+    "platform.enquiry_priority": "Changed a message's priority",
+    "platform.enquiry_note": "Added an internal note",
+    "platform.enquiry_replied": "Replied to a message",
+    "platform.enquiry_status": "Changed a message's status",
+    "platform.enquiry_converted": "Created a programme from a pilot request",
+    "platform.enquiry_email_resent": "Sent an email again",
 }
 
 
@@ -143,6 +158,8 @@ def activity(limit: int = 50) -> list[dict]:
     for row in rows:
         target = people.get(row.entity_id)
         subject = (target.full_name or target.email) if target else programmes.get(row.entity_id, "")
+        if row.entity_table == "platform_enquiry":
+            subject = (row.changes or {}).get("reference", "")
         out.append({"id": str(row.id), "title": ACTIVITY_TITLES.get(row.action, row.action.replace(".", " ").replace("_", " ").capitalize()),
                     "actor": row.actor.full_name or row.actor.email, "actor_role": ROLE_LABELS.get(row.actor_role, row.actor_role),
                     "subject": subject if (not target or target.id != row.actor_id) else "",
@@ -152,3 +169,99 @@ def activity(limit: int = 50) -> list[dict]:
 
 def recent_signins(days: int = 7) -> int:
     return User.objects.filter(last_login__gte=timezone.now() - timedelta(days=days)).count()
+
+
+# --------------------------------------------------------------------------- enquiries and support
+
+def _person(user) -> dict | None:
+    return {"id": str(user.id), "name": user.full_name or user.email} if user else None
+
+
+def enquiry_row(enquiry, now=None) -> dict:
+    from apps.platform.enquiries import is_overdue
+
+    return {
+        "id": str(enquiry.id), "reference": enquiry.reference, "kind": enquiry.kind, "topic": enquiry.topic,
+        "status": enquiry.status, "priority": enquiry.priority, "name": enquiry.name, "email": enquiry.email,
+        "organisation": enquiry.organisation, "subject": enquiry.subject,
+        "preview": " ".join(enquiry.message.split())[:160], "unread": enquiry.seen_at is None,
+        "overdue": is_overdue(enquiry, now), "assigned_to": _person(enquiry.assigned_to),
+        "created_at": enquiry.created_at, "last_activity_at": enquiry.last_activity_at,
+    }
+
+
+def enquiries(*, actor, page: int = 1, page_size: int = 25, view: str = "open", kind: str = "", search: str = "",
+              assigned: str = "") -> dict:
+    from apps.platform.models import Enquiry
+
+    base = Enquiry.objects.select_related("assigned_to")
+    rows = base
+    if view == "open":
+        rows = rows.filter(status__in=Enquiry.OPEN_STATUSES)
+    elif view == "done":
+        rows = rows.filter(status__in=[Enquiry.Status.RESOLVED, Enquiry.Status.CLOSED])
+    elif view == "spam":
+        rows = rows.filter(status=Enquiry.Status.SPAM)
+    elif view in Enquiry.Status.values:
+        rows = rows.filter(status=view)
+    if kind:
+        rows = rows.filter(kind=kind)
+    if assigned == "me":
+        rows = rows.filter(assigned_to=actor)
+    elif assigned == "unassigned":
+        rows = rows.filter(assigned_to=None)
+    term = search.strip()
+    if term:
+        rows = rows.filter(Q(reference__icontains=term) | Q(name__icontains=term) | Q(email__icontains=term)
+                           | Q(organisation__icontains=term) | Q(subject__icontains=term))
+    paginator = Paginator(rows.order_by("-last_activity_at"), max(1, min(page_size, 100)))
+    current = paginator.get_page(page)
+    now = timezone.now()
+    return {"results": [enquiry_row(e, now) for e in current.object_list],
+            "pagination": {"page": current.number, "pages": paginator.num_pages, "total": paginator.count},
+            "counts": enquiry_counts()}
+
+
+def enquiry_counts() -> dict:
+    from apps.platform.models import Enquiry
+
+    by_status = dict(Enquiry.objects.values_list("status").annotate(n=Count("id")).values_list("status", "n"))
+    open_total = sum(by_status.get(s, 0) for s in Enquiry.OPEN_STATUSES)
+    return {"open": open_total, "new": by_status.get("new", 0), "done": by_status.get("resolved", 0) + by_status.get("closed", 0),
+            "spam": by_status.get("spam", 0), "unread": Enquiry.objects.filter(seen_at=None).exclude(status="spam").count(),
+            "overdue": enquiry_overdue_count()}
+
+
+def enquiry_overdue_count() -> int:
+    from apps.platform.enquiries import SERVICE_LEVEL
+    from apps.platform.models import Enquiry
+
+    return Enquiry.objects.filter(first_response_at=None, status__in=Enquiry.OPEN_STATUSES,
+                                  created_at__lt=timezone.now() - SERVICE_LEVEL).count()
+
+
+def enquiry_detail(enquiry) -> dict:
+    from apps.platform.models import EnquiryEvent
+
+    events = [e for e in enquiry.events.select_related("actor").all() if e.type != EnquiryEvent.Type.STAFF_ALERT]
+    timeline = []
+    for event in events:
+        email = None
+        if event.email_status:
+            recipient = enquiry.email
+            email = {"template": event.email_template, "status": event.email_status, "to": recipient, "subject": event.email_subject,
+                     "attempts": event.email_attempts, "error": event.email_error if event.email_status == "failed" else "",
+                     "sent_at": event.email_sent_at}
+        timeline.append({"id": str(event.id), "type": event.type, "actor": _person(event.actor), "body": event.body,
+                         "text": event.meta.get("text", ""), "meta": {k: v for k, v in event.meta.items() if k in {"programme", "programme_id", "sender_notified"}},
+                         "created_at": event.created_at, "email": email})
+    alerts = [e for e in enquiry.events.all() if e.type == EnquiryEvent.Type.STAFF_ALERT]
+    row = enquiry_row(enquiry)
+    return {**row, "phone": enquiry.phone, "message": enquiry.message, "details": enquiry.details, "source_page": enquiry.source_page,
+            "consent_at": enquiry.consent_at, "first_response_at": enquiry.first_response_at, "closed_at": enquiry.closed_at,
+            "converted_programme": ({"id": str(enquiry.converted_programme_id), "name": enquiry.converted_programme.name}
+                                    if enquiry.converted_programme_id else None),
+            "team_alert": alerts[0].email_status if alerts else "",
+            "timeline": timeline,
+            "assignees": [{"id": str(u.id), "name": u.full_name or u.email} for u in
+                          User.objects.filter(role=Role.PLATFORM_ADMIN, status=Status.ACTIVE).order_by("first_name", "email")]}

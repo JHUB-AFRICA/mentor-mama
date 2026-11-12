@@ -3242,6 +3242,8 @@ export type PlatformOverview = {
     by_role: Array<{ role: string; label: string; active: number }>;
   };
   support_pending: number;
+  enquiries_new: number;
+  enquiries_overdue: number;
   programmes_without_admin: number;
   signins_last_7_days: number;
   system: SystemStatus;
@@ -3372,3 +3374,89 @@ export async function resolvePlatformSupportRequest(id: string, decision: "recov
 export async function getPlatformActivity(): Promise<PlatformActivity[]> {
   return (await request<{ data: PlatformActivity[] }>("/api/v1/platform/activity")).data;
 }
+
+
+// ---- Website messages: contact, pilot access and support requests
+
+export type EnquiryKind = "contact" | "pilot" | "support";
+export type EnquiryStatus = "new" | "in_progress" | "waiting" | "resolved" | "closed" | "spam";
+export type EnquiryPriority = "low" | "normal" | "high";
+export type EnquiryPerson = { id: string; name: string };
+export type EnquiryRow = {
+  id: string;
+  reference: string;
+  kind: EnquiryKind;
+  topic: string;
+  status: EnquiryStatus;
+  priority: EnquiryPriority;
+  name: string;
+  email: string;
+  organisation: string;
+  subject: string;
+  preview: string;
+  unread: boolean;
+  overdue: boolean;
+  assigned_to: EnquiryPerson | null;
+  created_at: string;
+  last_activity_at: string;
+};
+export type EnquiryCounts = { open: number; new: number; done: number; spam: number; unread: number; overdue: number };
+export type EnquiryEmail = {
+  template: string;
+  status: "queued" | "sent" | "failed";
+  to: string;
+  subject: string;
+  attempts: number;
+  error: string;
+  sent_at: string | null;
+};
+export type EnquiryTimelineEntry = {
+  id: string;
+  type: "received" | "note" | "reply" | "status" | "assignment" | "priority" | "converted" | "email";
+  actor: EnquiryPerson | null;
+  body: string;
+  text: string;
+  meta: { programme?: string; programme_id?: string; sender_notified?: boolean };
+  created_at: string;
+  email: EnquiryEmail | null;
+};
+export type EnquiryDetail = EnquiryRow & {
+  phone: string;
+  message: string;
+  details: Record<string, string | number | null>;
+  source_page: string;
+  consent_at: string;
+  first_response_at: string | null;
+  closed_at: string | null;
+  converted_programme: { id: string; name: string } | null;
+  team_alert: "" | "queued" | "sent" | "failed";
+  timeline: EnquiryTimelineEntry[];
+  assignees: EnquiryPerson[];
+};
+
+export async function getPlatformEnquiries(params: Record<string, string | number>) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== "").map(([key, value]) => [key, String(value)]));
+  return (await request<{ data: { results: EnquiryRow[]; counts: EnquiryCounts; pagination: { page: number; pages: number; total: number } } }>(
+    `/api/v1/platform/enquiries?${query.toString()}`,
+  )).data;
+}
+
+export async function getPlatformEnquiry(id: string): Promise<EnquiryDetail> {
+  return (await request<{ data: EnquiryDetail }>(`/api/v1/platform/enquiries/${id}`)).data;
+}
+
+async function enquiryAction(id: string, action: string, body: Record<string, unknown>): Promise<EnquiryDetail> {
+  return (await request<{ data: EnquiryDetail }>(`/api/v1/platform/enquiries/${id}/${action}`, { method: "POST", body: JSON.stringify(body) })).data;
+}
+
+export const assignPlatformEnquiry = (id: string, userId: string | null) => enquiryAction(id, "assign", { user_id: userId });
+export const setPlatformEnquiryStatus = (id: string, status: EnquiryStatus, note = "", notify = true) =>
+  enquiryAction(id, "status", { status, note, notify });
+export const setPlatformEnquiryPriority = (id: string, priority: EnquiryPriority) => enquiryAction(id, "priority", { priority });
+export const addPlatformEnquiryNote = (id: string, body: string) => enquiryAction(id, "notes", { body });
+export const replyToPlatformEnquiry = (id: string, body: string) => enquiryAction(id, "reply", { body });
+export const resendPlatformEnquiryEmail = (id: string, eventId: string) => enquiryAction(id, "email/resend", { event_id: eventId });
+export const convertPlatformEnquiry = (
+  id: string,
+  input: { name: string; short_name?: string; academic_year?: string; note?: string; admin: PersonInput },
+) => enquiryAction(id, "convert", input);

@@ -8,11 +8,15 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
 app = Celery("mentormama")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks(["apps.notifications", "apps.analytics", "apps.placements"], force=True)
+app.autodiscover_tasks(["apps.notifications", "apps.analytics", "apps.placements", "apps.platform"], force=True)
 app.conf.beat_schedule = {
     "dispatch-outbox-every-ten-seconds": {
         "task": "apps.notifications.tasks.dispatch_outbox_task",
         "schedule": 10.0,
+    },
+    "send-enquiry-emails-every-thirty-seconds": {
+        "task": "apps.platform.tasks.send_enquiry_emails_task",
+        "schedule": 30.0,
     },
     "refresh-analytics-hourly": {
         "task": "apps.analytics.tasks.refresh_projections_task",

@@ -44,7 +44,7 @@ export function PlatformSupport({ onError }: { onError: (message: string) => voi
     <AdminPage>
       <AdminPageHeader
         eyebrow="Platform administration"
-        title="Support requests"
+        title="Sign-in help requests"
         description="People who lost access to their authenticator app. Programme administrators usually handle their own people; requests marked “Needs the platform” have nobody else who can."
       />
       <Notice icon={<KeyRound />}>

@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.platform import enquiry_views as enq
 from apps.platform import views
 
 urlpatterns = [
@@ -14,5 +15,15 @@ urlpatterns = [
     path("platform/accounts/<uuid:user_id>/invitation/resend", views.AccountInvitationResendView.as_view()),
     path("platform/support-requests", views.SupportRequestsView.as_view()),
     path("platform/support-requests/<uuid:request_id>/resolve", views.SupportRequestResolveView.as_view()),
+    path("public/enquiries", enq.PublicEnquiryView.as_view()),
+    path("platform/enquiries", enq.EnquiriesView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>", enq.EnquiryDetailView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/assign", enq.EnquiryAssignView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/status", enq.EnquiryStatusView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/priority", enq.EnquiryPriorityView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/notes", enq.EnquiryNoteView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/reply", enq.EnquiryReplyView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/email/resend", enq.EnquiryEmailResendView.as_view()),
+    path("platform/enquiries/<uuid:enquiry_id>/convert", enq.EnquiryConvertView.as_view()),
     path("platform/activity", views.ActivityView.as_view()),
 ]

@@ -1,34 +1,38 @@
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Activity, Building2, KeyRound, LayoutDashboard, LifeBuoy, LockKeyhole, Settings2, Users } from "lucide-react";
+import { Activity, Building2, KeyRound, LayoutDashboard, Inbox, LifeBuoy, LockKeyhole, Settings2, Users } from "lucide-react";
 import { useToast } from "../../components/ToastProvider";
 import { Field, PasswordInput } from "../../components/kit";
-import { ApiError, changePassword, getSessionState, logout, type CurrentUser } from "../../services/api";
+import { ApiError, changePassword, getPlatformEnquiries, getSessionState, logout, type CurrentUser } from "../../services/api";
 import { AccountSettings } from "../auth/AccountSettings";
 import { AdminButton, AdminCard, AdminPage, AdminPageHeader, Notice } from "../programme-admin/ui/AdminKit";
 import { PortalHeader } from "../workspaces/PortalHeader";
 import { PortalSidebar } from "../workspaces/PortalSidebar";
 import { PlatformAccounts } from "./PlatformAccounts";
 import { PlatformActivity } from "./PlatformActivity";
+import { PlatformMessageDetail } from "./PlatformMessageDetail";
+import { PlatformMessages } from "./PlatformMessages";
 import { PlatformOverview } from "./PlatformOverview";
 import { PlatformProgrammes } from "./PlatformProgrammes";
 import { PlatformSupport } from "./PlatformSupport";
 import "./platform.css";
 
-type Nav = "overview" | "programmes" | "accounts" | "support" | "activity" | "account";
+type Nav = "overview" | "messages" | "programmes" | "accounts" | "support" | "activity" | "account";
 
 const ROLE_LABEL = "Platform Administrator";
 const PAGES: Record<Exclude<Nav, "account">, { path: string; title: string }> = {
   overview: { path: "/platform", title: "Overview" },
+  messages: { path: "/platform/messages", title: "Messages" },
   programmes: { path: "/platform/programmes", title: "Programmes" },
   accounts: { path: "/platform/accounts", title: "Accounts" },
-  support: { path: "/platform/support", title: "Support requests" },
+  support: { path: "/platform/support", title: "Sign-in help" },
   activity: { path: "/platform/activity", title: "Activity" },
 };
 
 function navFor(pathname: string): Nav {
   const segment = pathname.replace(/\/+$/, "").split("/")[2] ?? "";
-  return (["programmes", "accounts", "support", "activity", "account"] as const).find((item) => item === segment) ?? "overview";
+  return (["messages", "programmes", "accounts", "support", "activity", "account"] as const).find((item) => item === segment) ?? "overview";
 }
 
 /** The operator workspace at /platform: programmes, accounts, support and system health. */
@@ -47,7 +51,16 @@ export function PlatformWorkspace({
   const go = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const active = navFor(location.pathname);
+  const messageId = active === "messages" ? location.pathname.replace(/\/+$/, "").split("/")[3] : undefined;
   const title = active === "account" ? "Account & security" : PAGES[active].title;
+  // The number on the Messages item: new messages nobody has opened yet. Refreshes while the workspace is open.
+  const inbox = useQuery({
+    queryKey: ["platform-enquiries", "badge"],
+    queryFn: () => getPlatformEnquiries({ page_size: 1, view: "open" }),
+    enabled: !user.must_change_password,
+    refetchInterval: 60_000,
+    select: (data) => data.counts.unread,
+  });
 
   async function signOut() {
     try {
@@ -64,6 +77,8 @@ export function PlatformWorkspace({
 
   let page: ReactNode;
   if (user.must_change_password) page = <InitialPasswordGate onChanged={onUserUpdated} />;
+  else if (active === "messages")
+    page = messageId ? <PlatformMessageDetail key={messageId} id={messageId} onError={onError} /> : <PlatformMessages />;
   else if (active === "programmes") page = <PlatformProgrammes onError={onError} />;
   else if (active === "accounts") page = <PlatformAccounts currentUserId={user.id} onError={onError} />;
   else if (active === "support") page = <PlatformSupport onError={onError} />;
@@ -91,9 +106,10 @@ export function PlatformWorkspace({
           {
             label: "Manage",
             items: [
+              { id: "messages", label: "Messages", icon: <Inbox />, badge: inbox.data, onSelect: () => open("messages") },
               { id: "programmes", label: "Programmes", icon: <Building2 />, onSelect: () => open("programmes") },
               { id: "accounts", label: "Accounts & invitations", icon: <Users />, onSelect: () => open("accounts") },
-              { id: "support", label: "Support requests", icon: <LifeBuoy />, onSelect: () => open("support") },
+              { id: "support", label: "Sign-in help", icon: <LifeBuoy />, onSelect: () => open("support") },
             ],
           },
           {
@@ -106,7 +122,7 @@ export function PlatformWorkspace({
       <div className="min-h-screen min-w-0 lg:pl-[17rem]">
         <PortalHeader
           onOpenNav={() => setMobileOpen(true)}
-          crumbs={["Platform administration", title]}
+          crumbs={messageId ? ["Platform administration", "Messages", "Message"] : ["Platform administration", title]}
           user={{ name: user.name, email: user.email, roleLabel: ROLE_LABEL }}
           accountItems={[{ label: "Account & security", icon: <KeyRound aria-hidden="true" />, onSelect: () => open("account") }]}
           onSignOut={() => void signOut()}

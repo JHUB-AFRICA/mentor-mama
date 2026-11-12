@@ -55,6 +55,10 @@ envVarGroups:
         value: mentormama-portal.onrender.com # the portal's host; switch to the custom domain when it has one
       - key: CSRF_TRUSTED_ORIGINS
         value: https://mentormama-portal.onrender.com # keep in step with PORTAL_DOMAIN
+      # Website messages (contact, pilot access, support): who is alerted (comma-separated; empty = every active platform
+      # administrator) and the address senders reply to from the emails they get (empty = the sender address).
+      # - key: PLATFORM_NOTIFY_EMAILS
+      # - key: SUPPORT_REPLY_TO
       # Email: Resend, one sender for the whole product.
       - key: EMAIL_PROVIDER
         value: resend
@@ -112,6 +116,11 @@ services:
         name: Cache-Control
         value: public, max-age=31536000, immutable
     routes:
+      # The contact, pilot-access and support forms post to /api/v1/public/enquiries. Proxying /api keeps the call
+      # same-origin (no CORS, no cookies). Rules run top to bottom.
+      - type: rewrite
+        source: /api/*
+        destination: https://mentormama-api.onrender.com/api/*
       # React uses client-side routing, so every unknown path serves index.html.
       - type: rewrite
         source: /*

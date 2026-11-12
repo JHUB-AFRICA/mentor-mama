@@ -9,6 +9,7 @@ import HowItWorks from "./pages/HowItWorks";
 import Resources from "./pages/Resources";
 import Community from "./pages/Community";
 import Contact from "./pages/Contact";
+import Support from "./pages/Support";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -25,6 +26,7 @@ function App() {
           <Route path="/resources" element={<Resources />} />
           <Route path="/community" element={<Community />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/support" element={<Support />} />
         </Routes>
       </main>
       <Footer />

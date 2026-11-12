@@ -61,6 +61,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link to="/support" className="text-[13px] text-white/50 hover:text-white transition-colors duration-200">
+                  Support
+                </Link>
+              </li>
+              <li>
                 <a href={portalUrl} className="text-[13px] text-white/50 hover:text-white transition-colors duration-200">
                   Portal sign in
                 </a>

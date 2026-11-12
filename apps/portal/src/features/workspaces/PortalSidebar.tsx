@@ -22,6 +22,8 @@ export interface SidebarItem {
   icon: ReactNode;
   href?: string;
   onSelect?: () => void;
+  /** Items waiting for the person (shown as a count next to the label; announced to screen readers). */
+  badge?: number;
 }
 
 export interface SidebarGroup {
@@ -222,6 +224,12 @@ function SidebarEntry({
       )}
       <span className="portal-sidebar__icon">{item.icon}</span>
       <span className="portal-sidebar__label">{item.label}</span>
+      {item.badge ? (
+        <span className="portal-sidebar__badge">
+          {item.badge > 99 ? "99+" : item.badge}
+          <span className="sr-only"> waiting</span>
+        </span>
+      ) : null}
     </>
   );
   if (item.href && !item.onSelect) {

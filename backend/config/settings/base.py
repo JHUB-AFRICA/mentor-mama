@@ -202,6 +202,10 @@ OTP_EMAIL_TOKEN_VALIDITY = env.int("OTP_EMAIL_TOKEN_VALIDITY", default=300)
 OTP_EMAIL_COOLDOWN_DURATION = env.int("OTP_EMAIL_COOLDOWN_DURATION", default=60)
 OTP_EMAIL_THROTTLE_FACTOR = env.int("OTP_EMAIL_THROTTLE_FACTOR", default=1)
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:5173")
+# Website enquiries and support requests: who is alerted (default: every active platform administrator) and the
+# address senders can reply to from the emails they receive (empty = they reply to the sender address).
+PLATFORM_NOTIFY_EMAILS = env.list("PLATFORM_NOTIFY_EMAILS", default=[])
+SUPPORT_REPLY_TO = env("SUPPORT_REPLY_TO", default="").strip()
 EXPORT_ROOT = env("EXPORT_ROOT", default="/tmp/mentormama-exports")
 # "r2" = Cloudflare R2 (the production store). "s3" is accepted as an alias: R2 speaks the S3 API, so any
 # S3-compatible bucket works with the same code. Both are normalised to "r2" below.
@@ -294,6 +298,9 @@ REST_FRAMEWORK = {
         "auth_email_verify": "10/minute",
         "auth_password_reset": "5/hour",
         "auth_password_reset_confirm": "10/hour",
+        # Public website forms: per visitor address, and a ceiling across everyone so a flood cannot fill the inbox.
+        "public_enquiry": "10/hour",
+        "public_enquiry_global": "400/hour",
     },
 }
 

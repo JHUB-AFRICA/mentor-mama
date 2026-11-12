@@ -65,7 +65,7 @@ export default function Navbar() {
               Portal sign in
             </a>
             <Link
-              to="/contact"
+              to="/contact?type=pilot"
               className="bg-sage text-white px-6 py-2.5 rounded-pill text-[14px] font-semibold hover:bg-sage/90 transition-all hover:scale-[1.02]"
             >
               Request Pilot Access
@@ -128,7 +128,7 @@ export default function Navbar() {
               Portal sign in
             </a>
             <Link
-              to="/contact"
+              to="/contact?type=pilot"
               className="bg-sage text-white px-8 py-3 rounded-pill text-body font-semibold hover:bg-sage/90 transition-colors"
             >
               Request Pilot Access

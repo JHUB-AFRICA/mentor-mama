@@ -120,7 +120,7 @@ function Hero() {
               className="mt-10 opacity-0 translate-y-4"
             >
               <Link
-                to="/contact"
+                to="/contact?type=pilot"
                 className="inline-block bg-sage text-white px-8 py-3.5 rounded-pill text-[14px] font-semibold hover:scale-[1.02] transition-transform shadow-editorial"
               >
                 Request Pilot Access
@@ -299,7 +299,7 @@ function ClosingCTA() {
           </p>
           <div className="pt-4">
             <Link
-              to="/contact"
+              to="/contact?type=pilot"
               className="inline-flex items-center gap-2 bg-white text-sage px-8 py-3.5 rounded-pill text-[14px] font-semibold hover:bg-cream transition-colors shadow-editorial"
             >
               Request Pilot Access <ArrowRight size={16} />

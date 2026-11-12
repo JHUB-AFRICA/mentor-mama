@@ -194,3 +194,40 @@ export function ActivitySkeleton() {
     </AdminPage>
   );
 }
+
+/** Message detail: back link, title, then the message / respond / activity column beside the handling column. */
+export function MessageDetailSkeleton() {
+  return (
+    <AdminPage>
+      <Announce label="message">
+        <div className="pf-sk-stack">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-9 w-[min(30rem,80%)]" />
+          <Skeleton className="h-5 w-72 max-w-full" />
+        </div>
+        <div className="pf-columns pf-columns--detail pf-sk-gap">
+          <div className="pf-stack">
+            {[10, 8].map((lines) => (
+              <div key={lines} className="pf-sk-stat" style={{ display: "grid" }}>
+                <Skeleton className="h-4 w-28" />
+                {Array.from({ length: lines / 2 }, (_, index) => (
+                  <Skeleton key={index} className={`h-3.5 ${index % 2 ? "w-4/5" : "w-full"}`} />
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="pf-stack">
+            {[3, 5].map((rows) => (
+              <div key={rows} className="pf-sk-stat" style={{ display: "grid" }}>
+                <Skeleton className="h-4 w-24" />
+                {Array.from({ length: rows }, (_, index) => (
+                  <Skeleton key={index} className="h-10 w-full rounded-xl" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Announce>
+    </AdminPage>
+  );
+}
