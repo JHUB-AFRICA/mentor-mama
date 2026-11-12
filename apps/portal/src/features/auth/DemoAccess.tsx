@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, LogIn, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Copy, KeyRound, LogIn, type LucideIcon } from "lucide-react";
 import { BookOpenCheck, Building2, GraduationCap, Hospital, Stethoscope } from "lucide-react";
 import { ApiError, demoLogin, getDemoAccounts } from "../../services/api";
 import type { CurrentUser, DemoAccount } from "../../services/api";
@@ -21,11 +21,23 @@ const ROLE_INFO: Record<string, { icon: LucideIcon; short: string; sees: string 
  * No real password is ever shown or sent: the server signs the chosen demo account in directly, and the password box is
  * filled with dots only so the audience can follow what is happening.
  */
+const OPEN_KEY = "mentormama:demo-access-open";
+
+/** Open by default (fastest for a presentation); the choice is remembered for this browser tab only. */
+function initialOpen(): boolean {
+  try {
+    return window.sessionStorage.getItem(OPEN_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
 export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user: CurrentUser) => void; onFill: (email: string, password: string) => void }) {
   const accounts = useQuery({ queryKey: ["demo-accounts"], queryFn: getDemoAccounts, staleTime: 60_000, retry: false });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -35,6 +47,16 @@ export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user
   const current: DemoAccount = list.find((account) => account.role === selected) ?? list[0];
   const info = ROLE_INFO[current.role] ?? ROLE_INFO.program_admin;
   const Icon = info.icon;
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    try {
+      window.sessionStorage.setItem(OPEN_KEY, next ? "1" : "0");
+    } catch {
+      /* private mode: the card still opens and closes, it just is not remembered */
+    }
+  }
 
   async function copyEmail() {
     try {
@@ -61,11 +83,16 @@ export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user
   }
 
   return (
-    <section className="auth-demo" aria-labelledby="auth-demo-title">
-      <div className="auth-demo__head">
-        <h2 id="auth-demo-title"><KeyRound size={14} aria-hidden="true" />Explore demo accounts</h2>
-        <p>Choose a role to see its prepared programme data.</p>
-      </div>
+    <section className={`auth-demo${open ? "" : " auth-demo--closed"}`} aria-labelledby="auth-demo-title">
+      <button type="button" className="auth-demo__toggle" aria-expanded={open} aria-controls="demo-body" onClick={toggle}>
+        <span className="auth-demo__head">
+          <span id="auth-demo-title" className="auth-demo__title"><KeyRound size={14} aria-hidden="true" />Explore demo accounts</span>
+          {open && <span className="auth-demo__hint">Choose a role to see its prepared programme data.</span>}
+        </span>
+        <span className="auth-demo__chev" aria-hidden="true"><ChevronDown size={18} /></span>
+        <span className="sr-only">{open ? "Minimise" : "Show"}</span>
+      </button>
+      <div id="demo-body" hidden={!open}>
       <div className="auth-demo__tabs" role="tablist" aria-label="Demo role">
         {list.map((account) => {
           const meta = ROLE_INFO[account.role] ?? ROLE_INFO.program_admin;
@@ -115,6 +142,7 @@ export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user
           {busy ? "Signing in…" : "Use this account"}
         </button>
         {error && <p role="alert" className="auth-demo__error">{error}</p>}
+      </div>
       </div>
     </section>
   );

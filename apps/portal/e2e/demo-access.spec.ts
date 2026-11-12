@@ -47,6 +47,34 @@ test("demo access: pick a role, see the account, use it, and the form fills in b
   await expect.poll(() => signedInAs).toBe("student");
 });
 
+test("demo access can be minimised and reopened, and the choice is remembered for the tab", async ({ page }) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (data: unknown) => route.fulfill({ json: { data } });
+    if (path === "/api/v1/auth/csrf") return route.fulfill({ json: { data: { csrfToken: "t" } }, headers: { "Set-Cookie": "csrftoken=t; Path=/" } });
+    if (path === "/api/v1/auth/session") return json({ authenticated: false, user: null });
+    if (path === "/api/v1/auth/demo") return json({ enabled: true, accounts });
+    return json([]);
+  });
+  await page.goto("/");
+  const toggle = page.getByRole("button", { name: /Explore demo accounts/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("tab")).toHaveCount(5);
+
+  await toggle.click(); // minimise: only the slim bar stays, the sign-in form is untouched
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByLabel("Email address")).toBeVisible();
+
+  await page.reload(); // remembered for this tab
+  await expect(page.getByRole("button", { name: /Explore demo accounts/ })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("tab")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Explore demo accounts/ }).click(); // reopen
+  await expect(page.getByRole("tab")).toHaveCount(5);
+  await expect(page.getByRole("button", { name: "Use this account" })).toBeVisible();
+});
+
 test("no demo card appears when demo mode is off", async ({ page }) => {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

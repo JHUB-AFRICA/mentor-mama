@@ -6,6 +6,10 @@ tier_reason: User-visible learning-module creation bug spans the portal form and
 last_updated: 2026-11-11T00:00:00Z
 ---
 
+## Current session update — Demo access card can be minimised (2026-11-12)
+
+The "Explore demo accounts" card on the sign-in page is now a disclosure: the header is a button (`aria-expanded`, chevron) that minimises it to a slim bar and reopens it; open by default, and the choice is remembered for the browser tab (sessionStorage). Verified: new Chrome spec (minimise, form untouched, remembered after reload, reopen) plus the earlier two, and a real-browser run against seeded data (minimised bar renders, reopening and "Use this account" still signs in at /mentor). Not verified: keyboard arrow navigation between role tabs.
+
 ## Current session update — Demo access card on the sign-in page (2026-11-12)
 
 Redesigned the demo sign-in to match the reference flow: an "Explore demo accounts" card with a tab per role (Admin, Coordinator, Manager, Mentor, Student); the selected role shows its account card (name, what that role does, email with a Copy button, "Password: Filled for you") and a "Use this account" button that visibly fills the email and password boxes and then signs in (about a second). No real password is ever shown or sent: the server signs the chosen demo account in directly (`/auth/demo/login`), the password box only holds placeholder dots. Production check before the redesign: the tiles code was live and `/api/v1/auth/demo` returned enabled with five accounts; an already-open tab keeps its earlier "no demo" answer until reloaded. Finding: the live seed used the fake `@demo.sinapstechnology.tech` addresses for the administrator and student (the real inboxes were not applied), so it must be re-seeded with `--retire-existing --admin-email … --student-email …`.

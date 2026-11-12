@@ -379,8 +379,17 @@
 
 /* Presentation shortcut: role tabs + a details card */
 .auth-demo { margin-top: 14px; padding: 12px; border: 1px solid rgba(29, 140, 140, 0.25); border-radius: 16px; background: rgba(29, 140, 140, 0.06); }
-.auth-demo__head h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #157373; }
-.auth-demo__head p { margin: 2px 0 10px; font-size: 0.8125rem; color: var(--auth-muted); }
+.auth-demo__toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.auth-demo__toggle:focus-visible { outline: 3px solid rgba(29, 140, 140, 0.4); outline-offset: 4px; border-radius: 10px; }
+.auth-demo__head { display: grid; gap: 2px; min-width: 0; }
+.auth-demo__title { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #157373; }
+.auth-demo__hint { font-size: 0.8125rem; color: var(--auth-muted); }
+.auth-demo__chev { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 9px; border: 1px solid #d6e4e4; background: #fff; color: #157373; transition: transform 0.2s; }
+.auth-demo__toggle:hover .auth-demo__chev { border-color: #1d8c8c; }
+.auth-demo:not(.auth-demo--closed) .auth-demo__chev { transform: rotate(180deg); }
+.auth-demo--closed { padding: 10px 12px; }
+.auth-demo__tabs { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .auth-demo__chev { transition: none; } }
 .auth-demo__tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .auth-demo__tab { display: grid; justify-items: center; gap: 3px; padding: 8px 1px; min-width: 0; border: 1px solid #d6e4e4; border-radius: 12px; background: #fff; color: #4f627d; font-size: 0.625rem; font-weight: 600; letter-spacing: -0.01em; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s; }
 .auth-demo__tab:hover:not(:disabled) { border-color: #1d8c8c; }
