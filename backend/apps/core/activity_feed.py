@@ -55,6 +55,7 @@ TITLES = {
     "cohort.archived": ("cohorts", "Cohort archived", "You archived a cohort"),
     "cohort.student_enrolled": ("cohorts", "Student enrolled", "You enrolled a student"),
     "cohort.student_membership_removed": ("cohorts", "Student removed from cohort", "You removed a student from a cohort"),
+    "institution.created": ("facility", "Institution added", "You added an institution"),
     "ward.created": ("facility", "Ward added", "You added a ward"),
     "ward.updated": ("facility", "Ward updated", "You updated a ward"),
     "facility.created": ("facility", "Facility added", "You added a facility"),

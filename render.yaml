@@ -62,6 +62,15 @@ envVarGroups:
       # - key: WEBSITE_BASE_URL        # public site, for the "check progress" link in enquiry emails
       # - key: ENQUIRY_INBOUND_SECRET  # opens POST /api/v1/public/enquiries/inbound for emailed replies (header X-Inbound-Secret)
       # - key: TURNSTILE_SECRET_KEY    # with VITE_TURNSTILE_SITE_KEY on the website, turns on Cloudflare Turnstile
+      # Presentation demo (leave these out of normal operation). Set them in the Render dashboard, not here, so no personal
+      # address is committed. DEMO_SEED=true makes the next deploy create the isolated demo programme once (pre-deploy).
+      # DEMO_MODE=true shows the one-tap role tiles on the sign-in page (no MFA, demo programme only): turn it OFF after the
+      # presentation. DEMO_EMAIL_ALLOWLIST is the only list of real inboxes the demo programme may email.
+      # - key: DEMO_SEED
+      # - key: DEMO_ADMIN_EMAIL
+      # - key: DEMO_STUDENT_EMAIL
+      # - key: DEMO_MODE
+      # - key: DEMO_EMAIL_ALLOWLIST   # comma-separated, e.g. the two inboxes above
       # Email: Resend, one sender for the whole product.
       - key: EMAIL_PROVIDER
         value: resend

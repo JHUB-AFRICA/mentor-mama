@@ -7,6 +7,7 @@ import { login, ApiError } from "../../services/api";
 import type { CurrentUser } from "../../services/api";
 import { AuthLayout } from "./AuthLayout";
 import { AuthAlert, AuthButton } from "./AuthUi";
+import { DemoAccess } from "./DemoAccess";
 
 export function SignInFlow({
   message,
@@ -91,6 +92,16 @@ export function SignInFlow({
             )}
           </AuthAlert>
         </div>
+      )}
+
+      {!platform && (
+        <DemoAccess
+          onAuthenticated={onAuthenticated}
+          onFill={(demoEmail, demoPassword) => {
+            setEmail(demoEmail);
+            setPassword(demoPassword);
+          }}
+        />
       )}
 
       <form className="mt-4 space-y-3" onSubmit={submit}>

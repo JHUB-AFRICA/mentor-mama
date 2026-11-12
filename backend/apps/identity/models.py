@@ -18,6 +18,10 @@ class Program(BaseModel):
     academic_year = models.CharField(max_length=20, blank=True, default="")
     owner = models.ForeignKey("User", null=True, blank=True, on_delete=models.SET_NULL, related_name="owned_programmes")
     require_mentor_training_before_placement = models.BooleanField(default=True)
+    # A sandbox programme for presentations (see `manage.py seed_demo`). Only when DEMO_MODE is on does it get
+    # one-tap sign-in without MFA, and only for the accounts named in `demo_logins` ({role: user id}).
+    is_demo = models.BooleanField(default=False)
+    demo_logins = models.JSONField(default=dict, blank=True)
     directory_reviewed_at = models.DateTimeField(null=True, blank=True)
     directory_reviewed_by = models.ForeignKey(
         "User", null=True, blank=True, on_delete=models.SET_NULL,

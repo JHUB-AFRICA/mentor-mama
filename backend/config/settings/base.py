@@ -186,7 +186,17 @@ if EMAIL_PROVIDER not in _EMAIL_BACKENDS:
     raise ImproperlyConfigured(f"EMAIL_PROVIDER must be one of {sorted(_EMAIL_BACKENDS)}, not {EMAIL_PROVIDER!r}.")
 if EMAIL_PROVIDER == "resend" and not RESEND_API_KEY:
     raise ImproperlyConfigured("EMAIL_PROVIDER=resend needs RESEND_API_KEY.")
-EMAIL_BACKEND = env("EMAIL_BACKEND", default=_EMAIL_BACKENDS[EMAIL_PROVIDER])
+# Every message goes through the safety wrapper, which drops mail to reserved ".test" addresses and, for people in the
+# demo programme, to anyone not on DEMO_EMAIL_ALLOWLIST. It then hands the message to the real provider below.
+EMAIL_DELEGATE_BACKEND = env("EMAIL_BACKEND", default=_EMAIL_BACKENDS[EMAIL_PROVIDER])
+EMAIL_BACKEND = "apps.core.email_backend.SafeEmailBackend"
+# Presentation mode: one-tap sign-in for the demo programme's accounts, without MFA. OFF unless explicitly enabled;
+# turn it off again after the presentation. Real programmes are never affected.
+DEMO_MODE = env.bool("DEMO_MODE", default=False)
+# Seeded demo people get addresses on this subdomain of our own domain. Mail to it is always dropped (no mailbox exists).
+DEMO_EMAIL_DOMAIN = env("DEMO_EMAIL_DOMAIN", default="demo.sinapstechnology.tech").strip().lower()
+# Real inboxes the demo programme may email (comma-separated). "name+tag@gmail.com" counts as "name@gmail.com".
+DEMO_EMAIL_ALLOWLIST = [address.strip().lower() for address in env.list("DEMO_EMAIL_ALLOWLIST", default=[]) if address.strip()]
 ANYMAIL = {
     "RESEND_API_KEY": RESEND_API_KEY,
     **({"RESEND_SIGNING_SECRET": RESEND_SIGNING_SECRET} if RESEND_SIGNING_SECRET else {}),
@@ -309,6 +319,7 @@ REST_FRAMEWORK = {
         "public_enquiry": "10/hour",
         "public_enquiry_global": "400/hour",
         "public_enquiry_status": "30/hour",
+        "auth_demo": "60/hour",
     },
 }
 

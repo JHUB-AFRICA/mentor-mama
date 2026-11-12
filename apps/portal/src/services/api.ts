@@ -3490,3 +3490,16 @@ export async function exportPlatformEnquiries(params: Record<string, string | nu
 export async function sendHelpRequest(input: { topic: string; message: string; page: string }): Promise<{ reference: string }> {
   return (await request<{ data: { reference: string } }>("/api/v1/support/help", { method: "POST", body: JSON.stringify(input) })).data;
 }
+
+// ---- Presentation mode (only exists when the server runs with DEMO_MODE)
+
+export type DemoAccount = { role: string; role_label: string; name: string; email: string };
+
+export async function getDemoAccounts(): Promise<DemoAccount[]> {
+  const response = await request<{ data: { enabled: boolean; accounts: DemoAccount[] } }>("/api/v1/auth/demo");
+  return response.data.enabled ? response.data.accounts : [];
+}
+
+export async function demoLogin(role: string): Promise<CurrentUser> {
+  return (await request<{ data: CurrentUser }>("/api/v1/auth/demo/login", { method: "POST", body: JSON.stringify({ role }) })).data;
+}

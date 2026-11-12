@@ -1,11 +1,13 @@
 from django.urls import path
 
-from apps.identity import views
+from apps.identity import demo, views
 
 urlpatterns = [
     path("auth/csrf", views.CSRFCookieView.as_view(), name="auth-csrf"),
     path("auth/session", views.SessionView.as_view(), name="auth-session"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    path("auth/demo", demo.DemoAccountsView.as_view(), name="auth-demo"),
+    path("auth/demo/login", demo.DemoLoginView.as_view(), name="auth-demo-login"),
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/invitations", views.InviteView.as_view(), name="auth-invite"),
     path("auth/invitations/students/bulk", views.BulkStudentInviteView.as_view(), name="auth-bulk-student-invite"),

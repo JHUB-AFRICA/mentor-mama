@@ -376,3 +376,19 @@
 /* The surface's decorative ::before/::after glows extend below it and used to add a
    blank scrollable strip under the page. Clip both axes. */
 .auth-shell .auth-surface { overflow: clip; }
+
+/* Presentation shortcut */
+.auth-demo { margin-top: 16px; padding: 14px; border: 1px solid rgba(29, 140, 140, 0.25); border-radius: 16px; background: rgba(29, 140, 140, 0.06); }
+.auth-demo__head h2 { margin: 0; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #157373; }
+.auth-demo__head p { margin: 2px 0 10px; font-size: 0.8125rem; color: var(--auth-muted); }
+.auth-demo__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.auth-demo__grid li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.auth-demo__tile { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid #d6e4e4; border-radius: 12px; background: #fff; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+.auth-demo__tile:hover:not(:disabled) { border-color: #1d8c8c; box-shadow: 0 4px 14px rgba(13, 27, 51, 0.08); transform: translateY(-1px); }
+.auth-demo__tile:focus-visible { outline: 3px solid rgba(29, 140, 140, 0.4); outline-offset: 2px; }
+.auth-demo__tile:disabled { opacity: 0.6; cursor: default; }
+.auth-demo__icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 10px; background: #e3f1f1; color: #157373; }
+.auth-demo__text { display: grid; min-width: 0; }
+.auth-demo__text strong { font-size: 0.8125rem; color: #0d1b33; }
+.auth-demo__text small { font-size: 0.75rem; color: var(--auth-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auth-demo__error { margin: 10px 0 0; font-size: 0.8125rem; color: #b83e3e; }

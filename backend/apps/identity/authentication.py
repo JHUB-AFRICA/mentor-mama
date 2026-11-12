@@ -801,7 +801,15 @@ def authenticate_user(*, email: str, password: str) -> User | None:
 
 
 def mfa_required(user: User) -> bool:
-    return user.role in MFA_REQUIRED_ROLES
+    if user.role not in MFA_REQUIRED_ROLES:
+        return False
+    # Presentation sandbox only (DEMO_MODE on, and the person belongs to a demo programme). Never platform admins.
+    if user.role != Role.PLATFORM_ADMIN:
+        from apps.identity.demo import is_demo_account
+
+        if is_demo_account(user):
+            return False
+    return True
 
 
 def mfa_is_enabled(user: User) -> bool:
