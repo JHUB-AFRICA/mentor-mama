@@ -6,6 +6,12 @@ tier_reason: User-visible learning-module creation bug spans the portal form and
 last_updated: 2026-11-11T00:00:00Z
 ---
 
+## Current session update — Demo access card on the sign-in page (2026-11-12)
+
+Redesigned the demo sign-in to match the reference flow: an "Explore demo accounts" card with a tab per role (Admin, Coordinator, Manager, Mentor, Student); the selected role shows its account card (name, what that role does, email with a Copy button, "Password: Filled for you") and a "Use this account" button that visibly fills the email and password boxes and then signs in (about a second). No real password is ever shown or sent: the server signs the chosen demo account in directly (`/auth/demo/login`), the password box only holds placeholder dots. Production check before the redesign: the tiles code was live and `/api/v1/auth/demo` returned enabled with five accounts; an already-open tab keeps its earlier "no demo" answer until reloaded. Finding: the live seed used the fake `@demo.sinapstechnology.tech` addresses for the administrator and student (the real inboxes were not applied), so it must be re-seeded with `--retire-existing --admin-email … --student-email …`.
+
+Verified: new Chrome spec `e2e/demo-access.spec.ts` (2), real Chrome against the seeded dev database (tabs swap the card, fields fill, signs in at /student, no overflow at 390 px), tsc/ESLint/build. Not verified on Render after this change; keyboard arrow-key navigation between tabs.
+
 ## Current session update — Single-name pilot requesters (2026-11-12)
 
 The "Create the programme" dialog and `POST /platform/enquiries/<id>/convert` required a last name, but a pilot requester may type one name. Last name is now optional there (stored as an empty string; the display name is just the first name). Related: the profile endpoint (`PATCH /api/v1/me`) also accepts an empty last name, and the portal's Account settings no longer copies the first name into the last name for one-word names (it would have turned "Ric" into "Ric Ric"). Ordinary invitations still ask for both names. Verified: new backend tests (single name converts; profile saves without gaining a second name), enquiry, platform, account and identity suites, portal tsc/ESLint, Chrome spec updated to clear the last name and still create the programme. Not run: the full backend suite after this small change.

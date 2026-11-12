@@ -1,63 +1,121 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenCheck, Building2, GraduationCap, Hospital, Stethoscope, type LucideIcon } from "lucide-react";
+import { Check, Copy, KeyRound, LogIn, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Building2, GraduationCap, Hospital, Stethoscope } from "lucide-react";
 import { ApiError, demoLogin, getDemoAccounts } from "../../services/api";
 import type { CurrentUser, DemoAccount } from "../../services/api";
 
-const ICON: Record<string, LucideIcon> = {
-  program_admin: Building2,
-  coordinator: BookOpenCheck,
-  nurse_manager: Hospital,
-  mentor: Stethoscope,
-  student: GraduationCap,
+const ROLE_INFO: Record<string, { icon: LucideIcon; short: string; sees: string }> = {
+  program_admin: { icon: Building2, short: "Admin", sees: "Sets up the programme: people, content, placements and exports." },
+  coordinator: { icon: BookOpenCheck, short: "Coordinator", sees: "Places students, follows cohorts and reviews approved feedback." },
+  nurse_manager: { icon: Hospital, short: "Manager", sees: "Assigns mentors and wards, watches capacity and reviews concerns." },
+  mentor: { icon: Stethoscope, short: "Mentor", sees: "Signs off induction and logs mentorship sessions in minutes." },
+  student: { icon: GraduationCap, short: "Student", sees: "Follows the placement, sessions, feedback and concerns." },
 };
 
 /**
- * Presentation shortcut: tap a role and you are signed in as that demo person. Only appears when the server is in
- * demo mode and a demo programme is seeded, so on a normal deployment this renders nothing.
+ * Presentation shortcut, in the style of a "demo accounts" card: pick a role, see who you will be, press "Use this
+ * account" and the form fills in and signs you in. Only appears when the server is in demo mode and a demo programme is
+ * seeded, so on a normal deployment this renders nothing.
+ *
+ * No real password is ever shown or sent: the server signs the chosen demo account in directly, and the password box is
+ * filled with dots only so the audience can follow what is happening.
  */
 export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user: CurrentUser) => void; onFill: (email: string, password: string) => void }) {
-  const accounts = useQuery({ queryKey: ["demo-accounts"], queryFn: getDemoAccounts, staleTime: 5 * 60_000, retry: false });
-  const [active, setActive] = useState<string | null>(null);
+  const accounts = useQuery({ queryKey: ["demo-accounts"], queryFn: getDemoAccounts, staleTime: 60_000, retry: false });
+  const [selected, setSelected] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!accounts.data?.length) return null;
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  async function enter(account: DemoAccount) {
-    if (active) return;
-    setActive(account.role);
-    setError(null);
-    onFill(account.email, "••••••••••••");
+  const list = accounts.data ?? [];
+  if (!list.length) return null;
+  const current: DemoAccount = list.find((account) => account.role === selected) ?? list[0];
+  const info = ROLE_INFO[current.role] ?? ROLE_INFO.program_admin;
+  const Icon = info.icon;
+
+  async function copyEmail() {
     try {
-      onAuthenticated(await demoLogin(account.role));
+      await navigator.clipboard.writeText(current.email);
+      setCopied(true);
+      timer.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard not available: the address is on screen anyway */
+    }
+  }
+
+  async function useAccount() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    onFill(current.email, "••••••••••••"); // visible autofill
+    await new Promise((resolve) => window.setTimeout(resolve, 500)); // a beat, so the fields are seen filling in
+    try {
+      onAuthenticated(await demoLogin(current.role));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "We could not open the demo account.");
-      setActive(null);
+      setBusy(false);
     }
   }
 
   return (
     <section className="auth-demo" aria-labelledby="auth-demo-title">
       <div className="auth-demo__head">
-        <h2 id="auth-demo-title">Demo access</h2>
-        <p>Tap a role to open its workspace with prepared programme data.</p>
+        <h2 id="auth-demo-title"><KeyRound size={14} aria-hidden="true" />Explore demo accounts</h2>
+        <p>Choose a role to see its prepared programme data.</p>
       </div>
-      <ul className="auth-demo__grid">
-        {accounts.data.map((account) => {
-          const Icon = ICON[account.role] ?? Building2;
+      <div className="auth-demo__tabs" role="tablist" aria-label="Demo role">
+        {list.map((account) => {
+          const meta = ROLE_INFO[account.role] ?? ROLE_INFO.program_admin;
+          const TabIcon = meta.icon;
+          const active = account.role === current.role;
           return (
-            <li key={account.role}>
-              <button type="button" className="auth-demo__tile" disabled={Boolean(active)} aria-busy={active === account.role} onClick={() => void enter(account)}>
-                <span className="auth-demo__icon" aria-hidden="true"><Icon size={18} /></span>
-                <span className="auth-demo__text">
-                  <strong>{account.role_label}</strong>
-                  <small>{active === account.role ? "Signing in…" : account.name}</small>
-                </span>
-              </button>
-            </li>
+            <button
+              key={account.role}
+              type="button"
+              role="tab"
+              id={`demo-tab-${account.role}`}
+              aria-selected={active}
+              aria-controls="demo-panel"
+              tabIndex={active ? 0 : -1}
+              disabled={busy}
+              className="auth-demo__tab"
+              onClick={() => {
+                setSelected(account.role);
+                setError(null);
+              }}
+            >
+              <TabIcon size={16} aria-hidden="true" />
+              <span>{meta.short}</span>
+            </button>
           );
         })}
-      </ul>
-      {error && <p role="alert" className="auth-demo__error">{error}</p>}
+      </div>
+      <div className="auth-demo__card" id="demo-panel" role="tabpanel" aria-labelledby={`demo-tab-${current.role}`}>
+        <div className="auth-demo__who">
+          <span className="auth-demo__icon" aria-hidden="true"><Icon size={20} /></span>
+          <span className="auth-demo__text">
+            <strong>{current.role_label} demo</strong>
+            <small>{current.name}</small>
+          </span>
+          <button type="button" className="auth-demo__copy" onClick={() => void copyEmail()} aria-label={`Copy ${current.email}`}>
+            {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+            <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
+          </button>
+        </div>
+        <p className="auth-demo__sees">{info.sees}</p>
+        <dl className="auth-demo__creds">
+          <div><dt>Email</dt><dd>{current.email}</dd></div>
+          <div><dt>Password</dt><dd>Filled for you</dd></div>
+        </dl>
+        <button type="button" className="auth-demo__use" disabled={busy} aria-busy={busy} onClick={() => void useAccount()}>
+          <LogIn size={17} aria-hidden="true" />
+          {busy ? "Signing in…" : "Use this account"}
+        </button>
+        {error && <p role="alert" className="auth-demo__error">{error}</p>}
+      </div>
     </section>
   );
 }
