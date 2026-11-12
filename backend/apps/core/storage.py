@@ -4,7 +4,7 @@ Every uploaded file (library documents and covers, module covers, lesson images,
 ``private_storage``. Nothing is public: files are served only through authenticated API endpoints with
 ``file_response``, so the portal keeps first-party cookies and its strict Content-Security-Policy.
 
-``FILE_STORAGE_BACKEND=s3`` selects object storage. While files are being moved off the old persistent disk,
+``FILE_STORAGE_BACKEND=r2`` selects Cloudflare R2 (reached through its S3-compatible API). While files are being moved off the old persistent disk,
 reads that miss in the bucket fall back to ``PRIVATE_CONTENT_ROOT`` (see ``copy_media_to_object_storage``).
 """
 
@@ -161,14 +161,14 @@ else:  # pragma: no cover
 
 
 def uses_object_storage() -> bool:
-    return getattr(settings, "FILE_STORAGE_BACKEND", "local") == "s3"
+    return getattr(settings, "FILE_STORAGE_BACKEND", "local") == "r2"
 
 
 def private_storage():
     """The storage for every private upload (model fields pass this callable as ``storage=``)."""
     if uses_object_storage():
         if PrivateObjectStorage is None:
-            raise ImproperlyConfigured("FILE_STORAGE_BACKEND=s3 needs the django-storages[s3] package.")
+            raise ImproperlyConfigured("FILE_STORAGE_BACKEND=r2 needs the django-storages[s3] package (the client R2 uses).")
         return PrivateObjectStorage()
     return _local_storage()
 

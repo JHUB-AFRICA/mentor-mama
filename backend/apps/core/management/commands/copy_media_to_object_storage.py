@@ -1,6 +1,6 @@
 """Copy uploaded files from the server disk (PRIVATE_CONTENT_ROOT) into the object storage bucket.
 
-Run once on the API service after setting FILE_STORAGE_BACKEND=s3 (Render: mentormama-api → Shell):
+Run once on the API service after setting FILE_STORAGE_BACKEND=r2 (Render: mentormama-api → Shell):
 
     python manage.py copy_media_to_object_storage --dry-run
     python manage.py copy_media_to_object_storage

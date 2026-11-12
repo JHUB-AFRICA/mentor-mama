@@ -35,7 +35,7 @@ class S3ExportStorage:
 
         self.bucket = getattr(settings, "EXPORT_STORAGE_BUCKET", "") or getattr(settings, "MEDIA_STORAGE_BUCKET", "")
         if not self.bucket:
-            raise RuntimeError("EXPORT_STORAGE_BACKEND=s3 needs EXPORT_STORAGE_BUCKET.")
+            raise RuntimeError("EXPORT_STORAGE_BACKEND=r2 needs EXPORT_STORAGE_BUCKET.")
         self.prefix = getattr(settings, "EXPORT_STORAGE_PREFIX", "exports").strip("/")
         self.client = client or s3_client()
 
@@ -64,6 +64,6 @@ class S3ExportStorage:
 
 
 def get_export_storage():
-    if getattr(settings, "EXPORT_STORAGE_BACKEND", "local") == "s3":
+    if getattr(settings, "EXPORT_STORAGE_BACKEND", "local") == "r2":
         return S3ExportStorage()
     return LocalExportStorage()

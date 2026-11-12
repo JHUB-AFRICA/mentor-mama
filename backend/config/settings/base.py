@@ -203,17 +203,21 @@ OTP_EMAIL_COOLDOWN_DURATION = env.int("OTP_EMAIL_COOLDOWN_DURATION", default=60)
 OTP_EMAIL_THROTTLE_FACTOR = env.int("OTP_EMAIL_THROTTLE_FACTOR", default=1)
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:5173")
 EXPORT_ROOT = env("EXPORT_ROOT", default="/tmp/mentormama-exports")
-EXPORT_STORAGE_BACKEND = env("EXPORT_STORAGE_BACKEND", default="local")
+# "r2" = Cloudflare R2 (the production store). "s3" is accepted as an alias: R2 speaks the S3 API, so any
+# S3-compatible bucket works with the same code. Both are normalised to "r2" below.
+_OBJECT_STORAGE_ALIASES = {"r2": "r2", "s3": "r2", "local": "local"}
+EXPORT_STORAGE_BACKEND = _OBJECT_STORAGE_ALIASES.get(env("EXPORT_STORAGE_BACKEND", default="local").strip().lower(), "invalid")
+if EXPORT_STORAGE_BACKEND == "invalid":
+    raise ImproperlyConfigured("EXPORT_STORAGE_BACKEND must be 'r2' (Cloudflare R2) or 'local'.")
 EXPORT_STORAGE_BUCKET = env("EXPORT_STORAGE_BUCKET", default="")
 EXPORT_STORAGE_ENDPOINT = env("EXPORT_STORAGE_ENDPOINT", default="")
 EXPORT_STORAGE_REGION = env("EXPORT_STORAGE_REGION", default="")
 # Exports share the bucket with uploads, under their own prefix.
 EXPORT_STORAGE_PREFIX = env("EXPORT_STORAGE_PREFIX", default="exports").strip("/")
 
-# Private uploads (documents, covers, lesson images, logos). "s3" stores them in Cloudflare R2 (any S3-compatible
-# bucket); "local" keeps them in PRIVATE_CONTENT_ROOT. The bucket, endpoint and region default to the export ones,
+# Private uploads (documents, covers, lesson images, logos). "r2" stores them in Cloudflare R2; "local" keeps them in PRIVATE_CONTENT_ROOT. The bucket, endpoint and region default to the export ones,
 # so one R2 bucket and one API token serve the whole product. Credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
-FILE_STORAGE_BACKEND = env("FILE_STORAGE_BACKEND", default="local").strip().lower()
+FILE_STORAGE_BACKEND = _OBJECT_STORAGE_ALIASES.get(env("FILE_STORAGE_BACKEND", default="local").strip().lower(), "invalid")
 MEDIA_STORAGE_BUCKET = env("MEDIA_STORAGE_BUCKET", default=EXPORT_STORAGE_BUCKET)
 MEDIA_STORAGE_ENDPOINT = env("MEDIA_STORAGE_ENDPOINT", default=EXPORT_STORAGE_ENDPOINT)
 MEDIA_STORAGE_REGION = env("MEDIA_STORAGE_REGION", default=EXPORT_STORAGE_REGION or "auto")
@@ -222,10 +226,10 @@ MEDIA_STORAGE_PREFIX = env("MEDIA_STORAGE_PREFIX", default="private").strip("/")
 MEDIA_STORAGE_LOCAL_FALLBACK = env.bool("MEDIA_STORAGE_LOCAL_FALLBACK", default=True)
 OBJECT_STORAGE_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 OBJECT_STORAGE_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
-if FILE_STORAGE_BACKEND not in {"local", "s3"}:
-    raise ImproperlyConfigured(f"FILE_STORAGE_BACKEND must be 'local' or 's3', not {FILE_STORAGE_BACKEND!r}.")
-if FILE_STORAGE_BACKEND == "s3" and not MEDIA_STORAGE_BUCKET:
-    raise ImproperlyConfigured("FILE_STORAGE_BACKEND=s3 needs MEDIA_STORAGE_BUCKET (or EXPORT_STORAGE_BUCKET).")
+if FILE_STORAGE_BACKEND == "invalid":
+    raise ImproperlyConfigured("FILE_STORAGE_BACKEND must be 'r2' (Cloudflare R2) or 'local'.")
+if FILE_STORAGE_BACKEND == "r2" and not MEDIA_STORAGE_BUCKET:
+    raise ImproperlyConfigured("FILE_STORAGE_BACKEND=r2 needs MEDIA_STORAGE_BUCKET (or EXPORT_STORAGE_BUCKET).")
 
 # Form fields (not files) above this size are refused with a clear 413 instead of a server error.
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024)

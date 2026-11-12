@@ -1,4 +1,4 @@
-"""Private uploads in S3-compatible object storage (Cloudflare R2 in production), against an in-memory S3."""
+"""Private uploads in Cloudflare R2, tested against an in-memory S3-compatible bucket (R2 speaks the S3 API)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ BUCKET = "mentor-mama-test"
 def bucket(settings, tmp_path):
     from apps.core import storage
 
-    settings.FILE_STORAGE_BACKEND = "s3"
+    settings.FILE_STORAGE_BACKEND = "r2"
     settings.MEDIA_STORAGE_BUCKET = BUCKET
     settings.MEDIA_STORAGE_ENDPOINT = ""
     settings.MEDIA_STORAGE_REGION = "us-east-1"

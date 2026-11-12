@@ -19,7 +19,7 @@
 #   RESEND_SIGNING_SECRET    add after step 1 below (the endpoint's signing secret, whsec_...)
 #   PLATFORM_ADMIN_INITIAL_PASSWORD  initial password of the platform admin (at least 12 characters); change it at first sign-in
 #   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   R2 API token for the private bucket (uploads and exports)
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   the Cloudflare R2 API token (Access Key ID / Secret Access Key)
 #   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION   the bucket, https://<account>.r2.cloudflarestorage.com, auto
 #
 # AFTER THE FIRST DEPLOY
@@ -65,14 +65,14 @@ envVarGroups:
       # Sign-in with an authenticator app: accept the codes just before and after the current one.
       - key: MFA_TOTP_TOLERANCE
         value: "1"
-      # Exports are written by the worker and downloaded through the API, so they live in object storage.
+      # Exports are written by the worker and downloaded through the API, so they live in Cloudflare R2.
       - key: EXPORT_STORAGE_BACKEND
-        value: s3
+        value: r2
       # Every upload (library documents and covers, module covers, lesson images, partner logos) lives in the same
       # private R2 bucket under private/ and is served only through the signed-in API. Uses the EXPORT_STORAGE_*
       # bucket, endpoint and region and the AWS_* key unless MEDIA_STORAGE_* are set.
       - key: FILE_STORAGE_BACKEND
-        value: s3
+        value: r2
       - key: USE_REDIS
         value: "true"
       - key: SECURE_SSL_REDIRECT

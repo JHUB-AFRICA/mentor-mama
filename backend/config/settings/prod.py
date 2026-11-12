@@ -65,7 +65,7 @@ STORAGES = {
     # nothing ever falls back to MEDIA_ROOT inside the read-only image.
     "default": (
         {"BACKEND": "apps.core.storage.PrivateObjectStorage"}
-        if FILE_STORAGE_BACKEND == "s3"
+        if FILE_STORAGE_BACKEND == "r2"
         else {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(PRIVATE_CONTENT_ROOT)}}
     ),
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},

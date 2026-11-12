@@ -112,16 +112,16 @@ def _storage():
     from apps.core.storage import uses_object_storage
 
     exports = getattr(settings, "EXPORT_STORAGE_BACKEND", "local")
-    export_label = "exports in object storage" if exports == "s3" else "exports in a local folder"
+    export_label = "exports in Cloudflare R2" if exports == "r2" else "exports in a local folder"
     if uses_object_storage():
         bucket = getattr(settings, "MEDIA_STORAGE_BUCKET", "")
         ok, reason = _bucket_reachable(bucket)
-        detail = f"Uploads in object storage ({bucket}) · {reason} · {export_label}"
+        detail = f"Uploads in Cloudflare R2 ({bucket}) · {reason} · {export_label}"
         return ("ok" if ok else "down"), detail
     root = getattr(settings, "PRIVATE_CONTENT_ROOT", "")
     writable = bool(root) and os.path.isdir(root) and os.access(root, os.W_OK)
     detail = f"Uploads on the server disk ({'writable' if writable else 'not writable'}) · {export_label}"
-    if exports == "s3":
+    if exports == "r2":
         if not getattr(settings, "EXPORT_STORAGE_BUCKET", ""):
             return "down", detail + " · export bucket not configured"
         ok, reason = _bucket_reachable(settings.EXPORT_STORAGE_BUCKET)
@@ -129,7 +129,7 @@ def _storage():
             return "down", f"{detail} · bucket {reason}"
     if not settings.DEBUG:
         # Production files on a server disk are lost if the disk is removed and cannot be shared between services.
-        return ("warning" if writable else "down"), detail + " · switch uploads to object storage (FILE_STORAGE_BACKEND=s3)"
+        return ("warning" if writable else "down"), detail + " · switch uploads to Cloudflare R2 (FILE_STORAGE_BACKEND=r2)"
     return ("ok" if writable else "warning"), detail
 
 
