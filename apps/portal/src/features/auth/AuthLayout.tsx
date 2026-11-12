@@ -4,6 +4,7 @@ import { ArrowLeft, ClipboardCheck, Lock, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Link } from "react-router-dom";
+import { websiteUrl } from "../../lib/site";
 
 import journeyArtwork from "../../assets/auth/mentor-mama-journey.png";
 import logoIcon from "../../assets/brand/logo-icon.svg";
@@ -52,10 +53,10 @@ export function AuthLayout({
       <div className="flex min-h-dvh min-w-0 flex-col">
         {/* Sticky compact bar for small screens */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#dbe4ed] bg-white/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/75 sm:px-8 lg:hidden">
-          <Link to="/" className="inline-flex min-h-11 items-center gap-2.5 rounded-lg text-[#0D1B33] no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#157373]">
+          <a href={websiteUrl} aria-label="MentorMAMA website" title="Back to the MentorMAMA website" className="inline-flex min-h-11 items-center gap-2.5 rounded-lg text-[#0D1B33] no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#157373]">
             <img src={logoIcon} alt="" className="h-8 w-8 object-contain" aria-hidden="true" />
             <span className="font-display text-base font-bold tracking-tight">MentorMAMA</span>
-          </Link>
+          </a>
           <span className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#4f627d]">Secure portal</span>
         </header>
 
@@ -114,10 +115,10 @@ function BrandPanel() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] bg-gradient-to-b from-transparent via-[#0D1B33]/50 to-[#0D1B33]/90" aria-hidden="true" />
 
       <div className="relative z-10 flex h-full flex-col">
-        <Link to="/" className="inline-flex w-fit items-center gap-3 rounded-lg text-white no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#45B9B3]">
+        <a href={websiteUrl} aria-label="MentorMAMA website" title="Back to the MentorMAMA website" className="inline-flex w-fit items-center gap-3 rounded-lg text-white no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#45B9B3]">
           <img src={logoIcon} alt="" className="h-10 w-10 object-contain" aria-hidden="true" />
           <span className="font-display text-lg font-bold tracking-[-0.025em]">MentorMAMA</span>
-        </Link>
+        </a>
 
         <div className="auth-brand-message mt-14 xl:mt-20">
           <p className="max-w-[26rem] font-display text-[2rem] font-semibold leading-[1.15] tracking-[-0.025em] xl:text-[2.4rem]">

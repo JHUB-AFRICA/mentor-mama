@@ -8,6 +8,6 @@ export const partners: Partner[] = [
   { name: "Jomo Kenyatta University of Agriculture and Technology", href: "https://www.jkuat.ac.ke", logo: "/partners/jkuat.png", role: "Academic partner", width: 182, height: 193 },
   { name: "JHUB Africa", href: "https://jhubafrica.com", logo: "/partners/jhub-africa.png", role: "Innovation partner", width: 361, height: 170 },
   { name: "Samsung", href: "https://www.samsung.com", logo: "/partners/samsung.png", role: "Technology partner", width: 720, height: 114 },
-  { name: "AfyaVentures", href: "https://afyaventures.org", logo: "/partners/afyaventures.png", role: "Community health partner", width: 720, height: 211 },
+  { name: "AfyaVentures", href: "https://afyaventures.amref.org/", logo: "/partners/afyaventures.png", role: "Community health partner", width: 720, height: 211 },
   { name: "Sinaps Technology", href: "https://sinapstechnology.tech", logo: "/partners/sinaps-technology.png", role: "Built by", width: 364, height: 185 },
 ];

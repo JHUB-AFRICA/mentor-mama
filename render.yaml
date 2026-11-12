@@ -147,6 +147,11 @@ services:
     runtime: static
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @mentormama/portal build
     staticPublishPath: apps/portal/dist
+    envVars:
+      # Where the MentorMAMA brand on the sign-in screens leads. Baked in at build time, so a change needs a redeploy.
+      # Use the website's custom domain here once it has one.
+      - key: VITE_WEBSITE_URL
+        value: https://mentormama-website.onrender.com
     # domains:
     #   - app.sinapstechnology.tech
     headers:

@@ -1,3 +1,4 @@
+import { NotFoundScreen } from "./NotFoundScreen";
 import { useCallback, useEffect, useState } from "react";
 import { PageShell } from "@mentormama/ui";
 import {
@@ -18,6 +19,14 @@ import { useToast } from "../components/ToastProvider";
 import { useLocation } from "react-router-dom";
 
 type AuthChallenge = { setupRequired: boolean; emailMfaAvailable: boolean; recoveryContact?: "programme_admin" | "another_program_admin" | "support" };
+
+/** First path segments the portal owns: the six workspaces, shared pages and the sign-in helper screens. */
+const KNOWN_ROOTS = new Set(["admin", "coordinator", "facility", "mentor", "student", "placements", "account", "platform", "settings", "activate", "reset-password", "account-status"]);
+
+function isUnknownRoute(pathname: string): boolean {
+  const root = pathname.split("/")[1] ?? "";
+  return root !== "" && !KNOWN_ROOTS.has(root);
+}
 
 export function App() {
   const { pushToast } = useToast();
@@ -105,6 +114,9 @@ export function App() {
   }, [activationRoute, resetRoute, statusRoute, reportError]);
 
   if (loading) return <LoadingScreen />;
+  // An address that is not part of the app gets a real "not found" page. Known areas still fall through, so a signed-out
+  // deep link such as /admin/people signs the person in and lands them where they were going.
+  if (isUnknownRoute(path)) return <NotFoundScreen signedIn={Boolean(user)} homeHref="/" />;
   if (activationRoute && !user && !authChallenge)
     return (
       <InvitationFlow

@@ -13,6 +13,7 @@ import Contact from "./pages/Contact";
 import Support from "./pages/Support";
 import Privacy from "./pages/Privacy";
 import Status from "./pages/Status";
+import NotFound from "./pages/NotFound";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,7 @@ function App() {
           <Route path="/support" element={<Support />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/status" element={<Status />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <Footer />
