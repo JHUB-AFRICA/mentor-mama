@@ -11,6 +11,7 @@ from textwrap import shorten
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
+from apps.core.links import portal_url, website_url
 from apps.identity.models import Role, Status, User
 from apps.platform.models import Enquiry, EnquiryEvent
 
@@ -27,12 +28,13 @@ def _quote(text: str) -> str:
 
 
 def _footer(enquiry: Enquiry) -> str:
-    return (
-        f"Your reference: {enquiry.reference}\n"
-        f"Check progress any time: {settings.WEBSITE_BASE_URL.rstrip('/')}/status\n"
-        "To add something, reply to this email and keep the reference in the subject line.\n"
-        "MentorMAMA will never ask for your password or a sign-in code by email."
-    )
+    status = website_url("/status")  # left out when the public website address is not configured
+    lines = [f"Your reference: {enquiry.reference}"]
+    if status:
+        lines.append(f"Check progress any time: {status}")
+    lines += ["To add something, reply to this email and keep the reference in the subject line.",
+              "MentorMAMA will never ask for your password or a sign-in code by email."]
+    return "\n".join(lines)
 
 
 def _subject(enquiry: Enquiry, lead: str) -> str:
@@ -122,7 +124,7 @@ def progress(enquiry: Enquiry, event: EnquiryEvent) -> tuple[str, str]:
 
 
 def staff_alert(enquiry: Enquiry) -> tuple[str, str]:
-    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/platform/messages/{enquiry.id}"
+    link = portal_url(f"/platform/messages/{enquiry.id}")
     label = {Enquiry.Kind.PILOT: "Pilot request", Enquiry.Kind.SUPPORT: "Support request", Enquiry.Kind.CONTACT: "Contact message"}[enquiry.kind]
     who = enquiry.name + (f" ({enquiry.organisation})" if enquiry.organisation else "")
     body = "\n\n".join([
@@ -136,7 +138,7 @@ def staff_alert(enquiry: Enquiry) -> tuple[str, str]:
 
 
 def assigned(enquiry: Enquiry, event: EnquiryEvent) -> tuple[str, str]:
-    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/platform/messages/{enquiry.id}"
+    link = portal_url(f"/platform/messages/{enquiry.id}")
     who = event.actor.full_name if event.actor and event.actor.full_name else "A colleague"
     body = "\n\n".join([
         f"{who} assigned you {enquiry.reference} from {enquiry.name}.",
@@ -147,7 +149,7 @@ def assigned(enquiry: Enquiry, event: EnquiryEvent) -> tuple[str, str]:
 
 
 def inbound_alert(enquiry: Enquiry) -> tuple[str, str]:
-    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/platform/messages/{enquiry.id}"
+    link = portal_url(f"/platform/messages/{enquiry.id}")
     body = "\n\n".join([f"{enquiry.name} replied to {enquiry.reference}.", f"Open it: {link}"])
     return f"Reply from {enquiry.name} [{enquiry.reference}]", body
 

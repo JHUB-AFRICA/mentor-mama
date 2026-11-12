@@ -7,6 +7,7 @@ import { activateAccount, ApiError } from "../../services/api";
 import type { CurrentUser } from "../../services/api";
 import { AuthLayout } from "./AuthLayout";
 import { AuthAlert, AuthButton, MatchIndicator, PASSWORD_MIN_LENGTH, PasswordStrength, StepProgress } from "./AuthUi";
+import { supportEmail } from "../../lib/site";
 
 interface InvitationFlowProps {
   uid: string;
@@ -133,7 +134,7 @@ function InvitationUnavailable() {
       <p className="auth-lede">The invitation may be incomplete, expired, or already replaced. Ask your programme team to send you a new invitation.</p>
       <div className="mt-6 grid gap-3">
         <AuthButton to="/">Back to sign in</AuthButton>
-        <AuthButton href="mailto:support@mentormama.org" variant="ghost">Contact support</AuthButton>
+        <AuthButton href={`mailto:${supportEmail}`} variant="ghost">Contact support</AuthButton>
       </div>
     </div>
   );

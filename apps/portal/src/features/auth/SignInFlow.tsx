@@ -8,6 +8,7 @@ import type { CurrentUser } from "../../services/api";
 import { AuthLayout } from "./AuthLayout";
 import { AuthAlert, AuthButton } from "./AuthUi";
 import { DemoAccess } from "./DemoAccess";
+import { supportEmail } from "../../lib/site";
 
 export function SignInFlow({
   message,
@@ -149,7 +150,7 @@ export function SignInFlow({
         {platform ? (
           <>Not a platform administrator? <a href="/" className="font-semibold text-[#157373] underline-offset-4 hover:underline">Go to the workspace sign-in</a></>
         ) : (
-          <>Need access? <a href="mailto:support@mentormama.org" className="font-semibold text-[#157373] underline-offset-4 hover:underline">Contact your programme team</a></>
+          <>Need access? <a href={`mailto:${supportEmail}`} className="font-semibold text-[#157373] underline-offset-4 hover:underline">Contact your programme team</a></>
         )}
       </p>
     </AuthLayout>

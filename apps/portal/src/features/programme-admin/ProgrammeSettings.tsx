@@ -37,6 +37,7 @@ import {
   Notice,
 } from "./ui/AdminKit";
 import "./programme-setup-kit.css";
+import { supportEmail } from "../../lib/site";
 
 type SetupTab = "identity" | "directory" | "access";
 
@@ -550,13 +551,13 @@ export function ProgrammeSettings({
                 <div className="ps-actions-col">
                   <a
                     className="pa-btn pa-btn--secondary pa-btn--sm"
-                    href="mailto:support@mentormama.org?subject=Programme setup help"
+                    href={`mailto:${supportEmail}?subject=Programme setup help`}
                   >
                     Open help centre
                   </a>
                   <a
                     className="pa-btn pa-btn--secondary pa-btn--sm"
-                    href="mailto:support@mentormama.org?subject=Programme setup support"
+                    href={`mailto:${supportEmail}?subject=Programme setup support`}
                   >
                     Contact support
                   </a>

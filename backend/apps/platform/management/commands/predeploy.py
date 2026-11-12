@@ -12,6 +12,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         call_command("migrate", interactive=False, verbosity=1)
+        call_command("check")  # prints configuration warnings (for example emailed links that would point at localhost)
         call_command("ensure_platform_admin")
         self._seed_demo_if_requested()
 

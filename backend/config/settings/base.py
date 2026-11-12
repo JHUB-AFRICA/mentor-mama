@@ -218,6 +218,8 @@ PLATFORM_NOTIFY_EMAILS = env.list("PLATFORM_NOTIFY_EMAILS", default=[])
 SUPPORT_REPLY_TO = env("SUPPORT_REPLY_TO", default="").strip()
 # Public website address (used for the progress-check link in enquiry emails).
 WEBSITE_BASE_URL = env("WEBSITE_BASE_URL", default="http://localhost:5173")
+# Production sets this True (config/settings/prod.py): emails must never carry a link to a local address.
+LINKS_MUST_BE_PUBLIC = False
 # Shared secret for the inbound-reply endpoint (empty = endpoint closed) and optional Cloudflare Turnstile on the public forms.
 ENQUIRY_INBOUND_SECRET = env("ENQUIRY_INBOUND_SECRET", default="")
 TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")

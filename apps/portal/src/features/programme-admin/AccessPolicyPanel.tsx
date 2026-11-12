@@ -23,6 +23,7 @@ import {
 import "./programme-setup-kit.css";
 import { useQuery } from "@tanstack/react-query";
 import { getAccessPolicies, type AccessPolicy } from "../../services/api";
+import { supportEmail } from "../../lib/site";
 
 const capabilityLabels: Record<string, string> = {
   create_placement: "Create placements",
@@ -334,14 +335,14 @@ export function AccessPolicyPanel({
           <div className="ps-actions-col">
             <a
               className="pa-btn pa-btn--secondary pa-btn--sm"
-              href="mailto:support@mentormama.org?subject=Access policy documentation"
+              href={`mailto:${supportEmail}?subject=Access policy documentation`}
             >
               <MessageSquare />
               View documentation
             </a>
             <a
               className="pa-btn pa-btn--secondary pa-btn--sm"
-              href="mailto:support@mentormama.org?subject=Access policy support"
+              href={`mailto:${supportEmail}?subject=Access policy support`}
             >
               <MessageSquare />
               Contact support

@@ -133,6 +133,19 @@ def _storage():
     return ("ok" if writable else "warning"), detail
 
 
+def _links():
+    """Emailed links must point at the public sites, never at localhost (apps/core/links.py)."""
+    from apps.core.links import is_local
+
+    if not getattr(settings, "LINKS_MUST_BE_PUBLIC", False):
+        return "off", "Development: links point at your local machine"
+    if is_local(settings.FRONTEND_BASE_URL or ""):
+        return "down", "Sign-in links in emails cannot be sent: set PORTAL_DOMAIN or FRONTEND_BASE_URL"
+    if is_local(settings.WEBSITE_BASE_URL or ""):
+        return "warning", f"Portal links OK ({settings.FRONTEND_BASE_URL}). Set WEBSITE_BASE_URL so emails include the progress link"
+    return "ok", f"Portal {settings.FRONTEND_BASE_URL} · website {settings.WEBSITE_BASE_URL}"
+
+
 def _ai():
     from apps.core.ai import is_configured
 
@@ -145,6 +158,7 @@ def system_status() -> dict:
         _check("Cache", _cache),
         _check("Background jobs", _background_jobs),
         _check("Email", _email),
+        _check("Email links", _links),
         _check("File storage", _storage),
         _check("AI assistant", _ai),
     ]

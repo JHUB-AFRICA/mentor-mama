@@ -66,6 +66,7 @@ import { Field, FieldRow, Modal, SelectInput, TextInput } from "../../components
 import "./directory-kit.css";
 import { useToast } from "../../components/ToastProvider";
 import { StoredImage } from "../../components/StoredImage";
+import { supportEmail } from "../../lib/site";
 
 type ResourceTab = "institutions" | "facilities" | "wards";
 type ResourceKind = "institution" | "facility" | "ward";
@@ -1414,7 +1415,7 @@ function DirectoryGuidanceModal({
       description="Programme directory"
       footer={
         <>
-          <Button type="button" variant="tertiary" to="mailto:support@mentormama.org?subject=Programme directory guidance" onClick={onClose}>
+          <Button type="button" variant="tertiary" to={`mailto:${supportEmail}?subject=Programme directory guidance`} onClick={onClose}>
             Contact support
           </Button>
           <Button

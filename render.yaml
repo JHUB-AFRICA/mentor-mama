@@ -59,7 +59,6 @@ envVarGroups:
       # administrator) and the address senders reply to from the emails they get (empty = the sender address).
       # - key: PLATFORM_NOTIFY_EMAILS
       # - key: SUPPORT_REPLY_TO
-      # - key: WEBSITE_BASE_URL        # public site, for the "check progress" link in enquiry emails
       # - key: ENQUIRY_INBOUND_SECRET  # opens POST /api/v1/public/enquiries/inbound for emailed replies (header X-Inbound-Secret)
       # - key: TURNSTILE_SECRET_KEY    # with VITE_TURNSTILE_SITE_KEY on the website, turns on Cloudflare Turnstile
       # Presentation demo (leave these out of normal operation). Set them in the Render dashboard, not here, so no personal
@@ -71,6 +70,10 @@ envVarGroups:
       # - key: DEMO_STUDENT_EMAIL
       # - key: DEMO_MODE
       # - key: DEMO_EMAIL_ALLOWLIST   # comma-separated, e.g. the two inboxes above
+      # The public website, for the "check progress" link in enquiry emails. Without it emails simply omit that link.
+      # Keep in step with the website's domain (it is the same address as the `mentormama-website` service below).
+      - key: WEBSITE_BASE_URL
+        value: https://mentormama-website.onrender.com
       # Email: Resend, one sender for the whole product.
       - key: EMAIL_PROVIDER
         value: resend

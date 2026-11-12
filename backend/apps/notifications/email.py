@@ -8,18 +8,19 @@ from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from apps.core.links import portal_url
 from apps.identity import api as identity
 from django_otp.plugins.otp_email.models import EmailDevice
 
 
 def _activation_link(user) -> str:
     uid = urlsafe_base64_encode(force_bytes(str(user.id)))
-    return f"{settings.FRONTEND_BASE_URL}/activate?uid={uid}&token={identity.invitation_token(user)}"
+    return portal_url(f"/activate?uid={uid}&token={identity.invitation_token(user)}")
 
 
 def _reset_link(user) -> str:
     uid = urlsafe_base64_encode(force_bytes(str(user.id)))
-    return f"{settings.FRONTEND_BASE_URL}/reset-password?uid={uid}&token={identity.password_reset_token(user)}"
+    return portal_url(f"/reset-password?uid={uid}&token={identity.password_reset_token(user)}")
 
 
 def _email_content(*, eyebrow: str, title: str, intro: str, action_label: str,
@@ -104,7 +105,7 @@ def deliver_outbox_event(event) -> None:
         text = _email_content(
             eyebrow="Placement invitation", title="Your placement is ready to review",
             intro=f"Hello {user.first_name}, your programme team has assigned a clinical placement for you to review.",
-            action_label="Review placement", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+            action_label="Review placement", action_url=portal_url("/placements"),
             detail="Sign in to confirm that you recognise the placement and continue to orientation.",
             expiry="Please review this placement as soon as you can.",
         )
@@ -115,7 +116,7 @@ def deliver_outbox_event(event) -> None:
         text = _email_content(
             eyebrow="Placement reminder", title="Your placement acknowledgement is waiting",
             intro=f"Hello {user.first_name}, your programme team is waiting for you to acknowledge your placement orientation.",
-            action_label="Review placement", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+            action_label="Review placement", action_url=portal_url("/placements"),
             detail="Please sign in to review the placement details and acknowledge the orientation step so induction can continue.",
             expiry="Please review this reminder when you are able.",
         )
@@ -206,7 +207,7 @@ def deliver_outbox_event(event) -> None:
         )
         text = _email_content(
             eyebrow="Account security", title=title, intro=f"Hello {user.first_name}, {intro}",
-            action_label="Open account", action_url=f"{settings.FRONTEND_BASE_URL}/settings",
+            action_label="Open account", action_url=portal_url("/settings"),
             detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
         )
         _send(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, user, event)
@@ -240,7 +241,7 @@ def deliver_outbox_event(event) -> None:
                 detail = f"Where: {where or 'to be confirmed'}\nWhen: {when}" + (f"\nMentor: {details['mentor']}" if details["mentor"] else "") + "\n\nCheck your MentorMAMA account for anything you still need to complete."
             text = _email_content(
                 eyebrow="Placement update", title=title, intro=intro, action_label="Open MentorMAMA",
-                action_url=f"{settings.FRONTEND_BASE_URL}/", detail=detail, expiry="",
+                action_url=portal_url("/"), detail=detail, expiry="",
             )
             _send(subject, text, settings.DEFAULT_FROM_EMAIL, recipient, event)
             event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
@@ -384,7 +385,7 @@ def deliver_outbox_event(event) -> None:
                 continue
             text = _email_content(
                 eyebrow=eyebrow, title=title, intro=f"Hello {recipient.first_name}, {intro.lower()}",
-                action_label="Open MentorMAMA", action_url=f"{settings.FRONTEND_BASE_URL}/placements",
+                action_label="Open MentorMAMA", action_url=portal_url("/placements"),
                 detail=detail, expiry="Please review this notification when you are able.",
             )
             _send(subject, text, settings.DEFAULT_FROM_EMAIL, recipient, event)
@@ -396,7 +397,7 @@ def send_digest_email(*, user, unread_count: int) -> None:
     text = _email_content(
         eyebrow="Weekly programme digest", title="A clear view of your week",
         intro=f"Hello {user.first_name}, here is a short summary of the updates waiting in your MentorMAMA inbox.",
-        action_label="Review notifications", action_url=f"{settings.FRONTEND_BASE_URL}/",
+        action_label="Review notifications", action_url=portal_url("/"),
         detail=f"You have {unread_count} unread programme notification{'s' if unread_count != 1 else ''}. Open MentorMAMA to review the safe summaries and any actions waiting for you.",
         expiry="You are receiving this because weekly digest notifications are enabled in your settings.",
     )

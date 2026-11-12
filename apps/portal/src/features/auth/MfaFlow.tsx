@@ -17,6 +17,7 @@ import {
 import type { CurrentUser } from "../../services/api";
 import { AuthLayout } from "./AuthLayout";
 import { AuthAlert, AuthButton, OtpInput, StepProgress, useCountdown } from "./AuthUi";
+import { supportEmail } from "../../lib/site";
 
 type RecoveryContact = "programme_admin" | "another_program_admin" | "support";
 
@@ -305,12 +306,12 @@ function RecoveryHelpDialog({
         {supportOnly ? (
           <div className="auth-note mt-5 flex-col">
             <p className="m-0">There isn’t another active Programme Admin to review an account recovery request. Contact MentorMAMA support for help.</p>
-            <AuthButton href="mailto:support@mentormama.org" size="sm" inline>Contact support</AuthButton>
+            <AuthButton href={`mailto:${supportEmail}`} size="sm" inline>Contact support</AuthButton>
           </div>
         ) : submitted ? (
           <>
             <div className="mt-5"><AuthAlert kind="success" title="Request received">A reviewer will check your request. No changes have been made to your sign-in access.</AuthAlert></div>
-            {adminIsTheReviewer && <p className="mt-4 text-sm text-[#4f627d]">Only Programme Admin on your programme? <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href="mailto:support@mentormama.org">Contact MentorMAMA support</a>.</p>}
+            {adminIsTheReviewer && <p className="mt-4 text-sm text-[#4f627d]">Only Programme Admin on your programme? <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href={`mailto:${supportEmail}`}>Contact MentorMAMA support</a>.</p>}
             <div className="mt-6 flex justify-end"><AuthButton type="button" inline onClick={onClose}>Done</AuthButton></div>
           </>
         ) : (
@@ -318,7 +319,7 @@ function RecoveryHelpDialog({
             <div className="auth-note flex-col">
               <p className="m-0 font-semibold text-[#0D1B33]">Use this if you can’t use your authenticator or any saved backup code.</p>
               <p className="m-0">Do not include passwords, sign-in codes, or backup codes.</p>
-              {adminIsTheReviewer && <p className="m-0">If you are the only Programme Admin, <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href="mailto:support@mentormama.org">contact MentorMAMA support</a>.</p>}
+              {adminIsTheReviewer && <p className="m-0">If you are the only Programme Admin, <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href={`mailto:${supportEmail}`}>contact MentorMAMA support</a>.</p>}
             </div>
             <Field label="What happened?" required>
               <TextArea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={5} maxLength={1000} rows={4} placeholder="For example, I changed phones and no longer have my authenticator app." />

@@ -2,6 +2,7 @@ import { ArrowRight, LogOut, Mail, MailOpen, PauseCircle, UserX } from "lucide-r
 import type { LucideIcon } from "lucide-react";
 import { AuthLayout } from "./AuthLayout";
 import { AuthButton } from "./AuthUi";
+import { supportEmail } from "../../lib/site";
 
 type Status = "invited" | "suspended" | "deactivated" | "revoked";
 
@@ -25,7 +26,7 @@ export function AccountStatusScreen({ status }: { status: Status }) {
         <Mail aria-hidden="true" />
         <div>
           <p className="m-0 font-semibold text-[#0D1B33]">Next step: {content.next}</p>
-          <p className="m-0 mt-1">Need help? <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href="mailto:support@mentormama.org">Contact programme support</a> and they’ll guide you.</p>
+          <p className="m-0 mt-1">Need help? <a className="font-semibold text-[#157373] underline-offset-4 hover:underline" href={`mailto:${supportEmail}`}>Contact programme support</a> and they’ll guide you.</p>
         </div>
       </div>
       <AuthButton href="/" className="mt-6">{content.action}<ArrowRight size={18} aria-hidden="true" /></AuthButton>

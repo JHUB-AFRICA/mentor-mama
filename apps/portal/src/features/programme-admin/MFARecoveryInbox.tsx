@@ -17,6 +17,7 @@ import {
 import "./people-pages.css";
 import "./programme-overlays.css";
 import { Field, Modal, TextArea } from "../../components/kit";
+import { supportEmail } from "../../lib/site";
 
 export function MFARecoveryInbox() {
   const queryClient = useQueryClient();
@@ -64,7 +65,7 @@ export function MFARecoveryInbox() {
       </StatGrid>
 
       <Notice icon={<ShieldCheck />}>
-        <strong>Review requests for your programme.</strong> A reason is recorded for each decision. Programme Administrators can’t approve their own recovery requests. For your own account, <a href="mailto:support@mentormama.org" className="font-bold text-[var(--pa-teal-ink)] underline underline-offset-2">contact MentorMAMA support</a>; platform administrators handle those requests.
+        <strong>Review requests for your programme.</strong> A reason is recorded for each decision. Programme Administrators can’t approve their own recovery requests. For your own account, <a href={`mailto:${supportEmail}`} className="font-bold text-[var(--pa-teal-ink)] underline underline-offset-2">contact MentorMAMA support</a>; platform administrators handle those requests.
       </Notice>
 
       <section className="pa-table-wrap" aria-label="Requests awaiting review">

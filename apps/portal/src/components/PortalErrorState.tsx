@@ -1,5 +1,6 @@
 import { Check, Info, MessageCircle, RefreshCw, Wrench } from "lucide-react";
 import { Button } from "@mentormama/ui";
+import { supportEmail } from "../lib/site";
 
 type PortalErrorStateProps = {
   title?: string;
@@ -12,7 +13,7 @@ export function PortalErrorState({
   title = "We couldn’t load this page",
   message = "The information is temporarily unavailable. This might be due to a connection issue or scheduled maintenance.",
   onRetry,
-  supportHref = "mailto:support@mentormama.org?subject=MentorMAMA portal support",
+  supportHref = `mailto:${supportEmail}?subject=MentorMAMA portal support`,
 }: PortalErrorStateProps) {
   return (
     <div className="portal-error-state-stack">

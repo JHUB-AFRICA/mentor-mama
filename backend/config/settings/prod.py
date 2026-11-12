@@ -22,6 +22,17 @@ if PORTAL_DOMAIN:
     CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, f"https://{PORTAL_DOMAIN}"]
     if not env("FRONTEND_BASE_URL", default=""):
         FRONTEND_BASE_URL = f"https://{PORTAL_DOMAIN}"
+# Links in emails must be public (see apps/core/links.py and the deployment check in apps/core/checks.py). A local value left
+# over from development counts as "not configured": the portal address then falls back to the first trusted https origin,
+# and the website address becomes empty, in which case emails simply leave the website pointer out.
+from apps.core.links import is_local as _is_local  # noqa: E402
+
+LINKS_MUST_BE_PUBLIC = True
+if _is_local(FRONTEND_BASE_URL):
+    FRONTEND_BASE_URL = next((o for o in CSRF_TRUSTED_ORIGINS if o.startswith("https://") and not _is_local(o)), FRONTEND_BASE_URL)
+WEBSITE_BASE_URL = env("WEBSITE_BASE_URL", default="")
+if _is_local(WEBSITE_BASE_URL):
+    WEBSITE_BASE_URL = ""
 # Render sets this to the service's own *.onrender.com host, which health checks and the portal proxy use.
 _render_host = env("RENDER_EXTERNAL_HOSTNAME", default="").strip()
 if _render_host and _render_host not in ALLOWED_HOSTS:

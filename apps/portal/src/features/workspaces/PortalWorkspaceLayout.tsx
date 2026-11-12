@@ -11,6 +11,7 @@ import {
 import { logout, type CurrentUser } from "../../services/api";
 import { NotificationPopover } from "../notifications/NotificationPopover";
 import { Link } from "react-router-dom";
+import { supportEmail } from "../../lib/site";
 
 export function PortalWorkspaceLayout({
   user,
@@ -99,7 +100,7 @@ export function PortalWorkspaceLayout({
             icon={<Settings2 size={17} />}
             label="Settings"
           />
-          <a href="mailto:support@mentormama.org" className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-body text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white">
+          <a href={`mailto:${supportEmail}`} className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-body text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white">
             <CircleHelp size={17} />
             Support
           </a>
