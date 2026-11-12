@@ -2,6 +2,8 @@
 
 pytest==8.4.2
 pytest-django==4.8.0
+# In-memory S3 for the object-storage tests.
+moto[s3]==5.2.5
 ruff==0.4.10
 # Restarts the dev Celery worker/beat when code changes (Celery has no autoreload).
 watchfiles==1.1.1

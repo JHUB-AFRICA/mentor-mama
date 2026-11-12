@@ -1,12 +1,10 @@
 from pathlib import Path
-import mimetypes
 
-from django.core.files.base import ContentFile
+from django.core.files import File
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
-from django.http import FileResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +12,7 @@ from rest_framework.views import APIView
 from apps.core import audit
 from apps.core.errors import InvalidTransition
 from apps.core.http import IdempotentCommand
+from apps.core.storage import delete_stored_files, file_response, versioned_url
 from apps.identity import capabilities
 from apps.content.models import ContentItem, ContentRevision
 from apps.content.serializers import ContentItemWriteSerializer
@@ -53,7 +52,7 @@ def _can_see(item, user) -> bool:
 def _row(item):
     resource_url = f"/api/v1/content/{item.id}/document" if item.document_file else item.resource_url
     return {"id": str(item.id), "title": item.title, "slug": item.slug, "summary": item.summary,
-            "body": item.body, "resource_url": resource_url, "cover_image": f"/api/v1/content/{item.id}/cover" if item.cover_image else "", "content_type": item.content_type,
+            "body": item.body, "resource_url": resource_url, "cover_image": versioned_url(f"/api/v1/content/{item.id}/cover", item.cover_image), "content_type": item.content_type,
             "category": item.category, "status": "archived" if item.archived_at else "published" if item.is_published else "draft",
             "visible_roles": item.visible_roles, "tags": item.tags, "facility_ids": item.facility_ids, "published": item.is_published,
             "document_name": item.document_file.name.rsplit("/", 1)[-1] if item.document_file else "",
@@ -67,7 +66,7 @@ def _library_content_row(item):
             "summary": item.summary, "audience": item.visible_roles, "category": item.category, "tags": item.tags,
             "status": "archived" if item.archived_at else "published" if item.is_published else "draft",
             "required": False, "updated_at": item.updated_at, "updated_by": item.created_by.full_name or item.created_by.email,
-            "resource_url": resource_url, "cover_image": f"/api/v1/content/{item.id}/cover" if item.cover_image else "", "lessons": 0, "completed": False}
+            "resource_url": resource_url, "cover_image": versioned_url(f"/api/v1/content/{item.id}/cover", item.cover_image), "lessons": 0, "completed": False}
 
 
 def _library_module_row(module, done=frozenset()):
@@ -192,11 +191,7 @@ class ContentDetailView(APIView):
             item.delete()
             audit.record(actor=request.user, action="content.deleted", entity_table="content_item", entity_id=pk,
                          scope={"program_id": str(request.user.program_id)}, changes={"title": title})
-        for stored in files:
-            try:
-                stored.delete(save=False)
-            except OSError:
-                pass
+        delete_stored_files([(stored.storage, stored.name) for stored in files])
         return Response(status=204)
 
 
@@ -211,15 +206,10 @@ class ContentDocumentDownloadView(APIView):
         suffix = Path(item.document_file.name).suffix.lower()
         filename = f"{slugify(item.title)[:80] or 'document'}{suffix}"
         inline_pdf = request.query_params.get("inline") == "1" and suffix == ".pdf"
-        response = FileResponse(item.document_file.open("rb"), as_attachment=not inline_pdf, filename=filename,
-                                content_type="application/pdf" if inline_pdf else "application/octet-stream")
-        if inline_pdf:
-            # Shown inside MentorMAMA only; never framed by another site.
-            response["X-Frame-Options"] = "SAMEORIGIN"
-            response["Content-Security-Policy"] = "frame-ancestors 'self'"
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, no-store"
-        return response
+        # Shown inside MentorMAMA only; never framed by another site.
+        frame_headers = {"X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'"} if inline_pdf else {}
+        return file_response(item.document_file, cache_seconds=0, as_attachment=not inline_pdf, filename=filename,
+                             content_type="application/pdf" if inline_pdf else "application/octet-stream", extra_headers=frame_headers)
 
 
 class ContentCoverImageView(APIView):
@@ -239,11 +229,8 @@ class ContentCoverImageView(APIView):
                 status=404,
             )
 
-        content_type = mimetypes.guess_type(item.cover_image.name)[0] or "application/octet-stream"
-        response = FileResponse(item.cover_image.open("rb"), content_type=content_type)
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, no-store"
-        return response
+        # The URL carries ?v=<file token>, so a replaced cover gets a new URL and the browser may cache this one.
+        return file_response(item.cover_image, cache_seconds=86400)
 
 
 class ContentPublishView(APIView):
@@ -350,7 +337,7 @@ class ContentDuplicateView(APIView):
                     stored = getattr(source, field)
                     if stored:
                         with stored.open("rb") as handle:
-                            getattr(copy, field).save(stored.name.rsplit("/", 1)[-1], ContentFile(handle.read()), save=False)
+                            getattr(copy, field).save(Path(stored.name).name, File(handle), save=False)
                 copy.save()
                 audit.record(actor=request.user, action="content.duplicated", entity_table="content_item", entity_id=copy.id,
                              scope={"program_id": str(request.user.program_id)}, changes={"source_id": str(source.id)})

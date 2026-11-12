@@ -46,6 +46,7 @@ import { GuideReader } from "../content/ContentReader";
 import { categoryLabel, formatMinutes } from "../content/contentMeta";
 import "../content/content-detail.css";
 import "./training.css";
+import { StoredImage } from "../../components/StoredImage";
 
 type Filter = "all" | "required" | "in_progress" | "completed";
 
@@ -349,7 +350,7 @@ function ModuleCard({ module, onOpen }: { module: TrainingModule; onOpen: () => 
   return (
     <button type="button" className="tr-card" onClick={onOpen}>
       <span className={`tr-card__media${module.cover_image ? "" : " is-empty"}`}>
-        {module.cover_image ? <img src={module.cover_image} alt="" /> : <GraduationCap size={28} aria-hidden="true" />}
+        <StoredImage src={module.cover_image} fallback={<GraduationCap size={28} aria-hidden="true" />} />
       </span>
       <span className="tr-card__body">
         <span className="tr-card__chips">
@@ -475,7 +476,7 @@ function ModuleRunner({
         </AdminButton>
       </div>
       <header className="cd-hero">
-        {module.cover_image && <img className="cd-hero__cover" src={module.cover_image} alt="" />}
+        <StoredImage className="cd-hero__cover" src={module.cover_image} loading="eager" />
         <div className="cd-hero__body">
           <div className="cd-chips">
             <span className="cd-chip cd-chip--teal">

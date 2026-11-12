@@ -24,6 +24,7 @@ import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { actionMeta, actionsFor, useContentActions, type ActionTarget } from "./contentActions";
 import { audienceSummary, categoryLabel } from "./contentMeta";
 import "./content-detail.css";
+import { StoredImage } from "../../components/StoredImage";
 
 type Kind = "all" | "guide" | "module" | "document" | "external";
 type AddType = Exclude<Kind, "all">;
@@ -419,11 +420,7 @@ function LibraryRow({
           <span
             className={`content-library-row-icon content-library-row-icon--${meta.color}`}
           >
-            {entry.cover_image ? (
-              <img src={entry.cover_image} alt="" />
-            ) : (
-              <Icon size={18} />
-            )}
+            <StoredImage src={entry.cover_image} fallback={<Icon size={18} />} />
           </span>
           <span>
             <button

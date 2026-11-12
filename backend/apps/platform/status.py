@@ -81,13 +81,55 @@ def _email():
     return "ok", detail
 
 
+def _bucket_reachable(bucket: str) -> tuple[bool, str]:
+    """One HEAD request against the bucket, remembered for a minute so the dashboard never hammers R2."""
+    cache_key = f"platform:bucket-probe:{bucket}"
+    remembered = cache.get(cache_key)
+    if remembered is not None:
+        return tuple(remembered)
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    from apps.core.storage import s3_client
+
+    try:
+        s3_client().head_bucket(Bucket=bucket)
+        result = (True, "reachable")
+    except ClientError as error:
+        code = str(error.response.get("Error", {}).get("Code", ""))
+        reasons = {"403": "access denied: check the API token", "AccessDenied": "access denied: check the API token",
+                   "404": "bucket not found", "NoSuchBucket": "bucket not found",
+                   "InvalidAccessKeyId": "unknown access key", "SignatureDoesNotMatch": "secret key does not match"}
+        result = (False, reasons.get(code, f"error {code or 'unknown'}"))
+    except BotoCoreError as error:
+        name = error.__class__.__name__
+        result = (False, "no credentials: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY" if "Credentials" in name
+                  else "cannot connect: check MEDIA_STORAGE_ENDPOINT / EXPORT_STORAGE_ENDPOINT")
+    cache.set(cache_key, list(result), timeout=60)
+    return result
+
+
 def _storage():
+    from apps.core.storage import uses_object_storage
+
+    exports = getattr(settings, "EXPORT_STORAGE_BACKEND", "local")
+    export_label = "exports in object storage" if exports == "s3" else "exports in a local folder"
+    if uses_object_storage():
+        bucket = getattr(settings, "MEDIA_STORAGE_BUCKET", "")
+        ok, reason = _bucket_reachable(bucket)
+        detail = f"Uploads in object storage ({bucket}) · {reason} · {export_label}"
+        return ("ok" if ok else "down"), detail
     root = getattr(settings, "PRIVATE_CONTENT_ROOT", "")
     writable = bool(root) and os.path.isdir(root) and os.access(root, os.W_OK)
-    exports = getattr(settings, "EXPORT_STORAGE_BACKEND", "local")
-    detail = f"Uploads {'writable' if writable else 'not writable'} · exports in {'object storage' if exports == 's3' else 'local folder'}"
-    if exports == "s3" and not getattr(settings, "EXPORT_STORAGE_BUCKET", ""):
-        return "down", detail + " · export bucket not configured"
+    detail = f"Uploads on the server disk ({'writable' if writable else 'not writable'}) · {export_label}"
+    if exports == "s3":
+        if not getattr(settings, "EXPORT_STORAGE_BUCKET", ""):
+            return "down", detail + " · export bucket not configured"
+        ok, reason = _bucket_reachable(settings.EXPORT_STORAGE_BUCKET)
+        if not ok:
+            return "down", f"{detail} · bucket {reason}"
+    if not settings.DEBUG:
+        # Production files on a server disk are lost if the disk is removed and cannot be shared between services.
+        return ("warning" if writable else "down"), detail + " · switch uploads to object storage (FILE_STORAGE_BACKEND=s3)"
     return ("ok" if writable else "warning"), detail
 
 

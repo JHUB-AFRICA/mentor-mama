@@ -19,8 +19,8 @@
 #   RESEND_SIGNING_SECRET    add after step 1 below (the endpoint's signing secret, whsec_...)
 #   PLATFORM_ADMIN_INITIAL_PASSWORD  initial password of the platform admin (at least 12 characters); change it at first sign-in
 #   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   for the private export bucket (any S3-compatible store)
-#   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   R2 API token for the private bucket (uploads and exports)
+#   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION   the bucket, https://<account>.r2.cloudflarestorage.com, auto
 #
 # AFTER THE FIRST DEPLOY
 #   1. Resend > Webhooks > Add endpoint: https://mentormama-api.onrender.com/anymail/resend/tracking/
@@ -30,6 +30,11 @@
 #      domain, and update the rewrite destination below if you give the API its own domain.
 #   3. Sign in at https://<portal>/platform as PLATFORM_ADMIN_EMAIL with PLATFORM_ADMIN_INITIAL_PASSWORD, set up an
 #      authenticator app, change the password, then create programmes and invite their administrators there.
+#   4. Files uploaded before uploads moved to R2 are still on the API disk. Copy them once from the API's Shell:
+#        python manage.py copy_media_to_object_storage --dry-run
+#        python manage.py copy_media_to_object_storage
+#      Until then they are still read from the disk. Remove the disk only after the command reports
+#      "missing on disk 0 · failed 0" and the platform dashboard shows File storage as OK (removing it deletes it).
 #
 # Sender: every message — sign-in codes, invitations, reminders, digests — goes out as
 # "MentorMAMA <mentormama@sinapstechnology.tech>" through Resend (Forge enabled on that domain).
@@ -62,6 +67,11 @@ envVarGroups:
         value: "1"
       # Exports are written by the worker and downloaded through the API, so they live in object storage.
       - key: EXPORT_STORAGE_BACKEND
+        value: s3
+      # Every upload (library documents and covers, module covers, lesson images, partner logos) lives in the same
+      # private R2 bucket under private/ and is served only through the signed-in API. Uses the EXPORT_STORAGE_*
+      # bucket, endpoint and region and the AWS_* key unless MEDIA_STORAGE_* are set.
+      - key: FILE_STORAGE_BACKEND
         value: s3
       - key: USE_REDIS
         value: "true"
@@ -151,7 +161,8 @@ services:
     # Runs after the build and before the new version takes traffic.
     # Migrations, then the initial platform admin (created once from PLATFORM_ADMIN_* settings, never modified after).
     preDeployCommand: python manage.py predeploy
-    # Uploaded documents, covers and lesson images live on this disk (the worker does not need them).
+    # Uploads now live in R2 (FILE_STORAGE_BACKEND). The disk holds files uploaded before that switch and is still
+    # read for any file not yet in the bucket; keep it until copy_media_to_object_storage has run (step 4 above).
     disk:
       name: mentormama-data
       mountPath: /var/lib/mentormama

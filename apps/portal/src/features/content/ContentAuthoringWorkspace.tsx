@@ -40,6 +40,7 @@ import {
   getContentItem,
   reviseContentItem,
   reviseTrainingModule,
+  uploadLessonImage,
 } from "../../services/api";
 import type { LessonType } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
@@ -54,6 +55,7 @@ import { AdminButton } from "../programme-admin/ui/AdminKit";
 import { GuideReader, isGuideBodyEmpty, parseGuideBody } from "./ContentReader";
 import { audienceOptions, groupsFromRoles, rolesFromGroups, type AudienceGroup } from "./contentMeta";
 import "./content-detail.css";
+import { StoredImage } from "../../components/StoredImage";
 
 export interface SavedContent {
   kind: AuthoringKind;
@@ -305,6 +307,7 @@ function GuideAuthoring({
   const [contentId, setContentId] = useState<string | null>(null);
   const [existingStatus, setExistingStatus] = useState<ExistingStatus | undefined>();
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageUploading, setImageUploading] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -312,6 +315,7 @@ function GuideAuthoring({
   const editor = useEditor({
     extensions: [
       StarterKit,
+      // Legacy guides may still hold embedded pictures; new ones are uploaded (see insertImage).
       Image.configure({ allowBase64: true }),
       Link.configure({ openOnClick: false }),
       Placeholder.configure({
@@ -388,17 +392,30 @@ function GuideAuthoring({
     if (existingStatus === "published") void save.mutate({ publish: false, keepLive: true });
     else void save.mutate({ publish: true });
   }
-  function insertImage(file: File) {
-    if (!file.type.startsWith("image/")) {
-      onError("Choose a PNG, JPG or WEBP image.");
+  /**
+   * Images are uploaded to private storage and the guide keeps only their link. (Embedding the picture in the
+   * guide text made saves fail once a few photos were added.) Older guides with embedded pictures still display.
+   */
+  async function insertImage(file: File) {
+    if (!editor) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 2 * 1024 * 1024) {
+      onError("Choose a PNG, JPG, WEBP or GIF image smaller than 2MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = typeof reader.result === "string" ? reader.result : "";
-      if (src) editor?.chain().focus().setImage({ src, alt: file.name }).run();
-    };
-    reader.readAsDataURL(file);
+    const alt = window.prompt("Describe the image in a few words (read aloud to screen-reader users)")?.trim();
+    if (!alt) {
+      onError("An image needs a short description so everyone can use it.");
+      return;
+    }
+    setImageUploading(true);
+    try {
+      const asset = await uploadLessonImage(file, alt);
+      editor.chain().focus().setImage({ src: asset.url, alt: asset.alt }).run();
+    } catch (cause) {
+      onError(cause instanceof ApiError ? cause.message : "We could not upload that image. Please try again.");
+    } finally {
+      setImageUploading(false);
+    }
   }
   function selectCover(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -532,8 +549,10 @@ function GuideAuthoring({
                   </button>
                   <button
                     type="button"
-                    title="Add image"
-                    aria-label="Add image"
+                    title={imageUploading ? "Uploading image…" : "Add image"}
+                    aria-label={imageUploading ? "Uploading image" : "Add image"}
+                    aria-busy={imageUploading}
+                    disabled={imageUploading}
                     onClick={() => imageInputRef.current?.click()}
                   >
                     <ImagePlus size={17} />
@@ -569,11 +588,11 @@ function GuideAuthoring({
                 <input
                   ref={imageInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
                   className="sr-only"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) insertImage(file);
+                    if (file) void insertImage(file);
                     event.currentTarget.value = "";
                   }}
                 />
@@ -1326,7 +1345,7 @@ function ModuleDetails({
       <div className="content-authoring-cover">
         <strong>Cover image</strong>
         <button type="button" onClick={() => coverInputRef.current?.click()}>
-          {coverPreview ? <img src={coverPreview} alt="Module cover preview" /> : <ImagePlus size={17} />}
+          <StoredImage src={coverPreview} alt="Module cover preview" fallback={<ImagePlus size={17} />} />
           {coverPreview ? "Change cover image" : "Add a cover image"}
           <small>PNG, JPG or WEBP · max 2MB</small>
         </button>
@@ -1717,11 +1736,7 @@ function GuideSettings({
         <div className="content-authoring-cover">
           <strong>Cover image</strong>
           <button type="button" onClick={() => coverInputRef.current?.click()}>
-            {coverPreview ? (
-              <img src={coverPreview} alt="Guide cover preview" />
-            ) : (
-              <Plus size={16} />
-            )}
+            <StoredImage src={coverPreview} alt="Guide cover preview" fallback={<Plus size={16} />} />
             {coverPreview ? "Change image" : "Upload an image"}
             <small>PNG, JPG or WEBP · max 2MB</small>
           </button>

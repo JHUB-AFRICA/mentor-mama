@@ -1,13 +1,13 @@
-import mimetypes
 import uuid
 from pathlib import Path
 
-from django.core.files.base import ContentFile
+from django.core.files import File
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.text import slugify
-from django.http import FileResponse, HttpResponse
+from django.http import HttpResponse
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -17,6 +17,8 @@ from rest_framework.views import APIView
 from apps.core import audit
 from apps.core.ai import is_configured as ai_is_configured
 from apps.core.http import IdempotentCommand
+from apps.core.storage import delete_stored_files, file_response, versioned_url
+from apps.core.validators import IMAGE_CONTENT_TYPES, inspect_image
 from apps.learning import api, certificates, services, versioning
 from apps.learning.ai import AIProviderError, explain_lesson
 from apps.core.errors import InvalidTransition
@@ -99,7 +101,7 @@ def _module(module, user):
             "description": snapshot["description"] if not is_admin else module.description,
             "pass_mark": snapshot["pass_mark"] if not is_admin else module.pass_mark, "is_required": module.is_required,
             "category": module.category, "visible_roles": module.visible_roles, "certificate_enabled": module.certificate_enabled,
-            "cover_image": f"/api/v1/training/modules/{module.id}/cover" if module.cover_image else "",
+            "cover_image": versioned_url(f"/api/v1/training/modules/{module.id}/cover", module.cover_image),
             "status": _module_status(module), "archived_at": module.archived_at, "updated_at": module.updated_at,
             "completed": completion is not None, "score": completion.score if completion else None,
             "completed_at": completion.completed_at if completion else None,
@@ -330,7 +332,7 @@ class TrainingModuleDuplicateView(APIView):
                 )
                 if source.cover_image:
                     with source.cover_image.open("rb") as handle:
-                        copy.cover_image.save(Path(source.cover_image.name).name, ContentFile(handle.read()), save=True)
+                        copy.cover_image.save(Path(source.cover_image.name).name, File(handle), save=True)
                 lesson_map = {}
                 for lesson in source.lessons.all():
                     created_lesson = copy.lessons.create(position=lesson.position, title=lesson.title, body=lesson.body, lesson_type=lesson.lesson_type, duration_minutes=lesson.duration_minutes, video_url=lesson.video_url, section=lesson.section)
@@ -370,11 +372,15 @@ class TrainingModuleReviseView(APIView):
             module.visible_roles = data["visible_roles"]
             module.category = data["category"]
             module.certificate_enabled = data["certificate_enabled"]
+            replaced = []
             if data.get("cover_image"):
+                if module.cover_image:
+                    replaced.append((module.cover_image.storage, module.cover_image.name))
                 module.cover_image = data["cover_image"]
             module.is_published = keep_published
             module.save()
             _replace_children(module, data)
+            delete_stored_files(replaced)
             audit.record(actor=request.user, action="learning.module_revised", entity_table="learning_training_module", entity_id=module.id, scope={"program_id": str(request.user.program_id)}, changes={"title": module.title, "kept_published": keep_published})
         module = TrainingModule.objects.prefetch_related("lessons", "quiz__questions").get(id=module.id)
         return Response({"data": _module(module, request.user)})
@@ -400,8 +406,10 @@ class TrainingModuleDetailView(APIView):
         if module.attempts.exists() or module.completions.exists():
             raise InvalidTransition("Learners already have records on this module, so it can be archived but not deleted.")
         title, pk = module.title, module.id
+        files = [(module.cover_image.storage, module.cover_image.name)] if module.cover_image else []
         with transaction.atomic():
             module.delete()
+            delete_stored_files(files)
             audit.record(actor=request.user, action="learning.module_deleted", entity_table="learning_training_module", entity_id=pk, scope={"program_id": str(request.user.program_id)}, changes={"title": title})
         return Response(status=204)
 
@@ -473,11 +481,8 @@ class TrainingModuleCoverView(APIView):
             module = api.visible_modules(request.user).filter(id=module_id).first()
         if module is None or not module.cover_image:
             return _not_found()
-        content_type = mimetypes.guess_type(module.cover_image.name)[0] or "application/octet-stream"
-        response = FileResponse(module.cover_image.open("rb"), content_type=content_type)
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, no-store"
-        return response
+        # The URL carries ?v=<file token>, so a replaced cover gets a new URL and the browser may cache this one.
+        return file_response(module.cover_image, cache_seconds=86400)
 
 
 class LessonVisitView(APIView):
@@ -504,21 +509,11 @@ class LessonMediaView(APIView):
         upload, alt = request.FILES.get("file"), str(request.data.get("alt", "")).strip()[:200]
         if upload is None or not alt:
             raise InvalidTransition("Choose an image and describe it in a few words for screen readers.")
-        if upload.size > self.MAX_BYTES:
-            raise InvalidTransition("Choose an image smaller than 2MB.")
-        from PIL import Image, UnidentifiedImageError
-
         try:
-            with Image.open(upload) as picture:
-                picture.verify()
-            upload.seek(0)
-            with Image.open(upload) as picture:
-                kind, (width, height) = (picture.format or "").upper(), picture.size
-        except (UnidentifiedImageError, OSError, SyntaxError) as error:
-            raise InvalidTransition("That file is not a readable image.") from error
-        content_type = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}.get(kind)
-        if content_type is None or width * height > 40_000_000:
-            raise InvalidTransition("Use a PNG, JPG, WEBP or GIF image of reasonable size.")
+            kind, width, height = inspect_image(upload, formats=set(IMAGE_CONTENT_TYPES), max_bytes=self.MAX_BYTES)
+        except DjangoValidationError as error:
+            raise InvalidTransition(error.messages[0]) from error
+        content_type = IMAGE_CONTENT_TYPES[kind]
         upload.seek(0)
         asset = MediaAsset.objects.create(program_id=request.user.program_id, file=upload, content_type=content_type,
                                           alt=alt, width=width, height=height, created_by=request.user)
@@ -533,10 +528,8 @@ class LessonMediaFileView(APIView):
         asset = MediaAsset.objects.filter(id=media_id, program_id=request.user.program_id).first()
         if asset is None:
             return _not_found()
-        response = FileResponse(asset.file.open("rb"), content_type=asset.content_type)
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, max-age=3600"
-        return response
+        # A lesson image never changes once uploaded (a new upload gets a new id), so it can be cached.
+        return file_response(asset.file, cache_seconds=86400, content_type=asset.content_type)
 
 
 class ModuleCertificateView(APIView):

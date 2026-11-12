@@ -47,8 +47,42 @@ def validation_message(fields: dict) -> str:
     return "Check the highlighted information and try again."
 
 
+def _upload_or_storage_error(exc):
+    """Clear answers for oversized requests, missing files and an unreachable bucket, instead of a 500."""
+    from django.core.exceptions import RequestDataTooBig
+
+    if isinstance(exc, RequestDataTooBig):
+        return Response({"error": {
+            "code": "RequestTooLarge",
+            "message": "This is too large to save. Make images and files smaller, or upload them separately, then try again.",
+            "retryable": False,
+        }}, status=413)
+    if isinstance(exc, FileNotFoundError):
+        logger.warning("Stored file missing: %s", exc)
+        return Response({"error": {
+            "code": "FileUnavailable",
+            "message": "This file is no longer available. Ask your programme team to upload it again.",
+            "retryable": False,
+        }}, status=404)
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError:  # pragma: no cover
+        return None
+    if isinstance(exc, (BotoCoreError, ClientError)):
+        logger.error("File storage error: %s", exc.__class__.__name__, exc_info=(type(exc), exc, exc.__traceback__))
+        return Response({"error": {
+            "code": "StorageUnavailable",
+            "message": "Files can’t be reached right now. Please try again in a moment.",
+            "retryable": True,
+        }}, status=503)
+    return None
+
+
 def domain_exception_handler(exc, context):
     """Render domain errors, and translate constraint violations (DB-01, ERR-01)."""
+    storage_response = _upload_or_storage_error(exc)
+    if storage_response is not None:
+        return storage_response
     if isinstance(exc, DomainError):
         if exc.status >= 500:
             logger.error("Internal domain error: %s", exc.code)

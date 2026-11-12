@@ -1187,7 +1187,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       // Only use an explicitly versioned API error envelope. DRF's generic
       // `detail` and validation payloads can contain internal serializer or
       // infrastructure wording, so the client uses a calm status fallback.
-      if (response.status < 500 && typeof body.error?.message === "string") {
+      if ((response.status < 500 || (code !== null && SAFE_SERVER_ERROR_CODES.has(code))) && typeof body.error?.message === "string") {
         message = body.error.message;
       }
       retryable = body.error?.retryable ?? retryable;
@@ -1205,13 +1205,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
+/** 5xx errors whose message was written for people (not internal details), so it can be shown as is. */
+const SAFE_SERVER_ERROR_CODES = new Set(["StorageUnavailable"]);
+
 function safeStatusMessage(status: number): string {
+  if (status === 413) return "This is too large to save. Make images and files smaller, or upload them separately, then try again.";
   if (status >= 500) return "MentorMAMA is having a brief problem. Please try again shortly.";
   if (status === 401) return "Your sign-in has expired. Sign in again to continue.";
   if (status === 403) return "You don’t have access to do that. Contact your programme team if you need help.";
   if (status === 404) return "We couldn’t find that information. Refresh the page and try again.";
   if (status === 409) return "This information has changed. Refresh the page and try again.";
-  if (status === 422) return "Check the information and try again.";
+  if (status === 400 || status === 422) return "Check the information and try again.";
   if (status === 429) return "Too many attempts. Please wait a moment, then try again.";
   return "We couldn’t complete that request. Check the information and try again.";
 }

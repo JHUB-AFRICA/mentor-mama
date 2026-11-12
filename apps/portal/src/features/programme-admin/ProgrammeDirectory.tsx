@@ -65,6 +65,7 @@ import {
 import { Field, FieldRow, Modal, SelectInput, TextInput } from "../../components/kit";
 import "./directory-kit.css";
 import { useToast } from "../../components/ToastProvider";
+import { StoredImage } from "../../components/StoredImage";
 
 type ResourceTab = "institutions" | "facilities" | "wards";
 type ResourceKind = "institution" | "facility" | "ward";
@@ -701,13 +702,15 @@ function ResourceTable({
                 <tr key={item.id}>
                   <td>
                     <div className="pa-cell-title">
-                      {item.logo_url ? (
-                        <img src={item.logo_url} alt="" className="pd-logo pd-logo--img" />
-                      ) : (
-                        <span aria-hidden="true" className="pd-logo pd-logo--ph">
-                          <Building2 size={16} />
-                        </span>
-                      )}
+                      <StoredImage
+                        src={item.logo_url}
+                        className="pd-logo pd-logo--img"
+                        fallback={
+                          <span aria-hidden="true" className="pd-logo pd-logo--ph">
+                            <Building2 size={16} />
+                          </span>
+                        }
+                      />
                       <div className="min-w-0">
                         <strong>{item.name}</strong>
                         <button type="button" onClick={() => onView(item)} className="pd-link">
@@ -966,7 +969,7 @@ function EditDirectoryModal({
         </Field>
         {resource.item.logo_url && (
           <div className="pd-logo-current">
-            <img src={resource.item.logo_url} alt={`${resource.item.name} logo`} />
+            <StoredImage src={resource.item.logo_url} alt={`${resource.item.name} logo`} fallback={<span className="pd-file-missing">The current logo can’t be shown. Upload it again.</span>} />
             <label className="pd-check">
               <input name="clear_logo" type="checkbox" /> Remove current logo
             </label>

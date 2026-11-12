@@ -2,9 +2,11 @@ import json
 import zipfile
 from pathlib import Path
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.content.models import ContentCategory, ContentKind
+from apps.core.validators import validate_cover_image
 
 
 class ContentItemWriteSerializer(serializers.Serializer):
@@ -46,8 +48,11 @@ class ContentItemWriteSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         cover = attrs.get("cover_image")
-        if cover and (not cover.content_type.startswith("image/") or cover.size > 2 * 1024 * 1024):
-            raise serializers.ValidationError({"cover_image": "Choose an image file smaller than 2MB."})
+        if cover:
+            try:
+                validate_cover_image(cover)
+            except DjangoValidationError as error:
+                raise serializers.ValidationError({"cover_image": error.messages[0]})
         document = attrs.get("document_file")
         if document:
             allowed = {".pdf", ".docx", ".pptx"}

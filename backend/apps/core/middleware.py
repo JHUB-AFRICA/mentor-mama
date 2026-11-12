@@ -27,6 +27,10 @@ class SafeApiErrorResponseMiddleware:
                 code = "AccessDenied"
                 message = "You don’t have access to do that. Contact your programme team if you need help."
                 retryable = False
+            elif status == 413:
+                code = "RequestTooLarge"
+                message = "This is too large to save. Make images and files smaller, then try again."
+                retryable = False
             else:
                 code = "RequestUnavailable"
                 message = "We couldn’t complete that request. Please try again."

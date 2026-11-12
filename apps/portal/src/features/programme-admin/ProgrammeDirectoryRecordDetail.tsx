@@ -32,6 +32,7 @@ import {
 } from "./ui/AdminKit";
 import type { Facility, Institution, Ward } from "../../services/api";
 import "./directory-kit.css";
+import { StoredImage } from "../../components/StoredImage";
 
 export type DirectoryRecordSelection =
   | { kind: "institution"; record: Institution }
@@ -179,7 +180,7 @@ export function ProgrammeDirectoryRecordDetail({
             <AdminCard
               title="Details"
               description="Record information used across programme setup."
-              action={record.logo_url ? <img src={record.logo_url} alt={`${record.name} logo`} className="pd-detail__logo" /> : undefined}
+              action={record.logo_url ? <StoredImage src={record.logo_url} alt={`${record.name} logo`} className="pd-detail__logo" /> : undefined}
             >
               <DetailList
                 items={

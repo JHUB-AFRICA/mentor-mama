@@ -1,10 +1,9 @@
 """Programme-owned library content and role visibility."""
 
 from django.db import models
-from django.conf import settings
-from django.core.files.storage import FileSystemStorage
 
 from apps.core.models import BaseModel
+from apps.core.storage import private_storage
 from apps.identity.models import Role
 
 
@@ -28,7 +27,8 @@ def default_visible_roles():
 
 
 def content_document_storage():
-    return FileSystemStorage(location=settings.PRIVATE_CONTENT_ROOT)
+    """Kept by name because migrations reference it; every upload uses the shared private storage."""
+    return private_storage()
 
 
 class ContentItem(BaseModel):

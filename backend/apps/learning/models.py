@@ -3,16 +3,16 @@
 import os
 import uuid
 
-from django.conf import settings
-from django.core.files.storage import FileSystemStorage
 from django.db import models
 
 from apps.core.models import BaseModel
+from apps.core.storage import private_storage
 from apps.identity.models import Role
 
 
 def private_media_storage():
-    return FileSystemStorage(location=settings.PRIVATE_CONTENT_ROOT)
+    """Kept by name because migrations reference it; every upload uses the shared private storage."""
+    return private_storage()
 
 
 def default_visible_roles():

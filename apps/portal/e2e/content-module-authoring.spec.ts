@@ -182,3 +182,48 @@ test("programme admin can save a structured learning module draft", async ({
   expect(page.locator("button button")).toHaveCount(0);
   expect(consoleErrors.join("\n")).not.toContain("<button> cannot be a descendant of <button>");
 });
+
+test("guide images are uploaded to private storage, not embedded in the guide text", async ({ page }) => {
+  let uploads = 0;
+  let savedGuide = "";
+  const pixel = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/auth/session") {
+      await route.fulfill({ json: { data: { authenticated: true, user: { id: "e2e-admin", email: "admin@example.test", name: "E2E Admin", role: "program_admin", capabilities: { manage_content: true } } } } });
+      return;
+    }
+    if (url.pathname === "/api/v1/auth/csrf") {
+      await route.fulfill({ json: { data: { csrfToken: "e2e-token" } }, headers: { "Set-Cookie": "csrftoken=e2e-token; Path=/; SameSite=Lax" } });
+      return;
+    }
+    if (url.pathname === "/api/v1/training/media" && request.method() === "POST") {
+      uploads += 1;
+      await route.fulfill({ status: 201, json: { data: { id: "22222222-2222-2222-2222-222222222222", url: "/api/v1/training/media/22222222-2222-2222-2222-222222222222", alt: "Hand hygiene poster", width: 1, height: 1 } } });
+      return;
+    }
+    if (url.pathname.startsWith("/api/v1/training/media/")) {
+      await route.fulfill({ contentType: "image/png", body: pixel });
+      return;
+    }
+    if (url.pathname === "/api/v1/content" && request.method() === "POST") {
+      savedGuide = request.postData() ?? "";
+      await route.fulfill({ status: 201, json: { data: { id: "guide-e2e-1", title: "Hand hygiene", slug: "hand-hygiene", summary: "", body: "", resource_url: "", cover_image: "", content_type: "guide", category: "onboarding", status: "draft", visible_roles: ["mentor"], tags: [], facility_ids: [], published: false, updated_at: "2026-11-11T00:00:00Z" } } });
+      return;
+    }
+    await route.fulfill({ json: { data: [] } });
+  });
+
+  await page.goto("/admin/content/new/guide");
+  await page.getByPlaceholder("e.g. Preparing for your first mentorship session").fill("Hand hygiene");
+  await page.locator(".tiptap[contenteditable='true']").fill("Wash before and after every contact.");
+  page.once("dialog", (dialog) => void dialog.accept("Hand hygiene poster"));
+  await page.locator('input[type="file"][accept*="image/gif"]').first().setInputFiles({ name: "poster.png", mimeType: "image/png", buffer: pixel });
+  await expect(page.locator(".tiptap img[alt='Hand hygiene poster']")).toBeVisible();
+  expect(uploads).toBe(1);
+
+  await page.getByRole("button", { name: "Save draft" }).first().click();
+  await expect.poll(() => savedGuide).toContain("/api/v1/training/media/22222222-2222-2222-2222-222222222222");
+  expect(savedGuide).not.toContain("data:image");
+});

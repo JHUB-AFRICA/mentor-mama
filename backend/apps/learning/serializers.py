@@ -1,8 +1,10 @@
 import json
 import uuid
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.core.validators import validate_cover_image as check_cover_image
 from apps.learning.blocks import InvalidBody, validate_body
 from apps.learning.models import Lesson
 from apps.learning.video import parse_video_url
@@ -58,8 +60,11 @@ class TrainingModuleWriteSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
     def validate_cover_image(self, value):
-        if value and (not value.content_type.startswith("image/") or value.size > 2 * 1024 * 1024):
-            raise serializers.ValidationError("Choose an image file smaller than 2MB.")
+        if value:
+            try:
+                check_cover_image(value)
+            except DjangoValidationError as error:
+                raise serializers.ValidationError(error.messages[0]) from error
         return value
 
     def validate_quiz(self, value):

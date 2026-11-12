@@ -57,6 +57,7 @@ import {
   kindLabel,
   statusLabel,
 } from "./contentMeta";
+import { StoredImage } from "../../components/StoredImage";
 
 const kindIcon = { guide: BookOpen, module: GraduationCap, document: FileText, external: Link2 } as const;
 
@@ -188,7 +189,7 @@ export function ContentDetailScreen({
       </div>
 
       <header className="cd-hero">
-        {cover && <img className="cd-hero__cover" src={cover} alt="" />}
+        <StoredImage className="cd-hero__cover" src={cover} loading="eager" />
         <div className="cd-hero__body">
           <div className="cd-chips">
             <span className="cd-chip cd-chip--teal">
@@ -417,7 +418,7 @@ function ItemBody({ item, kind, isAdmin }: { item: ContentItem; kind: ContentKin
       )}
       {isPdf && (
         <AdminCard title="Preview">
-          <iframe className="cd-pdf" title={`${item.title} (PDF preview)`} src={`${item.resource_url}?inline=1`} />
+          <iframe className="cd-pdf" title={`${item.title} (PDF preview)`} src={`${item.resource_url}${item.resource_url.includes("?") ? "&" : "?"}inline=1`} />
           <p className="cd-empty">If the preview does not open on your device, use Download document.</p>
         </AdminCard>
       )}

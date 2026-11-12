@@ -5,6 +5,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from apps.core import audit
+from apps.core.storage import delete_stored_files
 from apps.core.errors import CohortOverlap, InvalidCohortDates, UnauthorizedFacilityAccess
 from apps.identity import api as identity
 from apps.institutions.models import Cohort, CohortMembership, Institution, StudentProfile
@@ -48,7 +49,8 @@ def update_institution(*, actor, institution_id, **data):
         institution.archived_at = timezone.now() if archived else None
     institution.save(update_fields=[*data.keys(), "archived_at", "updated_at"])
     if previous_logo and previous_logo.name != institution.logo.name:
-        transaction.on_commit(lambda: previous_logo.delete(save=False))
+        # Delete by name: FieldFile.delete() would also blank the logo on the in-memory row being returned.
+        delete_stored_files([(previous_logo.storage, previous_logo.name)])
     audit.record(actor=actor, action="institution.updated", entity_table="institutions_institution", entity_id=institution.id, scope={"program_id": str(actor.program_id)}, changes={"fields": changed_fields, "logo_updated": "logo" in data, **({"archived": archived} if archived is not None else {})})
     identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
     return institution

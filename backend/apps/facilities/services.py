@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from apps.core import audit
+from apps.core.storage import delete_stored_files
 from apps.identity.models import Role, Status
 from apps.identity import api as identity
 from apps.facilities.models import Facility
@@ -47,7 +48,8 @@ def update_facility(*, actor, facility_id, **data):
         facility.archived_at = timezone.now() if archived else None
     facility.save(update_fields=[*data.keys(), "archived_at", "updated_at"])
     if previous_logo and previous_logo.name != facility.logo.name:
-        transaction.on_commit(lambda: previous_logo.delete(save=False))
+        # Delete by name: FieldFile.delete() would also blank the logo on the in-memory row being returned.
+        delete_stored_files([(previous_logo.storage, previous_logo.name)])
     audit.record(actor=actor, action="facility.updated", entity_table="facilities_facility", entity_id=facility.id, scope={"program_id": str(actor.program_id)}, changes={"fields": changed_fields, "logo_updated": "logo" in data, **({"archived": archived} if archived is not None else {})})
     identity.invalidate_directory_coverage(actor=actor, program_id=actor.program_id)
     return facility

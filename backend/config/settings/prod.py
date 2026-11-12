@@ -61,10 +61,13 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 
 MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {"location": str(PRIVATE_CONTENT_ROOT)},
-    },
+    # Model fields name their storage explicitly (apps.core.storage.private_storage); the default matches it so
+    # nothing ever falls back to MEDIA_ROOT inside the read-only image.
+    "default": (
+        {"BACKEND": "apps.core.storage.PrivateObjectStorage"}
+        if FILE_STORAGE_BACKEND == "s3"
+        else {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(PRIVATE_CONTENT_ROOT)}}
+    ),
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
