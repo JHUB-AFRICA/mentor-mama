@@ -18,7 +18,8 @@
 #   RESEND_API_KEY           Resend > API keys (sending access, domain sinapstechnology.tech)
 #   RESEND_SIGNING_SECRET    add after step 1 below (the endpoint's signing secret, whsec_...)
 #   PLATFORM_ADMIN_INITIAL_PASSWORD  initial password of the platform admin (at least 12 characters); change it at first sign-in
-#   AI_API_KEY               optional; only used if you also set AI_ENABLED=true
+#   AI_ENABLED               true to switch the Menta assistant on (absent or false = off); set it here so deploys never reset it
+#   AI_API_KEY               needed for Menta; only used when AI_ENABLED is true
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   the Cloudflare R2 API token (Access Key ID / Secret Access Key)
 #   EXPORT_STORAGE_BUCKET / EXPORT_STORAGE_ENDPOINT / EXPORT_STORAGE_REGION   the bucket, https://<account>.r2.cloudflarestorage.com, auto
 #
@@ -98,8 +99,8 @@ envVarGroups:
         value: "true"
       - key: LOG_LEVEL
         value: INFO
-      - key: AI_ENABLED
-        value: "false"
+      # AI_ENABLED is deliberately NOT here: values in this group are reset on every sync, which silently switched the
+      # Menta assistant off. It lives in `mentormama-secrets` next to AI_API_KEY (see the list at the top).
       # The platform administrator account, created at deploy time without an invitation email (see
       # apps/platform/management/commands/ensure_platform_admin.py). Its initial password is the secret
       # PLATFORM_ADMIN_INITIAL_PASSWORD in `mentormama-secrets`; it must be changed at the first sign-in (/platform).
