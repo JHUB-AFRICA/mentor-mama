@@ -58,3 +58,33 @@ def test_email_mfa_verification_is_single_use(db, coordinator):
     assert first.status_code == 200
     assert second.status_code == 400
     assert client.session[authentication.MFA_VERIFIED_SESSION_KEY] is True
+
+
+def _security_email(user, action):
+    from apps.identity.models import Status
+
+    event = OutboxEvent.objects.create(event_type="SecurityNotificationRequested", payload={"user_id": str(user.id), "action": action})
+    if action in {"account_suspended", "account_deactivated"}:
+        user.status = Status.SUSPENDED if action == "account_suspended" else Status.DEACTIVATED
+        user.save(update_fields=["status"])
+    mail.outbox.clear()
+    deliver_outbox_event(event)
+    assert len(mail.outbox) == 1
+    return mail.outbox[0].body
+
+
+def test_suspended_and_deactivated_emails_carry_no_dead_link(db, coordinator):
+    for action in ("account_suspended", "account_deactivated"):
+        body = _security_email(coordinator, action)
+        assert "http" not in body and "Open account" not in body, body  # they cannot sign in, so no link into the app
+        assert "programme support team" in body
+
+
+def test_other_security_emails_link_to_the_roles_real_account_page(db, coordinator):
+    body = _security_email(coordinator, "password_changed")
+    assert "/coordinator/account?tab=security" in body and "/settings" not in body
+
+
+def test_reactivation_email_links_to_sign_in(db, coordinator):
+    body = _security_email(coordinator, "account_active")
+    assert "Sign in:" in body and "/settings" not in body

@@ -209,9 +209,17 @@ def deliver_outbox_event(event) -> None:
         title, intro, detail = security_copy.get(
             action, ("Security update", "There has been a security update to your MentorMAMA account.", "If you did not expect this, contact your programme support team."),
         )
+        if action in {"account_suspended", "account_deactivated"}:
+            # They cannot sign in, so a link into the app would lead nowhere. Point them to their support team instead.
+            action_label, action_url = "", ""
+        elif action == "account_active":
+            action_label, action_url = "Sign in", portal_url("/")
+        else:
+            account_path = {"coordinator": "/coordinator/account", "nurse_manager": "/facility/account", "program_admin": "/admin/account"}.get(user.role, "/account")
+            action_label, action_url = "Open account", portal_url(f"{account_path}?tab=security")
         text = _email_content(
             eyebrow="Account security", title=title, intro=f"Hello {user.first_name}, {intro}",
-            action_label="Open account", action_url=portal_url("/settings"),
+            action_label=action_label, action_url=action_url,
             detail=detail, expiry="This message is for your security and cannot be disabled.", accent="#2a6fa8",
         )
         _send(f"MentorMAMA security: {title.lower()}", text, settings.DEFAULT_FROM_EMAIL, user, event)
