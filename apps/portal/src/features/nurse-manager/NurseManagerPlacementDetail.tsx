@@ -74,7 +74,7 @@ export function NurseManagerPlacementDetail({ user, onError }: { user: CurrentUs
     const closed = isPlacementClosed(item.state);
     const action = managerPlacementAction(item);
     const journey = placementJourney(item.state, "staff");
-    const blocked = (transitions.data?.blocked ?? []).flatMap((entry) => entry.reasons).map((r) => r.message).filter(Boolean).slice(0, 3);
+    const blocked = item.state !== "active" && item.state !== "paused" ? [] : (transitions.data?.blocked ?? []).flatMap((entry) => entry.reasons).map((r) => r.message).filter(Boolean).slice(0, 3);
     const wardValue = ward ?? item.ward?.id ?? "";
     const mentorValue = mentor ?? item.mentor?.id ?? "";
     const wardChanged = wardValue !== (item.ward?.id ?? "") && wardValue !== "";
