@@ -130,6 +130,22 @@ async function mock(page: Page, state: ReturnType<typeof makeState>, options: { 
       state.applied.push(body);
       return json({ data: { run_id: "run-1", seed: body.seed, requested: ids.length, by_facility: { f1: half, f2: ids.length - half }, unplaced: [], skipped: [] } }, 201);
     }
+    if (path === "/api/v1/placements/planning/cohorts/c1/auto-request") {
+      const body = request.postDataJSON() as Record<string, any>;
+      if (body.preview) {
+        state.previews.push(body);
+        return json({ data: { seed: body.seed, mode: body.mode, basis: body.basis, plan_hash: "b".repeat(64), to_create: 15, candidates: 30,
+          facilities: [
+            { facility_id: "f1", name: "Kenyatta National Hospital", free_capacity: 14, usable_capacity: 14, requested: 14, pending_requests: 4, mentor_places_left: 6 },
+            { facility_id: "f2", name: "Mama Lucy Hospital", free_capacity: 2, usable_capacity: 2, requested: 2, pending_requests: 0, mentor_places_left: 1 },
+          ],
+          assignments: Array.from({ length: 16 }, (_, i) => ({ placement_id: null, student_id: `s${i}`, student: `Student ${i}`, facility_id: i < 14 ? "f1" : "f2" })),
+          unplaced: Array.from({ length: 14 }, (_, i) => ({ placement_id: null, student_id: `u${i}`, student: `Left ${i}`, reason: "The chosen facilities have 16 free places for these dates, fewer than the 30 students." })),
+          skipped: [], warnings: [], window: { start: "2027-01-11", end: "2027-03-12" } } });
+      }
+      state.applied.push(body);
+      return json({ data: { run_id: "run-1", seed: body.seed, requested: 16, by_facility: { f1: 14, f2: 2 }, unplaced: [], skipped: [] } }, 201);
+    }
     if (path === "/api/v1/placements/release") {
       state.releases.push(request.postDataJSON());
       return json({ data: { released: 2, already_released: 1, not_arranged: 1, total: 5, released_students: [], blocked: [{ placement_id: "p27", student: "Student 27 Achieng", reason: "The mentor has not finished required training." }] } });
@@ -252,6 +268,29 @@ test.describe("placement planning", () => {
     expect(state.applied).toHaveLength(1);
     expect(state.applied[0]).toMatchObject({ seed: seen.seed, expected_plan_hash: "a".repeat(64), preview: false });
     await expect(page.getByRole("heading", { name: "Allocation result", level: 2 })).toBeVisible();
+  });
+
+  test("one button shares everyone who still needs a facility, after a preview", async ({ page }) => {
+    const state = makeState();
+    await mock(page, state);
+    await page.goto("/coordinator/placements/planning");
+    const card = page.getByRole("heading", { name: "Place everyone who still needs a facility" });
+    await expect(card).toBeVisible();
+    await expect(page.getByText(/15 students still need a facility/)).toBeVisible();
+    await page.getByRole("button", { name: "Share automatically" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Share the cohort across partner facilities" });
+    await expect(dialog.getByText(/15 students in Cohort A 2027 still need a facility/)).toBeVisible();
+    await expect(dialog.getByText("15 students have no placement yet; one is created for them when you send.")).toBeVisible();
+    await expect(dialog.getByText("14 would be left without a request")).toBeVisible();
+    expect(state.applied).toHaveLength(0);
+    expect(state.previews.at(-1)).toMatchObject({ mode: "capacity", preview: true });
+    expect(state.previews.at(-1)).not.toHaveProperty("placement_ids");
+
+    const seen = state.previews.at(-1)!;
+    await dialog.getByRole("button", { name: "Send 16 requests" }).click();
+    await expect(page).toHaveURL(/\/coordinator\/placements\/runs\/run-1$/);
+    expect(state.applied[0]).toMatchObject({ seed: seen.seed, expected_plan_hash: "b".repeat(64), preview: false });
   });
 
   test("selects everyone matching the filter across pages", async ({ page }) => {

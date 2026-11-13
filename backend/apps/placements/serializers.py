@@ -234,6 +234,19 @@ class FacilityRequestSerializer(serializers.Serializer):
     preview = serializers.BooleanField(required=False, default=False)
 
 
+class CohortAutoRequestSerializer(serializers.Serializer):
+    """Share every student in a cohort who still needs a facility. No facilities chosen means every partner with wards."""
+
+    facility_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False, max_length=20)
+    mode = serializers.ChoiceField(choices=["capacity", "even"], default="capacity")
+    basis = serializers.ChoiceField(choices=["wards", "wards_and_mentors"], default="wards")
+    net_of_pending = serializers.BooleanField(required=False, default=False)
+    seed = serializers.RegexField(r"^[a-zA-Z0-9]{4,40}$", required=False, allow_blank=True)
+    expected_plan_hash = serializers.RegexField(r"^[a-f0-9]{64}$", required=False, allow_blank=True)
+    preview = serializers.BooleanField(required=False, default=False)
+    institution_id = serializers.UUIDField(required=False)
+
+
 class ReleasePlacementsSerializer(serializers.Serializer):
     placement_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False, max_length=500)
     cohort_id = serializers.UUIDField(required=False)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Building2, CheckCircle2, Download, GraduationCap, History, Send, TriangleAlert, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, CheckCircle2, Download, GraduationCap, History, Send, Shuffle, TriangleAlert, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { PortalErrorState } from "../../../components/PortalErrorState";
 import { useToast } from "../../../components/ToastProvider";
@@ -107,6 +107,7 @@ export function PlacementPlanning({ user }: { user: CurrentUser }) {
   const [selected, setSelected] = useState<string[]>([]);
   useEffect(() => setSelected([]), [cohortId]);
   const [requesting, setRequesting] = useState(false);
+  const [sharingCohort, setSharingCohort] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [file, setFile] = useState<"csv" | "xlsx" | "pdf">("xlsx");
   const [downloading, setDownloading] = useState(false);
@@ -194,6 +195,7 @@ export function PlacementPlanning({ user }: { user: CurrentUser }) {
     );
   }
 
+  const needsFacility = counts ? counts.not_placed + counts.not_requested + counts.declined : 0;
   const bulkVisible = selected.length > 0;
   return (
     <PlanningShell
@@ -253,6 +255,19 @@ export function PlacementPlanning({ user }: { user: CurrentUser }) {
               );
             })}
           </ol>
+        </AdminCard>
+      )}
+
+      {canRequest && counts && needsFacility > 0 && (
+        <AdminCard title="Place everyone who still needs a facility" description="One step for the whole cohort. Review the split before anything is sent.">
+          <div className="pp-auto">
+            <p>
+              <strong>{needsFacility}</strong> {needsFacility === 1 ? "student still needs" : "students still need"} a facility
+              {" "}({[counts.not_placed > 0 && `${counts.not_placed} with no placement yet`, counts.not_requested > 0 && `${counts.not_requested} not yet requested`, counts.declined > 0 && `${counts.declined} declined`].filter(Boolean).join(", ")}).
+              The system creates the missing placements and shares everyone at random across your partner facilities by their free ward places. Each facility&rsquo;s nurse manager then places them in wards with mentors.
+            </p>
+            <AdminButton icon={<Shuffle />} onClick={() => setSharingCohort(true)} disabled={facilities.length === 0}>Share automatically</AdminButton>
+          </div>
         </AdminCard>
       )}
 
@@ -355,6 +370,21 @@ export function PlacementPlanning({ user }: { user: CurrentUser }) {
           navigate(`${RUNS_PATH}/${runId}`);
         }}
       />
+      {cohort && (
+        <RequestSplitDialog
+          open={sharingCohort}
+          onClose={() => setSharingCohort(false)}
+          placementIds={[]}
+          cohort={{ id: cohort.id, name: cohort.name, students: needsFacility }}
+          facilities={facilities.map((item) => ({ id: item.facility_id, name: item.name, free: item.free }))}
+          onApplied={(runId) => {
+            setSharingCohort(false);
+            setSelected([]);
+            refresh();
+            navigate(`${RUNS_PATH}/${runId}`);
+          }}
+        />
+      )}
       {cohort && (
         <ReleaseDialog
           open={releasing}

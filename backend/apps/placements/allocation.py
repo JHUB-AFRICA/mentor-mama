@@ -110,8 +110,11 @@ def _plan_hash_split(assignments) -> str:
 
 
 def plan_facility_split(*, actor, placement_ids, facility_ids, mode: str = "capacity", seed: str | None = None,
-                        basis: str = "wards", net_of_pending: bool = False) -> dict:
+                        basis: str = "wards", net_of_pending: bool = False, candidates=None, names=None) -> dict:
     """Preview how a batch would be requested of partner facilities.
+
+    ``candidates`` (with ``names``) lets the cohort-wide auto request plan students who have no placement yet: each
+    needs ``id``, ``planned_start``, ``planned_end`` and ``created_at``. Normal callers pass ``placement_ids``.
 
     ``capacity`` mode shares the batch in proportion to each facility's free ward places for the placement dates
     (never above them); students beyond the total free places are reported unplaced. ``even`` mode shares equally
@@ -121,7 +124,10 @@ def plan_facility_split(*, actor, placement_ids, facility_ids, mode: str = "capa
     identity.require_capability(actor, "request_facility")
     if mode not in {"capacity", "even"} or basis not in CAPACITY_BASES:
         raise errors.InvalidTransition("Unknown way of splitting the students.")
-    rows, skipped = _requestable(actor, placement_ids)
+    if candidates is None:
+        rows, skipped = _requestable(actor, placement_ids)
+    else:
+        rows, skipped = list(candidates), []
     if not rows:
         raise errors.InvalidTransition("Choose draft placements that have not been requested or allocated to a ward yet.", skipped=skipped)
     facility_ids = list(dict.fromkeys(UUID(str(value)) for value in facility_ids))
@@ -168,7 +174,7 @@ def plan_facility_split(*, actor, placement_ids, facility_ids, mode: str = "capa
         base, extra = divmod(len(shuffled), len(options))
         quotas = {o["facility_id"]: base + (1 if index < extra else 0) for index, o in enumerate(options)}
 
-    info = _student_info([p.id for p in shuffled])
+    info = names if names is not None else _student_info([p.id for p in shuffled])
     assignments, cursor = [], 0
     for option in options:
         count = quotas.get(option["facility_id"], 0)
@@ -208,6 +214,84 @@ def apply_facility_split(*, actor, placement_ids, facility_ids, mode: str = "cap
     if expected_plan_hash and expected_plan_hash != plan["plan_hash"]:
         raise errors.InvalidTransition("Things changed since you reviewed this split. Please review it again before confirming.")
     return _record_requests(actor, plan["assignments"], plan)
+
+
+def _auto_candidates(actor, cohort):
+    """Everyone in the cohort who still needs a facility: no placement yet, a draft not yet requested, or declined."""
+    from types import SimpleNamespace
+
+    from apps.placements import planning
+
+    rows = [r for r in planning._cohort_rows(actor, cohort) if r["status"] in {"not_placed", "not_requested", "declined"}]
+    stamp = timezone.now()
+    candidates, names = [], {}
+    for r in sorted(rows, key=lambda r: r["student"]["name"].lower()):
+        student_id = UUID(r["student"]["id"])
+        candidates.append(SimpleNamespace(
+            id=student_id, placement_id=r["placement_id"],
+            planned_start=r["planned_start"] or cohort.start_date, planned_end=r["planned_end"] or cohort.end_date, created_at=stamp,
+        ))
+        names[student_id] = {"name": r["student"]["name"]}
+    return candidates, names
+
+
+def plan_cohort_auto_request(*, actor, cohort_id, facility_ids=None, mode: str = "capacity", basis: str = "wards",
+                             net_of_pending: bool = False, seed: str | None = None, institution_id=None) -> dict:
+    """Share every student who still needs a facility across the partner facilities (nothing is written)."""
+    from apps.placements import planning
+
+    identity.require_capability(actor, "request_facility")
+    cohort = planning._cohort_or_404(actor, cohort_id, institution_id)
+    candidates, names = _auto_candidates(actor, cohort)
+    if not candidates:
+        raise errors.InvalidTransition("Every student in this cohort has already been sent to a facility or placed.")
+    if not facility_ids:
+        start, end = min(c.planned_start for c in candidates), max(c.planned_end for c in candidates)
+        facility_ids = [UUID(row["facility_id"]) for row in capacity.facility_capacity(program_id=actor.program_id, start=start, end=end) if not row.get("no_wards")]
+        if not facility_ids:
+            raise errors.InvalidTransition("No partner facility with wards is set up yet.")
+    plan = plan_facility_split(actor=actor, placement_ids=[], facility_ids=facility_ids, mode=mode, seed=seed, basis=basis,
+                               net_of_pending=net_of_pending, candidates=candidates, names=names)
+    existing = {c.id: c.placement_id for c in candidates}
+    for item in plan["assignments"] + plan["unplaced"]:
+        student_id = UUID(item["placement_id"])
+        item["student_id"] = str(student_id)
+        item["placement_id"] = existing.get(student_id)
+    plan["cohort"] = {"id": str(cohort.id), "name": cohort.name}
+    plan["to_create"] = sum(1 for a in plan["assignments"] if not a["placement_id"])
+    plan["candidates"] = len(candidates)
+    return plan
+
+
+def apply_cohort_auto_request(*, actor, cohort_id, facility_ids=None, mode: str = "capacity", basis: str = "wards",
+                              net_of_pending: bool = False, seed: str | None = None, expected_plan_hash: str | None = None,
+                              institution_id=None) -> dict:
+    """Create the missing draft placements and request the facilities, all or nothing."""
+    from apps.placements import planning
+
+    plan = plan_cohort_auto_request(actor=actor, cohort_id=cohort_id, facility_ids=facility_ids, mode=mode, basis=basis,
+                                    net_of_pending=net_of_pending, seed=seed, institution_id=institution_id)
+    if expected_plan_hash and expected_plan_hash != plan["plan_hash"]:
+        raise errors.InvalidTransition("Things changed since you reviewed this split. Please review it again before confirming.")
+    cohort = planning._cohort_or_404(actor, cohort_id, institution_id)
+    with transaction.atomic():
+        skipped = list(plan["skipped"])
+        to_create = [a for a in plan["assignments"] if not a["placement_id"]]
+        made: dict[str, str] = {}
+        if to_create:
+            created = services.bulk_create_placements(
+                services.BulkCreatePlacements(cohort_id=cohort.id, student_ids=[UUID(a["student_id"]) for a in to_create],
+                                              planned_start=cohort.start_date, planned_end=cohort.end_date), actor=actor)["created"]
+            made = {str(student_id): str(placement_id) for placement_id, student_id in
+                    StudentAssignment.objects.filter(placement_id__in=[p.id for p in created], ended_at=None).values_list("placement_id", "student_id")}
+        assignments = []
+        for item in plan["assignments"]:
+            placement_id = item["placement_id"] or made.get(item["student_id"])
+            if placement_id:
+                assignments.append({"placement_id": str(placement_id), "student": item["student"], "facility_id": item["facility_id"]})
+            else:
+                skipped.append({"placement_id": None, "student": item["student"], "reason": "Already has an overlapping placement, so none was created."})
+        return _record_requests(actor, assignments, {**plan, "skipped": skipped})
 
 
 def request_facility(*, actor, placement_ids, facility_id) -> dict:

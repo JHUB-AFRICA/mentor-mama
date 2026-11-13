@@ -25,6 +25,7 @@ urlpatterns = [
     path("placements/planning/overview", views.PlanningOverviewView.as_view(), name="placement-planning-overview"),
     path("placements/planning/cohorts/<uuid:cohort_id>", views.PlanningCohortView.as_view(), name="placement-planning-cohort"),
     path("placements/planning/cohorts/<uuid:cohort_id>/students", views.PlanningCohortStudentsView.as_view(), name="placement-planning-students"),
+    path("placements/planning/cohorts/<uuid:cohort_id>/auto-request", views.CohortAutoRequestView.as_view(), name="placement-planning-auto-request"),
     path("placements/release", views.ReleasePlacementsView.as_view(), name="placement-release"),
     path("placements/auto-arrange", views.AutoArrangeView.as_view(), name="placement-auto-arrange"),
     path("placements/facility-requests", views.FacilityRequestView.as_view(), name="placement-facility-requests"),

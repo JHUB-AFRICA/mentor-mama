@@ -156,3 +156,7 @@
   .pp-strip { grid-template-columns: minmax(0, 1fr); }
   .pp-cohorts { grid-template-columns: minmax(0, 1fr); }
 }
+
+.pp-auto { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+.pp-auto p { margin: 0; flex: 1 1 28rem; color: var(--pa-muted, #5b6b7b); line-height: 1.5; }
+.pp-auto p strong { color: inherit; }

@@ -601,6 +601,42 @@ class FacilityRequestView(APIView):
         return Response({"data": result}, status=status.HTTP_201_CREATED)
 
 
+class CohortAutoRequestView(APIView):
+    """One step for a whole cohort: create the missing draft placements and share everyone across the partner facilities.
+
+    ``preview: true`` returns the plan (``plan_hash`` and ``seed``) and writes nothing; applying with the same seed and
+    ``expected_plan_hash`` is refused if capacity changed in between.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, cohort_id):
+        from apps.placements import allocation
+
+        payload = serializers.CohortAutoRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = dict(payload.validated_data)
+        preview = data.pop("preview")
+        data["seed"] = data.get("seed") or None
+        expected = data.pop("expected_plan_hash", None) or None
+        if data.get("facility_ids"):
+            data["facility_ids"] = [str(value) for value in data["facility_ids"]]
+        if data.get("institution_id"):
+            data["institution_id"] = str(data["institution_id"])
+        if preview:
+            return Response({"data": allocation.plan_cohort_auto_request(actor=request.user, cohort_id=cohort_id, **data)})
+        with IdempotentCommand(request, "cohort_auto_request") as command:
+            if command.replayed:
+                from apps.placements.models import AllocationRun
+
+                stored = AllocationRun.objects.filter(id=command.result_ref, actor=request.user).first()
+                body = {**{k: v for k, v in stored.result.items() if k != "assignments"}, "run_id": str(stored.id), "seed": stored.seed} if stored else {"replayed": True}
+                return Response({"data": body, "meta": {"idempotency_replayed": True}})
+            result = allocation.apply_cohort_auto_request(actor=request.user, cohort_id=cohort_id, expected_plan_hash=expected, **data)
+            command.record(UUID(result["run_id"]))
+        return Response({"data": result}, status=status.HTTP_201_CREATED)
+
+
 class AllocationListView(APIView):
     """Download where each student is placed (csv, xlsx or pdf)."""
 

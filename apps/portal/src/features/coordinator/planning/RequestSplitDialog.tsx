@@ -5,8 +5,10 @@ import { Skeleton } from "@mentormama/ui";
 import { Modal } from "../../../components/kit";
 import { useToast } from "../../../components/ToastProvider";
 import {
+  applyCohortAutoRequest,
   applyFacilitySplit,
   messageOf,
+  previewCohortAutoRequest,
   previewFacilitySplit,
   type SplitBasis,
   type SplitInput,
@@ -33,12 +35,15 @@ export function RequestSplitDialog({
   open,
   onClose,
   placementIds,
+  cohort,
   facilities,
   onApplied,
 }: {
   open: boolean;
   onClose: () => void;
   placementIds: string[];
+  /** Whole-cohort mode: every student who still needs a facility, including those with no placement yet. */
+  cohort?: { id: string; name: string; students: number };
   facilities: SplitFacility[];
   /** Called with the new run's id once the requests are recorded, to open the result page. */
   onApplied: (runId: string) => void;
@@ -63,16 +68,28 @@ export function RequestSplitDialog({
     () => ({ placement_ids: placementIds, facility_ids: selected, mode, basis, seed }),
     [placementIds, selected, mode, basis, seed],
   );
+  const cohortId = cohort?.id;
+  const studentCount = cohort ? cohort.students : placementIds.length;
   const preview = useQuery({
-    queryKey: ["planning-split-preview", input],
-    queryFn: () => previewFacilitySplit(input),
-    enabled: open && selected.length > 0 && placementIds.length > 0,
+    queryKey: ["planning-split-preview", cohortId ?? "selection", input],
+    queryFn: () => {
+      if (!cohortId) return previewFacilitySplit(input);
+      const { placement_ids: _ids, ...rest } = input;
+      void _ids;
+      return previewCohortAutoRequest(cohortId, rest);
+    },
+    enabled: open && selected.length > 0 && studentCount > 0,
     staleTime: 0,
     gcTime: 0,
     retry: false,
   });
   const apply = useMutation({
-    mutationFn: (hash: string) => applyFacilitySplit(input, hash),
+    mutationFn: (hash: string) => {
+      if (!cohortId) return applyFacilitySplit(input, hash);
+      const { placement_ids: _ids, ...rest } = input;
+      void _ids;
+      return applyCohortAutoRequest(cohortId, rest, hash);
+    },
     onSuccess: (data) => {
       pushToast({ kind: "success", title: "Facilities notified", message: `${data.requested} students requested. Nurse managers have been emailed.` });
       onApplied(data.run_id);
@@ -90,8 +107,12 @@ export function RequestSplitDialog({
       dismissible={!apply.isPending}
       size="lg"
       icon={<Building2 />}
-      title="Request facilities"
-      description={`${placementIds.length} ${placementIds.length === 1 ? "student" : "students"} selected. Choose the facilities and review how the students are shared before anything is sent.`}
+      title={cohort ? "Share the cohort across partner facilities" : "Request facilities"}
+      description={
+        cohort
+          ? `${cohort.students} ${cohort.students === 1 ? "student" : "students"} in ${cohort.name} still need a facility. The system creates any missing placements and shares everyone at random across the facilities you choose. Review the split before anything is sent.`
+          : `${placementIds.length} ${placementIds.length === 1 ? "student" : "students"} selected. Choose the facilities and review how the students are shared before anything is sent.`
+      }
       footer={
         <>
           <AdminButton variant="secondary" size="sm" onClick={onClose} disabled={apply.isPending}>Cancel</AdminButton>
@@ -99,7 +120,7 @@ export function RequestSplitDialog({
             Shuffle again
           </AdminButton>
           <AdminButton size="sm" onClick={() => plan && apply.mutate(plan.plan_hash)} disabled={!plan || plan.assignments.length === 0 || apply.isPending}>
-            {apply.isPending ? "Sending…" : plan ? `Send ${plan.assignments.length} requests` : "Send requests"}
+            {apply.isPending ? "Sending…" : plan ? `Send ${plan.assignments.length} ${plan.assignments.length === 1 ? "request" : "requests"}` : "Send requests"}
           </AdminButton>
         </>
       }
@@ -173,6 +194,9 @@ export function RequestSplitDialog({
           <p className="pa-muted" style={{ margin: "8px 0" }}>
             Window {plan.window.start} to {plan.window.end}. Reproducible: the same shuffle code ({plan.seed}) always gives the same split.
           </p>
+          {cohort && (plan.to_create ?? 0) > 0 && (
+            <p className="pa-muted">{plan.to_create} {plan.to_create === 1 ? "student has" : "students have"} no placement yet; one is created for them when you send.</p>
+          )}
           {plan.unplaced.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <StatusPill tone="warning">{plan.unplaced.length} would be left without a request</StatusPill>

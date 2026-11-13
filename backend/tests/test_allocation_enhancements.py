@@ -863,3 +863,58 @@ def test_arranged_notifications_count_each_school_separately():
     events = {tuple(e.payload["recipient_user_ids"]): e.payload for e in OutboxEvent.objects.filter(event_type="PlacementsArranged")}
     assert events[(str(world.coordinator.id),)]["arranged"] + events[(str(coordinator_b.id),)]["arranged"] == 12
     assert events[(str(coordinator_b.id),)]["arranged"] + events[(str(coordinator_b.id),)]["unplaced"] == 6
+
+
+def test_cohort_auto_request_creates_missing_placements_and_shares_everyone_in_one_step(world):
+    extra = world.add_students(3, prefix="n")  # enrolled with no placement yet
+    coordinator, cohort = world.coordinator, world.cohort
+    path = f"placements/planning/cohorts/{cohort.id}/auto-request"
+    before = Placement.objects.count()
+
+    preview = post(coordinator, path, {"preview": True, "mode": "even", "seed": "auto0001"})
+    assert preview.status_code == 200, preview.content
+    plan = preview.json()["data"]
+    assert plan["candidates"] == 63 and plan["to_create"] == 3 and len(plan["assignments"]) == 63 and not plan["unplaced"]
+    assert Placement.objects.count() == before  # a preview writes nothing
+    again = post(coordinator, path, {"preview": True, "mode": "even", "seed": "auto0001"}).json()["data"]
+    assert again["plan_hash"] == plan["plan_hash"]  # the same shuffle code gives the same split
+
+    applied = post(coordinator, path, {"mode": "even", "seed": "auto0001", "expected_plan_hash": plan["plan_hash"]})
+    assert applied.status_code == 201, applied.content
+    body = applied.json()["data"]
+    assert body["requested"] == 63 and sum(body["by_facility"].values()) == 63
+    assert Placement.objects.count() == before + 3
+    counts = planning.cohort_students(actor=coordinator, cohort_id=cohort.id, page_size=100)["counts"]
+    assert counts["not_placed"] == 0 and counts["not_requested"] == 0 and counts["requested"] == 63
+    assert {StudentAssignment.objects.get(placement=p).student_id for p in Placement.objects.filter(requested_facility__isnull=False, cohort=cohort)} >= {s.id for s in extra}
+
+    nothing_left = post(coordinator, path, {"preview": True})
+    assert nothing_left.status_code in (400, 409, 422)
+
+
+def test_cohort_auto_request_in_capacity_mode_leaves_students_without_room_unplaced_and_creates_nothing_for_them(world):
+    extra = world.add_students(3, prefix="n")
+    coordinator, cohort = world.coordinator, world.cohort
+    path = f"placements/planning/cohorts/{cohort.id}/auto-request"
+    plan = post(coordinator, path, {"preview": True, "mode": "capacity", "seed": "auto0002"}).json()["data"]
+    free = sum(f["usable_capacity"] for f in plan["facilities"])
+    assert len(plan["assignments"]) == min(63, free) and len(plan["unplaced"]) == 63 - len(plan["assignments"])
+    before = Placement.objects.count()
+    body = post(coordinator, path, {"mode": "capacity", "seed": "auto0002", "expected_plan_hash": plan["plan_hash"]}).json()["data"]
+    assert body["requested"] == len(plan["assignments"])
+    made = Placement.objects.count() - before
+    assert made == plan["to_create"] <= 3  # only students who were given a facility get a new placement
+    assert AllocationRun.objects.filter(id=body["run_id"], mode=AllocationRun.Mode.FACILITY_SPLIT).exists()
+    detail = get(coordinator, f"placements/allocation-runs/{body['run_id']}").json()["data"]
+    assert detail["summary"]["unplaced"] == len(plan["unplaced"])  # students who got no placement still show on the result page
+    assert detail["summary"]["requested"] == 63
+    del extra
+
+
+def test_cohort_auto_request_refuses_a_stale_plan_and_other_roles(world):
+    coordinator, cohort = world.coordinator, world.cohort
+    path = f"placements/planning/cohorts/{cohort.id}/auto-request"
+    stale = post(coordinator, path, {"mode": "even", "seed": "auto0003", "expected_plan_hash": "0" * 64})
+    assert stale.status_code in (400, 409, 422)
+    manager = world.facilities[0][1]
+    assert post(manager, path, {"preview": True}).status_code in (403, 404)

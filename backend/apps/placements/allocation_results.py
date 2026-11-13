@@ -72,6 +72,14 @@ def run_detail(*, actor, run_id, page: int = 1, page_size: int = 100, outcome: s
         for item in source:
             placement = live.get(UUID(item["placement_id"])) if item.get("placement_id") else None
             if placement is None:
+                if outcome_name == "unplaced" and item.get("student_id"):
+                    # Someone the cohort-wide request could not find room for: they never got a placement, but they are in this run.
+                    rows.append({
+                        "placement_id": None, "student_id": item["student_id"], "student": item.get("student", ""), "registration_number": "",
+                        "cohort": (run.result or {}).get("cohort", {}).get("name", ""), "outcome": "unplaced", "facility": None, "ward": None, "mentor": None,
+                        "planned_start": None, "planned_end": None, "state": "", "status": "not_placed", "status_label": STATUS_LABEL["not_placed"],
+                        "reason": item.get("reason", ""), "issues": [], "moved_since": False,
+                    })
                 continue
             ward, mentor = wards.get(placement.id), mentors.get(placement.id)
             arranged_ward = (item.get("ward") or {}).get("id")
@@ -139,6 +147,10 @@ def _summary_rows(run, live, wards, mentors, people):
     out = []
     for outcome_name, source in (("placed", placed), ("unplaced", unplaced)):
         for item in source:
+            if not item.get("placement_id") and outcome_name == "unplaced" and item.get("student_id"):
+                out.append({"outcome": "unplaced", "reason": item.get("reason", ""), "ward": None, "mentor": None,
+                            "arranged_ward": None, "arranged_mentor": None, "facility_id": None})
+                continue
             if not item.get("placement_id") or UUID(item["placement_id"]) not in live:
                 continue
             pid = UUID(item["placement_id"])

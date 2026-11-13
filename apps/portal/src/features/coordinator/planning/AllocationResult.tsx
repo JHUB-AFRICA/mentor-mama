@@ -92,7 +92,7 @@ export function AllocationResult({ runId, user }: { runId: string; user: Current
   const withdraw = useMutation({
     mutationFn: async () => {
       const waiting = await getAllocationRunDetail(runId, { outcome: "requested", page_size: 200 });
-      const ids = waiting.placements.filter((row) => row.status === "requested").map((row) => row.placement_id);
+      const ids = waiting.placements.filter((row) => row.status === "requested").map((row) => row.placement_id).filter((id): id is string => Boolean(id));
       if (ids.length === 0) return { withdrawn: 0 };
       return withdrawFacilityRequests(ids);
     },
@@ -142,7 +142,7 @@ export function AllocationResult({ runId, user }: { runId: string; user: Current
   const canWithdraw = isSplit && run.status !== "undone" && Boolean(user.capabilities.request_facility);
   const rows = view.placements;
   const maxRequested = Math.max(1, ...data.facilities.map((item) => item.requested ?? 0));
-  const askIds = (unplacedForAction.data?.placements ?? []).map((row) => row.placement_id);
+  const askIds = (unplacedForAction.data?.placements ?? []).map((row) => row.placement_id).filter((id): id is string => Boolean(id));
 
   return (
     <AdminPage>
@@ -309,11 +309,11 @@ export function AllocationResult({ runId, user }: { runId: string; user: Current
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.placement_id}>
+                  <tr key={row.placement_id ?? row.student_id ?? row.student}>
                     <td>
                       <div className="pa-cell-title">
                         <span>
-                          <Link to={`/coordinator/placements/${row.placement_id}`}><strong>{row.student}</strong></Link>
+                          {row.placement_id ? <Link to={`/coordinator/placements/${row.placement_id}`}><strong>{row.student}</strong></Link> : <strong>{row.student}</strong>}
                           <small>{row.registration_number || row.cohort}</small>
                         </span>
                       </div>

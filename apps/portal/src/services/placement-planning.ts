@@ -225,6 +225,9 @@ export interface SplitPlan {
   skipped: Array<{ placement_id: string; student?: string; reason: string }>;
   warnings: string[];
   window: { start: string; end: string };
+  /** Cohort-wide plans only: students who have no placement yet and would get one, and everyone considered. */
+  to_create?: number;
+  candidates?: number;
 }
 
 export interface SplitResult {
@@ -247,6 +250,26 @@ export async function previewFacilitySplit(input: SplitInput): Promise<SplitPlan
 /** Applies exactly the reviewed split: the server refuses if capacity changed since `planHash` was shown. */
 export async function applyFacilitySplit(input: SplitInput, planHash: string): Promise<SplitResult> {
   const response = await request<{ data: SplitResult }>("/api/v1/placements/facility-requests", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ ...input, preview: false, expected_plan_hash: planHash }),
+  });
+  return response.data;
+}
+
+/** Cohort-wide: create missing placements and share every student who still needs a facility. */
+export type CohortAutoInput = Omit<SplitInput, "placement_ids">;
+
+export async function previewCohortAutoRequest(cohortId: string, input: CohortAutoInput): Promise<SplitPlan> {
+  const response = await request<{ data: SplitPlan }>(`/api/v1/placements/planning/cohorts/${cohortId}/auto-request`, {
+    method: "POST",
+    body: JSON.stringify({ ...input, preview: true }),
+  });
+  return response.data;
+}
+
+export async function applyCohortAutoRequest(cohortId: string, input: CohortAutoInput, planHash: string): Promise<SplitResult> {
+  const response = await request<{ data: SplitResult }>(`/api/v1/placements/planning/cohorts/${cohortId}/auto-request`, {
     method: "POST",
     headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ ...input, preview: false, expected_plan_hash: planHash }),
@@ -280,7 +303,9 @@ export async function listAllocationRuns(limit = 50, mode?: RunMode): Promise<Al
 }
 
 export interface RunPlacementRow {
-  placement_id: string;
+  /** Null for a student the cohort-wide request found no room for: they have no placement yet. */
+  placement_id: string | null;
+  student_id?: string;
   student: string;
   registration_number: string;
   cohort: string;
