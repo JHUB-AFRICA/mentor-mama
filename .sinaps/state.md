@@ -6,6 +6,12 @@ tier_reason: User-visible learning-module creation bug spans the portal form and
 last_updated: 2026-11-11T00:00:00Z
 ---
 
+## Current session update — Demo card missing after sign-out: stale service worker (2026-11-13)
+
+Symptom: after signing out of a role the sign-in page had no demo card until a reload. Cause: `apps/portal/public/sw.js` answered every non-page GET cache-first and cached every ok same-origin response, API included, and never refreshed it. `/api/v1/auth/demo` was stored while demo mode was off and kept being replayed ("off"); a hard reload bypasses the worker, which is why reloading "fixed" it. Same flaw affects every GET API screen (stale data) and `/api/v1/auth/session`, and on a shared phone could replay one person's cached responses to the next. Fix: the worker never intercepts or caches `/api/` (or anything outside `/assets/` and page loads); pages are network-first with the cached shell only offline; hashed `/assets/` are cache-first; cache name bumped to v2 and activation deletes every older cache (so the polluted v1 cache is purged on its own); `render.yaml` serves `/sw.js` with `Cache-Control: no-cache`. The demo card also keeps its answer while someone is signed in (gcTime 6 h) and re-asks the server whenever the sign-in page appears.
+
+Verified: production build with a stub API that flips demo mode on: old worker stays stuck on "off" with 2 API responses cached, new worker follows immediately with 0 stored; upgrade from a browser holding the old cache clears it; `e2e/service-worker.spec.ts` (4); demo card returns after sign-out without reload for all five roles on the seeded app. Not verified on Render itself (needs the deploy; the open tab needs one reload to pick up the new worker, after that it self-heals).
+
 ## Current session update — Concept-note gaps closed and placement overlap fixed (2026-11-12)
 
 Five areas built in parallel (separate agents, isolated test databases via `scripts/pytest-isolated.sh`, integrated and verified together).

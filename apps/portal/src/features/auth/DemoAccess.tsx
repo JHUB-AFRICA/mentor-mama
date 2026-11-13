@@ -33,7 +33,16 @@ function initialOpen(): boolean {
 }
 
 export function DemoAccess({ onAuthenticated, onFill }: { onAuthenticated: (user: CurrentUser) => void; onFill: (email: string, password: string) => void }) {
-  const accounts = useQuery({ queryKey: ["demo-accounts"], queryFn: getDemoAccounts, staleTime: 60_000, retry: false });
+  // Keep the answer around while someone is signed in (gcTime), so the card is there the instant they sign out, and ask the
+  // server again every time the sign-in page appears (staleTime 0 / refetchOnMount) so a change is never missed.
+  const accounts = useQuery({
+    queryKey: ["demo-accounts"],
+    queryFn: getDemoAccounts,
+    staleTime: 0,
+    refetchOnMount: "always",
+    gcTime: 6 * 60 * 60 * 1000,
+    retry: false,
+  });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
