@@ -20,7 +20,17 @@
 .im-facts dt { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--pa-muted, #607392); }
 .im-facts dd { margin: 0; font-size: 0.9rem; color: var(--pa-ink, #10223b); }
 .im-facts dd small { display: block; color: var(--pa-muted, #607392); font-size: 0.78rem; }
-.im-card__foot { display: flex; justify-content: flex-end; }
+.im-card__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+.im-reminded { margin-right: auto; color: var(--pa-muted, #607392); font-size: 0.82rem; font-weight: 600; }
+.im-live:empty { display: none; }
+.im-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0; border-radius: 0.9rem; padding: 0.7rem 1rem; font-size: 0.86rem; line-height: 1.4; }
+.im-notice span { flex: 1 1 12rem; }
+.im-notice svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.im-notice button { min-height: 2.75rem; border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.im-notice--ok { border: 1px solid #bfe3d0; background: #eef8f3; color: #1f5f41; }
+.im-notice--problem { border: 1px solid #f0cecb; background: #fff2f1; color: #a63b3b; }
+.im-confirm { margin: 0 0 0.6rem; font-weight: 700; color: var(--pa-ink, #10223b); }
+.im-confirm-list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; color: #405675; font-size: 0.9rem; line-height: 1.5; }
 @media (max-width: 560px) {
   .im-controls .im-field { min-width: 0; flex: 1 1 100%; }
   .im-controls .pa-btn, .im-controls button { width: 100%; justify-content: center; }

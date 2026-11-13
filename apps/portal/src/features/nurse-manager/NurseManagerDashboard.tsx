@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Activity, Building2, HeartHandshake, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, UserX, Users } from "lucide-react";
+import { Activity, Building2, HeartHandshake, Inbox, ListChecks, Wand2, CheckCircle2, ClipboardList, ShieldAlert, UserPlus, UserX, Users } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { BarList } from "../../components/charts";
 import { greetingFor } from "../../lib/greeting";
+import { followUpKeys, listFollowUps } from "../../services/follow-ups";
 import { getMentorActivity } from "../../services/mentor-activity";
+import { useIncomingSummary } from "../../services/incoming-requests";
 import { getDashboardIndicators, getFacilities, getFacilityMentors, getIncomingPlacements, getOrphanedPlacements, getPlacements, getWards, type CurrentUser } from "../../services/api";
 import {
   AdminButton,
@@ -40,6 +42,14 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
   const orphans = orphaned.data ?? [];
   const quiet = useQuery({ queryKey: ["facility-inactive-mentors", 14], queryFn: () => getMentorActivity(14), staleTime: 15_000 });
   const quietMentors = (quiet.data?.results ?? []).filter((row) => row.inactive);
+  const supervisor = useQuery({
+    queryKey: [...followUpKeys.all, "dashboard"],
+    queryFn: () => listFollowUps({ status: "pending", pageSize: 3 }),
+    staleTime: 15_000,
+    retry: false,
+  });
+  const supervisorCounts = supervisor.data?.meta?.counts;
+  const requests = useIncomingSummary();
   const [arranging, setArranging] = useState(false);
   const incomingCount = incoming.data?.length ?? 0;
   const n = (key: string) => indicators.data?.indicators[key] ?? 0;
@@ -135,6 +145,66 @@ export function NurseManagerDashboard({ user, onError }: { user: CurrentUser; on
             ))}
           </AdminCard>
         )}
+
+        {requests.data && requests.data.total_requested > 0 ? (
+          <AdminCard
+            className="nm-incoming-requests"
+            titleId="incoming-requests-card"
+            title={`Incoming placement requests: ${requests.data.total_requested} ${requests.data.total_requested === 1 ? "student is" : "students are"} waiting`}
+            description={
+              requests.data.over_capacity
+                ? "Your wards do not have room for everyone on these dates. Check the capacity, then arrange or decline."
+                : "Schools have asked your facility to host these students. Arrange them in your wards, or decline with a reason."
+            }
+            action={<AdminButton size="sm" icon={<Inbox />} onClick={() => go("/facility/requests")}>Review requests</AdminButton>}
+            flush
+          >
+            <div className="pa-list">
+              {requests.data.groups.slice(0, 3).map((group) => (
+                <ListRow
+                  key={`${group.institution.id}-${group.cohort.id}-${group.planned_start}`}
+                  icon={<Inbox />}
+                  tone={group.over_capacity ? "rose" : "amber"}
+                  title={group.institution.name}
+                  meta={`${group.cohort.name} · ${group.count} ${group.count === 1 ? "student" : "students"}`}
+                  trailing={group.over_capacity ? <StatusPill tone="warning">Short of room</StatusPill> : undefined}
+                  onClick={() => go("/facility/requests")}
+                />
+              ))}
+            </div>
+          </AdminCard>
+        ) : null}
+
+        {supervisor.isPending ? (
+          <Skeleton className="h-24" />
+        ) : supervisorCounts && supervisorCounts.pending > 0 ? (
+          <AdminCard
+            className="nm-supervisor-follow-ups"
+            titleId="supervisor-follow-ups-card"
+            title={`${supervisorCounts.pending} supervisor ${supervisorCounts.pending === 1 ? "follow-up is" : "follow-ups are"} waiting`}
+            description={
+              supervisorCounts.overdue > 0
+                ? `Mentors asked for your review after a session. ${supervisorCounts.overdue} ${supervisorCounts.overdue === 1 ? "has" : "have"} been waiting over a week.`
+                : "Mentors asked for your review after a session. A short conversation usually settles it."
+            }
+            action={<AdminButton variant="ghost" size="sm" onClick={() => go("/facility/follow-ups")}>Open follow-ups</AdminButton>}
+            flush
+          >
+            <div className="pa-list">
+              {supervisor.data!.data.map((item) => (
+                <ListRow
+                  key={item.session_id}
+                  icon={<ListChecks />}
+                  tone={item.overdue ? "rose" : "amber"}
+                  title={item.student?.name ?? "Assigned student"}
+                  meta={`Asked by ${item.mentor?.name ?? "the mentor"} · ${item.session_type_label}`}
+                  trailing={item.overdue ? <StatusPill tone="warning">Overdue</StatusPill> : undefined}
+                  onClick={() => go("/facility/follow-ups")}
+                />
+              ))}
+            </div>
+          </AdminCard>
+        ) : null}
 
         {quiet.isPending ? (
           <Skeleton className="h-24" />

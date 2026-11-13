@@ -11,7 +11,7 @@ type PreferenceKey = keyof Omit<Preferences, "security_alerts">;
 const groups: Array<{ title: string; fields: Array<{ key: PreferenceKey; title: string; detail: string }> }> = [
   {
     title: "Mentoring",
-    fields: [{ key: "account_activity", title: "Session follow-ups", detail: "Reminders when a mentoring session needs a follow-up." }],
+    fields: [{ key: "account_activity", title: "Session follow-ups", detail: "Reminders when a mentoring session needs a follow-up, and friendly nudges from your manager to log a session." }],
   },
   {
     title: "Programme",

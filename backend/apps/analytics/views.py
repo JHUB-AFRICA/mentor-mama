@@ -3,7 +3,7 @@ from django.core import signing
 from django.http import FileResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -100,6 +100,56 @@ class MentorActivityView(APIView):
             except ValueError:
                 facility_id = None
         data = mentor_activity.mentor_activity(actor=request.user, days=request.query_params.get("days"), facility_id=facility_id)
+        return Response({"data": data})
+
+
+class _ReminderBody(serializers.Serializer):
+    days = serializers.IntegerField(required=False, allow_null=True, default=None)
+    facility_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+
+class MentorReminderBulkBody(_ReminderBody):
+    mentor_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_null=True, default=None)
+    all_listed = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if bool(attrs.get("all_listed")) == bool(attrs.get("mentor_ids")):
+            raise serializers.ValidationError("Choose mentors, or remind all listed.")
+        return attrs
+
+
+class MentorReminderView(APIView):
+    """Remind one mentor on the inactive list (nurse manager of their facility, or programme admin)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, mentor_id):
+        from apps.analytics import mentor_reminders
+
+        body = _ReminderBody(data=request.data)
+        body.is_valid(raise_exception=True)
+        result = mentor_reminders.remind_one(
+            actor=request.user, mentor_id=mentor_id, days=body.validated_data["days"],
+            facility_id=body.validated_data["facility_id"],
+        )
+        return Response({"data": result}, status=status.HTTP_201_CREATED)
+
+
+class MentorReminderBulkView(APIView):
+    """Remind several listed mentors (or all who can be reminded now); capped and safe to repeat."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.analytics import mentor_reminders
+
+        body = MentorReminderBulkBody(data=request.data)
+        body.is_valid(raise_exception=True)
+        value = body.validated_data
+        data = mentor_reminders.remind(
+            actor=request.user, mentor_ids=None if value["all_listed"] else value["mentor_ids"],
+            days=value["days"], facility_id=value["facility_id"],
+        )
         return Response({"data": data})
 
 

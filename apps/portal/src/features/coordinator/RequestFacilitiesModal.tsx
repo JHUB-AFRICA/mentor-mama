@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Building2, Shuffle } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { Modal } from "../../components/kit";
@@ -22,6 +23,7 @@ export function RequestFacilitiesModal({
   facilities: Array<{ id: string; name: string }>;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { pushToast } = useToast();
   const [selected, setSelected] = useState<string[]>([]);
   const [mode, setMode] = useState<FacilityRequestInput["mode"]>("capacity");
@@ -48,6 +50,9 @@ export function RequestFacilitiesModal({
       pushToast({ kind: "success", title: "Facilities notified", message: `${data.requested} students requested. Nurse managers have been emailed.` });
       void queryClient.invalidateQueries();
       onClose();
+      // Show the full result (who went where, who did not and why) on its own page.
+      const runId = (data as typeof data & { run_id?: string }).run_id;
+      if (runId) navigate(`/coordinator/placements/runs/${runId}`);
     },
     onError: (error) => pushToast({ kind: "error", title: "Could not send requests", message: error instanceof Error ? error.message : "Try again." }),
   });

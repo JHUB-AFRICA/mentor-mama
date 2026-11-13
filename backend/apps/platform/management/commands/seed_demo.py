@@ -13,6 +13,12 @@ back-dated. No email is sent while seeding: the outbox events it creates are tur
 marked delivered. Only the two real addresses you pass in can ever receive demo mail (see DEMO_EMAIL_ALLOWLIST); all
 other people use ``@<DEMO_EMAIL_DOMAIN>`` addresses that are never emailed.
 
+A **next cohort** at each school (about 58 and 25 students) starts shortly and is deliberately left at different
+points of the placement pipeline, all created through the real services: students with no placement yet, a block
+waiting for a facility request (so the presenter can run the automatic split live), a block already requested of a
+facility (its nurse manager sees incoming requests and a capacity warning), a block arranged by a real allocation run
+(some unplaced, with reasons), students shared with and released to, a declined request, and two placement batches.
+
 One-tap sign-in on the login screen only works while DEMO_MODE=true on the server.
 """
 
@@ -24,6 +30,7 @@ import random
 import uuid
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -44,8 +51,10 @@ from apps.learning import certificates, versioning
 from apps.learning.models import Lesson, ModuleCompletion, Quiz, QuizAttempt, QuizQuestion, TrainingModule
 from apps.mentorship.models import Session, SessionFollowUp, SessionTopic
 from apps.notifications import services as notification_services
+from apps.placements import allocation, notices, planning
 from apps.placements import services as placement_services
-from apps.placements.models import MentorAssignment, Placement, State, StudentAssignment, WardAssignment
+from apps.placements.models import AllocationRun, MentorAssignment, Placement, PlacementBatch, State, StudentAssignment, WardAssignment
+from apps.placements.tasks import run_placement_batch
 from apps.safeguarding import services as safeguarding_services
 from apps.safeguarding.models import ResolutionOutcome
 
@@ -194,7 +203,29 @@ MENTORS = [
     ("Lucy", "Akinyi", "greenville", {"cadre": "Registered midwife", "department": "Antenatal ward", "years_of_practice": 10, "mentorship_experience_years": 4, "digital_literacy": 4}),
     ("Mary", "Ndunge", "lakeview", {"cadre": "Registered midwife", "department": "Labour ward", "years_of_practice": 9, "mentorship_experience_years": 4, "digital_literacy": 3}),
     ("Samuel", "Mwangi", "lakeview", {"cadre": "Registered nurse-midwife", "department": "Postnatal ward", "years_of_practice": 6, "mentorship_experience_years": 1, "digital_literacy": 3}),
+    # Added for the next cohort, so a large intake has enough mentors to spread across.
+    ("Agnes", "Wafula", "greenville", {"cadre": "Registered midwife", "department": "Labour ward", "years_of_practice": 11, "mentorship_experience_years": 5, "digital_literacy": 4}),
+    ("Hassan", "Omar", "greenville", {"cadre": "Registered nurse-midwife", "department": "Antenatal ward", "years_of_practice": 7, "mentorship_experience_years": 2, "digital_literacy": 3}),
+    ("Rose", "Kerubo", "lakeview", {"cadre": "Registered midwife", "department": "Labour ward", "years_of_practice": 13, "mentorship_experience_years": 7, "digital_literacy": 4}),
 ]
+
+# How many more students each mentor can take. Lucy is already at her limit; the others leave room for the next cohort.
+MENTOR_LIMITS = {"Esther": 12, "Joseph": 10, "Lucy": 1, "Agnes": 8, "Hassan": 6, "Mary": 8, "Samuel": 6, "Rose": 6}
+
+FIRST_NAMES = ["Amina", "Brenda", "Caleb", "Doreen", "Elijah", "Felix", "Gladys", "Harun", "Irene", "Job", "Kendi", "Lydia", "Moses", "Nancy", "Oscar",
+               "Purity", "Quentin", "Rebecca", "Silas", "Trizah", "Ursula", "Victor", "Wanjiku", "Yusuf", "Zawadi", "Abigael", "Boniface", "Cecilia",
+               "Daudi", "Edna", "Felista", "George", "Hilda", "Ibrahim", "Jacinta", "Kelvin", "Linet", "Martin", "Njoki", "Omondi", "Pauline", "Ronald",
+               "Sharon", "Titus", "Vivian", "Wycliffe", "Alice", "Barnabas", "Carol", "Dickson"]
+LAST_NAMES = ["Abuga", "Bett", "Cheruiyot", "Dola", "Ekiru", "Gitau", "Hinga", "Imbuga", "Juma", "Kariuki", "Lagat", "Macharia", "Nyongesa", "Ogola",
+              "Pesa", "Rotich", "Simiyu", "Tanui", "Wekesa", "Yego", "Zulu", "Adhiambo", "Barasa", "Chelimo", "Kosgei", "Langat", "Maina", "Njuguna",
+              "Oduor", "Wafula", "Mburu", "Kirui", "Ngugi", "Odhiambo", "Waweru", "Kamau", "Ochieng", "Muriuki", "Sang", "Kibet", "Tuwei", "Owino"]
+
+#: The next cohort at each school. Counts per pipeline block are set in ``_next_cohort_stages``.
+NEXT_COHORTS = {
+    "msn": {"name": "BSc Midwifery Year 3, 2026 Intake B", "students": 58, "start_offset": 14, "reg": "SN", "reg_base": 2000, "planned_capacity": 60},
+    "rosami": {"name": "Diploma in Midwifery, 2026 Block 3", "students": 25, "start_offset": 21, "reg": "MW", "reg_base": 3000, "planned_capacity": 30},
+}
+PLACEMENT_LENGTH_DAYS = 63
 
 # key, first, last, institution, scenario, ward, mentor first-name, start offset (days from today), length (days), baseline, final, sessions
 STUDENTS = [
@@ -263,6 +294,7 @@ class Command(BaseCommand):
             self._training()
             self._library()
             self._placements()
+            self._next_cohorts()
             self._feedback_and_concerns()
             self._finish_people()
         self._notifications(started)
@@ -319,8 +351,11 @@ class Command(BaseCommand):
             "lakeview": Facility.objects.create(program=self.program, name="Lakeview Maternity Hospital", county="Machakos", level="Level 5",
                                                 maternity_unit_name="Maternity Unit", contact_person="David Mutua", contact_email=f"maternity.lakeview@{self.domain}", contact_phone="+254700000202"),
         }
-        wards = {"greenville": [("Labour Ward", 4, "Day, evening and night shifts"), ("Postnatal Ward", 3, "Day and night shifts"), ("Antenatal Ward", 3, "Day shift"), ("Maternity Theatre", 2, "On call")],
-                 "lakeview": [("Labour Ward", 3, "Day, evening and night shifts"), ("Postnatal Ward", 3, "Day and night shifts"), ("Antenatal Ward", 2, "Day shift")]}
+        # Capacities leave room for a large next cohort, but not quite enough: the Antenatal and Theatre wards start small and
+        # are enlarged after the first allocation run (see ``_next_cohort_stages``), so "retry unplaced" has something to do.
+        wards = {"greenville": [("Labour Ward", 12, "Day, evening and night shifts"), ("Postnatal Ward", 8, "Day and night shifts"), ("Antenatal Ward", 3, "Day shift"),
+                                ("Maternity Theatre", 2, "On call"), ("High Dependency Unit", 2, "Day and night shifts")],
+                 "lakeview": [("Labour Ward", 8, "Day, evening and night shifts"), ("Postnatal Ward", 8, "Day and night shifts"), ("Antenatal Ward", 5, "Day shift")]}
         self.wards = {(fk, name): Ward.objects.create(facility=self.facilities[fk], name=name, max_students=cap, shift_pattern=shift)
                       for fk, rows in wards.items() for name, cap, shift in rows}
 
@@ -524,6 +559,118 @@ class Command(BaseCommand):
                     note="Covered on the next shift." if follow == "review_next_shift" else "",
                     resolved_at=submitted + dt.timedelta(days=2),
                 )
+
+    # ------------------------------------------------------------------ next cohorts (the allocation story)
+
+    def _bulk_students(self, key, cohort, spec):
+        """Create a cohort's students in a few queries: one password hash is reused, never one per person."""
+        hashed = make_password(self.password)
+        taken = set(User.objects.values_list("email", flat=True))
+        rows, people = [], []
+        for index in range(spec["students"]):
+            first = FIRST_NAMES[(index * 7 + len(key)) % len(FIRST_NAMES)]
+            last = LAST_NAMES[(index * 11 + 3 * len(key)) % len(LAST_NAMES)]
+            email, suffix = self._email(first, last), 1
+            while email in taken:
+                suffix += 1
+                email = self._email(f"{first}{suffix}", last)
+            taken.add(email)
+            rows.append(User(
+                email=email, password=hashed, first_name=first, last_name=last, role=Role.STUDENT, status=Status.ACTIVE, program=self.program,
+                institution_id=self.institutions[key].id, registration_number=f"{spec['reg']}{self.today.year}/{spec['reg_base'] + index}",
+                phone=f"+2547{self.rng.randint(10000000, 99999999)}", email_verified_at=timezone.now(),
+            ))
+        people = User.objects.bulk_create(rows, batch_size=100)
+        CohortMembership.objects.bulk_create([CohortMembership(cohort=cohort, student=person) for person in people])
+        course = "BSc Midwifery" if key == "msn" else "Diploma in Midwifery"
+        StudentProfile.objects.bulk_create([
+            StudentProfile(student=person, course_name=course, year_of_study=3 if key == "msn" else 2, emergency_contact_name=f"{self.rng.choice(['Susan', 'James', 'Ruth', 'Paul'])} {person.last_name}",
+                           emergency_contact_phone="+254700000999", emergency_contact_relationship=self.rng.choice(["Parent", "Sibling", "Guardian"]))
+            for person in people
+        ])
+        return people
+
+    def _placement_batch(self, coordinator, cohort, students, start, end, *, extra_ids=(), age_days=1):
+        """Create the students' placements through a real placement batch, so Batch activity has history."""
+        batch = PlacementBatch.objects.create(
+            actor_id=coordinator.id, cohort_id=cohort.id, planned_start=start, planned_end=end,
+            student_ids=[str(person.id) for person in students] + [str(value) for value in extra_ids],
+        )
+        run_placement_batch(batch)
+        PlacementBatch.objects.filter(id=batch.id).update(created_at=timezone.now() - dt.timedelta(days=age_days))
+        by_student = dict(StudentAssignment.objects.filter(placement_id__in=batch.created_placement_ids, ended_at=None).values_list("student_id", "placement_id"))
+        return by_student
+
+    def _backdate_requests(self, placement_ids, days):
+        Placement.objects.filter(id__in=placement_ids).update(requested_at=timezone.now() - dt.timedelta(days=days))
+
+    def _next_cohorts(self):
+        """A big cohort at each school, left at different points of the pipeline (see the module docstring)."""
+        for first, limit in MENTOR_LIMITS.items():
+            User.objects.filter(id=self.mentors[first].id).update(max_active_placements=limit)
+        self.next_cohorts = {}
+        for key, spec in NEXT_COHORTS.items():
+            start = self.today + dt.timedelta(days=spec["start_offset"])
+            cohort = Cohort.objects.create(institution=self.institutions[key], name=spec["name"], start_date=start,
+                                           end_date=start + dt.timedelta(days=PLACEMENT_LENGTH_DAYS + 90), planned_capacity=spec["planned_capacity"])
+            audit.record(actor=self.admin, action="cohort.created", entity_table="institutions_cohort", entity_id=cohort.id, scope={"program_id": str(self.program.id)})
+            self.next_cohorts[key] = {"cohort": cohort, "students": self._bulk_students(key, cohort, spec), "start": start, "end": start + dt.timedelta(days=PLACEMENT_LENGTH_DAYS)}
+        self._next_cohort_stages_msn()
+        self._next_cohort_stages_rosami()
+
+    def _share_and_release(self, coordinator, arranged_rows, *, share, release):
+        """Share the first ``share`` trained-mentor students with their students, and release the first ``release`` of those."""
+        eligible = [row for row in arranged_rows if row.get("mentor") and row["mentor"].get("trained")]
+        shared = [uuid.UUID(row["placement_id"]) for row in eligible[:share]]
+        if shared:
+            notices.share_with_students(actor=coordinator, placement_ids=shared)
+        if release:
+            planning.release_placements(actor=coordinator, placement_ids=shared[:release])
+        return shared
+
+    def _next_cohort_stages_msn(self):
+        data = self.next_cohorts["msn"]
+        people, cohort, start, end = data["students"], data["cohort"], data["start"], data["end"]
+        peter, grace, david = self.coordinators["msn"], self.managers["greenville"], self.managers["lakeview"]
+        # 4 not placed yet · 2 declined · 24 requested of Greenville and arranged by a run · 14 requested and waiting · 14 not yet requested
+        not_placed, declined, run_block, pending, fresh = people[:4], people[4:6], people[6:30], people[30:44], people[44:58]
+        tom = self.students["tom"]  # a student of the current cohort: shows a "not enrolled" skip in the batch result
+        by_student = self._placement_batch(peter, cohort, [*declined, *run_block, *pending, *fresh], start, end, extra_ids=[tom.id], age_days=2)
+        ids = lambda group: [by_student[person.id] for person in group]  # noqa: E731
+
+        # Greenville is asked for the big block 3 days ago; its manager arranges it with one click.
+        allocation.request_facility(actor=peter, placement_ids=ids(run_block), facility_id=self.facilities["greenville"].id)
+        self._backdate_requests(ids(run_block), 3)
+        # Lakeview was asked for two students and said no.
+        allocation.request_facility(actor=peter, placement_ids=ids(declined), facility_id=self.facilities["lakeview"].id)
+        allocation.decline_requests(actor=david, placement_ids=ids(declined), reason="Maternity unit is at capacity for these dates. Please ask another facility.")
+        result = allocation.apply_auto_arrange(actor=grace, placement_ids=ids(run_block), strategy="balanced", seed="demorun1")
+        AllocationRun.objects.filter(id=result["run_id"]).update(created_at=timezone.now() - dt.timedelta(hours=3))
+        # Afterwards the hospital enlarges two wards, so retrying the unplaced students would now succeed.
+        for ward_key, size in ((("greenville", "Antenatal Ward"), 8), (("greenville", "Maternity Theatre"), 4)):
+            placement_services.update_programme_ward(actor=self.admin, ward_id=self.wards[ward_key].id, max_students=size)
+        # A second block arrives later than the run, and is longer than what is left: the manager sees a capacity warning.
+        allocation.request_facility(actor=peter, placement_ids=ids(pending), facility_id=self.facilities["greenville"].id)
+        self._backdate_requests(ids(pending), 1)
+        self._share_and_release(peter, result["arranged"], share=8, release=4)
+        data.update(not_placed=not_placed, run_id=result["run_id"], pending=ids(pending), fresh=ids(fresh), run_block=ids(run_block))
+
+    def _next_cohort_stages_rosami(self):
+        data = self.next_cohorts["rosami"]
+        people, cohort, start, end = data["students"], data["cohort"], data["start"], data["end"]
+        mercy, david = self.coordinators["rosami"], self.managers["lakeview"]
+        # 3 not placed yet · 12 requested of Lakeview and arranged · 6 requested and waiting · 4 not yet requested
+        not_placed, run_block, pending, fresh = people[:3], people[3:15], people[15:21], people[21:25]
+        by_student = self._placement_batch(mercy, cohort, [*run_block, *pending, *fresh], start, end, age_days=1)
+        ids = lambda group: [by_student[person.id] for person in group]  # noqa: E731
+        allocation.request_facility(actor=mercy, placement_ids=ids(run_block), facility_id=self.facilities["lakeview"].id)
+        self._backdate_requests(ids(run_block), 2)
+        result = allocation.apply_auto_arrange(actor=david, placement_ids=ids(run_block), strategy="balanced", seed="demorun2")
+        AllocationRun.objects.filter(id=result["run_id"]).update(created_at=timezone.now() - dt.timedelta(hours=2))
+        allocation.request_facility(actor=mercy, placement_ids=ids(pending), facility_id=self.facilities["lakeview"].id)
+        self._backdate_requests(ids(pending), 1)
+        self._share_and_release(mercy, result["arranged"], share=4, release=0)
+        data.update(not_placed=not_placed, run_id=result["run_id"], pending=ids(pending), fresh=ids(fresh), run_block=ids(run_block))
 
     # ------------------------------------------------------------------ feedback and concerns
 

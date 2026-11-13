@@ -133,6 +133,7 @@ class FollowUpListView(APIView):
         result = followups.listing(request.user, followups.Filters(
             status=value["status"], action=value["action"],
             placement_id=str(value["placement_id"] or ""), student_id=str(value["student_id"] or ""),
+            mentor_id=str(value["mentor_id"] or ""),
             min_age_days=value["min_age_days"], page=value["page"], page_size=value["page_size"],
         ))
         return Response(result)

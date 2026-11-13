@@ -105,6 +105,7 @@ class Filters:
     action: str = ""
     placement_id: str = ""
     student_id: str = ""
+    mentor_id: str = ""
     min_age_days: int | None = None
     page: int = 1
     page_size: int = PAGE_SIZE_DEFAULT
@@ -126,6 +127,8 @@ def listing(actor, filters: Filters, *, today: dt.date | None = None) -> dict:
             placement__student_assignments__student_id=filters.student_id,
             placement__student_assignments__ended_at__isnull=True,
         )
+    if filters.mentor_id:
+        rows = rows.filter(mentor_assignment__mentor_id=filters.mentor_id)
     if filters.min_age_days is not None:
         rows = rows.filter(session_date__lte=today - dt.timedelta(days=filters.min_age_days))
 
@@ -141,7 +144,7 @@ def listing(actor, filters: Filters, *, today: dt.date | None = None) -> dict:
     pages = max(1, -(-total // page_size))
     page = max(1, min(filters.page, pages))
     window = (
-        rows.select_related("follow_up_resolution__resolved_by", "placement__facility")
+        rows.select_related("follow_up_resolution__resolved_by", "placement__facility", "mentor_assignment__mentor")
         .prefetch_related(
             "topics",
             "placement__student_assignments__student",
@@ -155,6 +158,7 @@ def listing(actor, filters: Filters, *, today: dt.date | None = None) -> dict:
             "counts": counts(actor, today=today),
             "kinds": kind_options(),
             "students": students(actor),
+            "mentors": mentors(actor),
         },
     }
 
@@ -176,6 +180,18 @@ def students(actor) -> list[dict]:
     return sorted(seen.values(), key=lambda row: row["name"].lower())
 
 
+def mentors(actor) -> list[dict]:
+    """Mentors who logged a follow-up in scope (any state), for the filter control (names only)."""
+    from apps.identity.models import User
+
+    ids = scope_queryset(actor).values("mentor_assignment__mentor_id")
+    rows = User.objects.filter(id__in=ids)
+    return sorted(
+        ({"id": str(user.id), "name": user.full_name or user.email} for user in rows),
+        key=lambda row: row["name"].lower(),
+    )
+
+
 def _student_of(session: Session) -> dict | None:
     for row in session.placement.student_assignments.all():
         if row.ended_at is None:
@@ -185,7 +201,7 @@ def _student_of(session: Session) -> dict | None:
 
 def detail(session_id, *, today: dt.date | None = None) -> dict:
     session = (
-        Session.objects.select_related("follow_up_resolution__resolved_by", "placement__facility")
+        Session.objects.select_related("follow_up_resolution__resolved_by", "placement__facility", "mentor_assignment__mentor")
         .prefetch_related("topics", "placement__student_assignments__student", "placement__ward_assignments__ward")
         .get(id=session_id)
     )
@@ -198,12 +214,14 @@ def present(session: Session, today: dt.date) -> dict:
     resolution = getattr(session, "follow_up_resolution", None)
     age = max((today - session.session_date).days, 0)
     pending = resolution is None
+    mentor = session.mentor_assignment.mentor
     ward = next((row.ward for row in session.placement.ward_assignments.all() if row.ended_at is None), None)
     return {
         "session_id": str(session.id),
         "placement_id": str(session.placement_id),
         "placement_state": session.placement.state,
         "student": _student_of(session),
+        "mentor": {"id": str(mentor.id), "name": mentor.full_name or mentor.email} if mentor else None,
         "ward": ward.name if ward else None,
         "session_date": session.session_date.isoformat(),
         "session_type": session.session_type,

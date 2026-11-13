@@ -337,6 +337,8 @@ def allocate_ward(placement_id: UUID, ward_id: UUID, *, actor, override_reason: 
         ward = facilities.lock_ward(ward_id)          # INV-16: lock before counting
         if ward is None:
             raise errors.UnauthorizedFacilityAccess()
+        if ward.archived_at is not None or ward.facility.archived_at is not None:
+            raise errors.InvalidTransition("That ward is archived, so no one can be placed there. Choose another ward.")
         # A draft has no derived facility yet. Facility operators are scoped by
         # the ward they are admitting into; the placement facility is derived
         # only after this check succeeds (INV-17).
@@ -482,6 +484,7 @@ def assign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, override_reason
         placement = _lock(placement_id)
         identity.require_scope(actor, institution_id=placement.institution_id, facility_id=placement.facility_id)
         _reject_closed(placement)
+        identity.lock_mentor(mentor_id)  # serialise concurrent assignments of the same mentor's last places
         policy = identity.mentor_assignment_policy(mentor_id=mentor_id, facility_id=placement.facility_id)
         if not policy["available"]:
             raise errors.InvalidTransition(policy["reason"])
@@ -517,6 +520,7 @@ def reassign_mentor(placement_id: UUID, mentor_id: UUID, *, actor, reason: str =
             raise errors.InvalidTransition("This placement has no mentor to reassign.")
         if current.mentor_id == mentor_id:
             raise errors.MentorAlreadyAssigned()
+        identity.lock_mentor(mentor_id)
         policy = identity.mentor_assignment_policy(mentor_id=mentor_id, facility_id=placement.facility_id)
         if not policy["available"]:
             raise errors.InvalidTransition(policy["reason"])

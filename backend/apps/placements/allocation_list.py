@@ -31,40 +31,56 @@ def _status(placement, has_ward: bool, has_mentor: bool) -> str:
     return "Awaiting ward or mentor"
 
 
-def rows_for(actor, *, cohort_id=None, file_format: str = "") -> list[dict]:
+def rows_for(actor, *, cohort_id=None, run_id=None, file_format: str = "") -> list[dict]:
+    """The list's rows: every placement the actor may see, optionally for one cohort or one allocation run."""
+    import uuid
+
+    from apps.placements.models import MentorAssignment, StudentAssignment, WardAssignment
+
     identity.require_capability(actor, "download_allocation_list")
     scope = identity.resolve_scope(actor)
-    placements = selectors.in_scope(scope).select_related("cohort", "facility", "requested_facility").order_by("cohort__name", "planned_start")
+    placements = selectors.in_scope(scope).select_related("cohort", "facility", "requested_facility").order_by("cohort__name", "planned_start", "id")
     if cohort_id:
-        import uuid
-
         try:
             cohort_id = uuid.UUID(str(cohort_id))
         except ValueError as exc:
             raise errors.InvalidTransition("Choose a valid cohort.") from exc
         placements = placements.filter(cohort_id=cohort_id)
+    if run_id:
+        from apps.placements.allocation_results import _stored_rows, _visible_run
+
+        try:
+            run = _visible_run(actor, uuid.UUID(str(run_id)))
+        except ValueError as exc:
+            raise errors.InvalidTransition("Choose a valid allocation run.") from exc
+        placed, unplaced = _stored_rows(run)
+        placements = placements.filter(id__in=[r["placement_id"] for r in [*placed, *unplaced] if r.get("placement_id")])
+    placements = list(placements)
+    ids = [p.id for p in placements]
+    # Three queries for the whole list, not three per student.
+    students = {a.placement_id: a.student for a in StudentAssignment.objects.filter(placement_id__in=ids, ended_at=None).select_related("student")}
+    wards = {a.placement_id: a.ward for a in WardAssignment.objects.filter(placement_id__in=ids, ended_at=None).select_related("ward")}
+    mentors = {a.placement_id: a.mentor for a in MentorAssignment.objects.filter(placement_id__in=ids, ended_at=None).select_related("mentor")}
     out = []
     for placement in placements:
-        student = placement.student_assignments.filter(ended_at=None).select_related("student").first()
-        ward = placement.ward_assignments.filter(ended_at=None).select_related("ward").first()
-        mentor = placement.mentor_assignments.filter(ended_at=None).select_related("mentor").first()
+        student, ward, mentor = students.get(placement.id), wards.get(placement.id), mentors.get(placement.id)
         facility = placement.facility.name if placement.facility else (f"Requested: {placement.requested_facility.name}" if placement.requested_facility else "")
         out.append({
-            "student": student.student.full_name if student else "",
-            "registration_number": (student.student.registration_number or "") if student else "",
+            "student": student.full_name if student else "",
+            "registration_number": (student.registration_number or "") if student else "",
             "cohort": placement.cohort.name,
             "facility": facility,
-            "ward": ward.ward.name if ward else "",
-            "mentor": mentor.mentor.full_name if mentor else "",
+            "ward": ward.name if ward else "",
+            "mentor": mentor.full_name if mentor else "",
             "dates": f"{placement.planned_start:%d %b %Y} – {placement.planned_end:%d %b %Y}",  # CSV format unchanged
             "planned_start": placement.planned_start,
             "planned_end": placement.planned_end,
-            "status": _status(placement, bool(ward), bool(mentor)),
+            "status": _status(placement, ward is not None, mentor is not None),
         })
     audit.record(actor=actor, action="export.allocation_list", entity_table="placements_placement", entity_id=actor.id,
                  scope={"program_id": str(actor.program_id), "institution_id": str(actor.institution_id) if actor.institution_id else None,
                         "facility_id": str(actor.facility_id) if actor.facility_id else None},
-                 changes={"rows": len(out), "format": file_format, "cohort_id": str(cohort_id) if cohort_id else None})
+                 changes={"rows": len(out), "format": file_format, "cohort_id": str(cohort_id) if cohort_id else None, "run_id": str(run_id) if run_id else None})
     return out
 
 

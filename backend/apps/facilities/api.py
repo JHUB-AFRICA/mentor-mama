@@ -20,6 +20,14 @@ def facility_belongs_to_program(*, facility_id: UUID, program_id: UUID) -> bool:
     ).exists()
 
 
+def active_facilities(*, program_id: UUID, facility_ids=None):
+    """Active (not archived) facilities of a programme, optionally limited to some ids."""
+    queryset = Facility.objects.filter(program_id=program_id, archived_at=None)
+    if facility_ids is not None:
+        queryset = queryset.filter(id__in=list(facility_ids))
+    return queryset.order_by("name")
+
+
 def active_directory_counts(*, program_id: UUID) -> tuple[int, int]:
     facilities = Facility.objects.filter(program_id=program_id, archived_at=None)
     facility_count = facilities.count()

@@ -1,5 +1,5 @@
-import { Check, Info, MessageCircle, RefreshCw, Wrench } from "lucide-react";
-import { Button } from "@mentormama/ui";
+import { useEffect, useRef, useState } from "react";
+import { CloudOff, RefreshCw, WifiOff } from "lucide-react";
 import { supportEmail } from "../lib/site";
 
 type PortalErrorStateProps = {
@@ -9,74 +9,85 @@ type PortalErrorStateProps = {
   supportHref?: string;
 };
 
+/** Browsers report this reliably when there is no connection at all. */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online;
+}
+
+/**
+ * Shown when a screen cannot load. Deliberately small and calm: what happened, one clear action, one quiet way to get help.
+ * If the device is offline it says so, and it tries again by itself the moment the connection returns.
+ */
 export function PortalErrorState({
-  title = "We couldn’t load this page",
-  message = "The information is temporarily unavailable. This might be due to a connection issue or scheduled maintenance.",
+  title,
+  message,
   onRetry,
   supportHref = `mailto:${supportEmail}?subject=MentorMAMA portal support`,
 }: PortalErrorStateProps) {
+  const online = useOnline();
+  const [retrying, setRetrying] = useState(false);
+  const wasOffline = useRef(!online);
+  const timer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  function retry() {
+    setRetrying(true);
+    onRetry();
+    // The screen swaps this card out when the request succeeds; if it fails again, stop the spinner.
+    timer.current = window.setTimeout(() => setRetrying(false), 1200);
+  }
+
+  // Coming back online after being offline: try once without making the person press anything.
+  useEffect(() => {
+    if (!online) {
+      wasOffline.current = true;
+      return;
+    }
+    if (wasOffline.current) {
+      wasOffline.current = false;
+      retry();
+    }
+  }, [online]);
+
+  const Icon = online ? CloudOff : WifiOff;
+  const heading = title ?? (online ? "We couldn’t load this page" : "You appear to be offline");
+  const body =
+    message ??
+    (online
+      ? "Something on our side is taking a moment. Your work is safe. Please try again."
+      : "Check your connection. This page will reload by itself as soon as you are back online.");
+
   return (
     <div className="portal-error-state-stack">
       <section className="portal-error-state" role="alert" aria-live="polite">
-        <div className="portal-error-illustration" aria-hidden="true">
-          <span className="portal-error-cloud portal-error-cloud--one" />
-          <span className="portal-error-cloud portal-error-cloud--two" />
-          <span className="portal-error-document">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span className="portal-error-mark">!</span>
-          <span className="portal-error-spark portal-error-spark--one" />
-          <span className="portal-error-spark portal-error-spark--two" />
-          <span className="portal-error-spark portal-error-spark--three" />
-        </div>
-        <h2>{title}</h2>
-        <p>{message}</p>
-        <div className="portal-error-actions">
-          <Button type="button" onClick={onRetry}>
-            <RefreshCw size={17} aria-hidden="true" />
-            Try again
-          </Button>
-          <Button variant="tertiary" to={supportHref}>
-            <MessageCircle size={17} aria-hidden="true" />
-            Contact support
-          </Button>
-        </div>
-        <div className="portal-error-guidance">
-          <div className="portal-error-guidance-heading">
-            <Info size={18} aria-hidden="true" />
-            <strong>What you can do</strong>
-          </div>
-          <ul>
-            <li>
-              <Check size={15} aria-hidden="true" />
-              Check your internet connection
-            </li>
-            <li>
-              <Check size={15} aria-hidden="true" />
-              Try again in a few moments
-            </li>
-            <li>
-              <Check size={15} aria-hidden="true" />
-              Contact support if the problem persists
-            </li>
-          </ul>
-        </div>
-      </section>
-      <aside className="portal-maintenance-note">
-        <span className="portal-maintenance-note-icon" aria-hidden="true">
-          <Wrench size={19} />
+        <span className={`portal-error-icon${online ? "" : " portal-error-icon--offline"}`} aria-hidden="true">
+          <Icon size={30} strokeWidth={1.6} />
         </span>
-        <div>
-          <strong>Planned maintenance</strong>
-          <p>
-            We regularly perform updates to keep MentorMAMA running smoothly. If
-            you continue to see this message, please check with your programme
-            administrator.
-          </p>
+        <h2>{heading}</h2>
+        <p>{body}</p>
+        <div className="portal-error-actions">
+          <button type="button" className="portal-error-retry" onClick={retry} disabled={retrying} aria-busy={retrying}>
+            <RefreshCw size={16} aria-hidden="true" className={retrying ? "is-spinning" : undefined} />
+            {retrying ? "Trying…" : "Try again"}
+          </button>
+          <a className="portal-error-help" href={supportHref}>
+            Contact support
+          </a>
         </div>
-      </aside>
+        <p className="portal-error-hint">If this keeps happening, tell us what you were doing and we will look into it.</p>
+      </section>
     </div>
   );
 }

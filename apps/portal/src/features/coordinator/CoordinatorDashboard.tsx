@@ -16,6 +16,7 @@ import {
   StatGrid,
 } from "../programme-admin/ui/AdminKit";
 import { DataTable, type ColumnDef } from "../programme-admin/ui/DataTable";
+import { NextCohortCard } from "./planning/NextCohortCard";
 
 export type CoordinatorDestination = "students" | "cohorts" | "placements" | "safeguarding" | "reports";
 
@@ -27,6 +28,7 @@ export function CoordinatorDashboard({
   onInvite,
   onOpenCohort,
   onOpenPlacements,
+  onOpenPlanning,
 }: {
   user: CurrentUser;
   onNavigate: (destination: CoordinatorDestination) => void;
@@ -35,6 +37,8 @@ export function CoordinatorDashboard({
   onOpenCohort: (id: string) => void;
   /** Open the placement register, optionally pre-filtered to a lifecycle stage. */
   onOpenPlacements: (state?: string) => void;
+  /** Open placement planning for the next cohort. */
+  onOpenPlanning?: () => void;
 }) {
   const indicators = useQuery({ queryKey: ["coordinator-dashboard"], queryFn: getDashboardIndicators, staleTime: 15_000 });
   const cohorts = useQuery({ queryKey: ["institution-cohorts"], queryFn: getCohorts, staleTime: 30_000 });
@@ -106,6 +110,8 @@ export function CoordinatorDashboard({
         <StatCard icon={<ClipboardList />} tone="blue" value={n("placements_active")} label="Active placements" hint={`${n("placements_completed")} completed`} loading={indicators.isPending} onClick={() => onOpenPlacements("active")} />
         <StatCard icon={<ShieldAlert />} tone={concerns ? "rose" : "green"} value={concerns} label="Open concerns" hint={concerns ? "Needs a reviewer" : "All clear"} loading={indicators.isPending} onClick={() => onNavigate("safeguarding")} />
       </StatGrid>
+
+      {onOpenPlanning && <NextCohortCard onOpen={onOpenPlanning} />}
 
       <div className="rp-grid-2">
         <AdminCard title="Needs your attention" description="Start here. Each item opens the filtered list." flush>

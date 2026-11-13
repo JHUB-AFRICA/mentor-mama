@@ -144,3 +144,21 @@ class SessionBatchResult(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["batch", "placement"], name="one_result_per_batch_placement"),
         ]
+
+
+class MentorReminder(BaseModel):
+    """One supportive "please log a session" nudge a manager sent to a mentor.
+
+    This is the history the rate limit reads (at most one reminder per mentor per ``reminders.INTERVAL``) and the
+    "Reminded 2 days ago" the inactive-mentors list shows.  It stores who, when and the reason codes only: the
+    message itself is composed from counts, carries no student names, and is not kept here.
+    """
+
+    mentor = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="+")
+    sent_by = models.ForeignKey("identity.User", on_delete=models.PROTECT, related_name="+")
+    reason_codes = models.JSONField(default=list)
+    sent_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "mentorship_mentor_reminder"
+        indexes = [models.Index(fields=["mentor", "-sent_at"], name="mentor_reminder_recent_idx")]

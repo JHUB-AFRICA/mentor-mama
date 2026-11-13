@@ -59,6 +59,7 @@ class FollowUpQuerySerializer(serializers.Serializer):
     action = serializers.CharField(required=False, allow_blank=True, default="", max_length=120)
     placement_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     student_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    mentor_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     min_age_days = serializers.IntegerField(required=False, allow_null=True, default=None, min_value=0, max_value=3650)
     page = serializers.IntegerField(required=False, default=1, min_value=1)
     page_size = serializers.IntegerField(required=False, default=followups.PAGE_SIZE_DEFAULT, min_value=1)

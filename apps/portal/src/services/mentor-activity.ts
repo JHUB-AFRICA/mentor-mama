@@ -17,6 +17,12 @@ export interface MentorActivityRow {
   accepting_students: boolean;
   /** True when the mentor appears because of the "inactive" definition. */
   inactive: boolean;
+  /** Listed for a reason a reminder can help with (active account). Invited accounts need a new invitation instead. */
+  remindable: boolean;
+  /** Remindable and not reminded in the last three days. */
+  can_remind: boolean;
+  last_reminded_at: string | null;
+  next_reminder_at: string | null;
   reason_codes: Array<"no_recent_session" | "never_logged" | "not_signed_in" | "invitation_pending" | string>;
   reasons: string[];
   /** Separate flag, not part of "inactive": an induction has waited for sign-off for a while. */
@@ -66,4 +72,47 @@ export function activityCsvRows(rows: MentorActivityRow[], days: number): unknow
       row.accepting_students ? "Yes" : "No", [...row.reasons, row.induction_note].filter(Boolean).join("; "),
     ]),
   ];
+}
+
+export type ReminderStatus = "sent" | "already_reminded" | "not_listed";
+
+export interface ReminderResult {
+  mentor_id: string;
+  status: ReminderStatus;
+  last_reminded_at: string | null;
+  next_reminder_at: string | null;
+}
+
+export interface ReminderSummary {
+  sent: number;
+  already_reminded: number;
+  not_listed: number;
+  remaining: number;
+  cap: number;
+}
+
+/** Send one supportive reminder. The server re-checks the mentor is still listed and not reminded in the last 3 days. */
+export async function remindMentor(mentorId: string, days: number): Promise<ReminderResult> {
+  const response = await request<{ data: ReminderResult }>(`/api/v1/mentors/${encodeURIComponent(mentorId)}/remind`, {
+    method: "POST",
+    body: JSON.stringify({ days }),
+  });
+  return response.data;
+}
+
+/** Remind several listed mentors (or, with `mentorIds` omitted, everyone who can be reminded now; capped by the server). */
+export async function remindMentors(days: number, mentorIds?: string[]): Promise<{ results: ReminderResult[]; summary: ReminderSummary }> {
+  const response = await request<{ data: { results: ReminderResult[]; summary: ReminderSummary } }>("/api/v1/mentors/remind", {
+    method: "POST",
+    body: JSON.stringify(mentorIds ? { days, mentor_ids: mentorIds } : { days, all_listed: true }),
+  });
+  return response.data;
+}
+
+/** "Reminded 2 days ago" for the list. */
+export function remindedLabel(iso: string | null, now = Date.now()): string | null {
+  if (!iso) return null;
+  const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "Reminded today";
+  return days === 1 ? "Reminded yesterday" : `Reminded ${days} days ago`;
 }

@@ -42,6 +42,7 @@ EVENT_TEMPLATES = {
     "EscalationRaised": "safeguarding.concern_raised",
     "FeedbackSubmitted": "feedback.received",
     "SessionLogged": "mentorship.follow_up",
+    "MentorReminderRequested": "mentorship.reminder",
     "FinalAssessmentSubmitted": "assessment.final_submitted",
     "PlacementPaused": "placement.paused",
     "PlacementResumed": "placement.resumed",

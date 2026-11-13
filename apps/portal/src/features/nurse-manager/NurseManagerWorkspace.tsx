@@ -9,6 +9,8 @@ import { NurseManagerMentorOperations } from "./NurseManagerMentorOperations";
 import { NurseManagerMentorDetail } from "./NurseManagerMentorDetail";
 import { ReportsDashboard } from "../reports/ReportsDashboard";
 import { ConcernQueue } from "../safeguarding/ConcernQueue";
+import { SupervisorFollowUps } from "./SupervisorFollowUps";
+import { IncomingRequests } from "./IncomingRequests";
 import { NurseManagerActivity } from "./NurseManagerActivity";
 import { FacilityWorkspaceFrame } from "./FacilityWorkspaceFrame";
 import { TrainingWorkspace } from "../training/TrainingWorkspace";
@@ -92,6 +94,12 @@ export function NurseManagerWorkspace({
         <TrainingWorkspace onError={onError} role="staff" />
       </FacilityWorkspaceFrame>
     );
+  }
+  if (normalizedPath === "/facility/requests") {
+    return <IncomingRequests user={user} onError={onError} />;
+  }
+  if (normalizedPath === "/facility/follow-ups") {
+    return <SupervisorFollowUps user={user} onError={onError} />;
   }
   if (normalizedPath === "/facility/activity") {
     return <NurseManagerActivity user={user} onError={onError} />;

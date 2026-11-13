@@ -68,6 +68,9 @@ class Placement(BaseModel):
         "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="requested_placements"
     )
 
+    # When the request was made, so the facility and the coordinator can say "requested since".
+    requested_at = models.DateTimeField(null=True, blank=True)
+
     # The last facility that declined to host this student, and why, so the coordinator can ask another.
     declined_facility = models.ForeignKey(
         "facilities.Facility", on_delete=models.PROTECT, null=True, blank=True, related_name="declined_placements"
@@ -308,6 +311,8 @@ class AllocationRun(BaseModel):
     status = models.CharField(max_length=16, default="completed")  # running | completed | partial | failed
     plan_hash = models.CharField(max_length=64, blank=True, default="")
     result = models.JSONField(default=dict, blank=True)  # stored so an idempotent replay can return the real outcome
+    # Institutions whose students this run touched, so a coordinator can read the results that concern them.
+    institution_ids = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "placements_allocation_run"

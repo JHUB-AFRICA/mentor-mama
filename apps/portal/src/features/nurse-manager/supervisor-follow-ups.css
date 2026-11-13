@@ -1,0 +1,11 @@
+/* Supervisor follow-ups: reuses the mentor follow-up card styles (mfu-*); only the extras live here. */
+.sfu { width: 100%; max-width: 62rem; }
+.sfu .mfu-list { margin-top: 0.25rem; }
+.sfu-asked { margin: 0; color: var(--pa-ink-2); font: 500 0.86rem/1.4 "Inter", sans-serif; overflow-wrap: anywhere; }
+.sfu-asked__label { color: var(--pa-muted); font-weight: 400; }
+.sfu-asked a { color: var(--pa-teal-ink); font-weight: 700; text-decoration: none; }
+.sfu-asked a:hover, .sfu-asked a:focus-visible { text-decoration: underline; }
+@media (max-width: 560px) {
+  .sfu .mfu-actions > * { flex: 1 1 100%; justify-content: center; }
+  .sfu .mfu-actions { align-items: stretch; }
+}

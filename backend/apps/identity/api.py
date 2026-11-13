@@ -129,6 +129,15 @@ def mentor_assignment_policy(*, mentor_id: UUID, facility_id: UUID) -> dict:
     return {"available": True}
 
 
+def lock_mentor(mentor_id: UUID) -> None:
+    """Row-lock a mentor so two assignments cannot both take their last free place.
+
+    Call inside a transaction, before ``mentor_assignment_policy``: the workload count is an aggregate and
+    cannot itself be locked, so the account row is the serialisation point.
+    """
+    list(User.objects.select_for_update().filter(id=mentor_id, role=Role.MENTOR).values_list("id", flat=True))
+
+
 def invitation_token(user) -> str:
     """Return the signed invitation token without exposing authentication internals."""
     from apps.identity import authentication

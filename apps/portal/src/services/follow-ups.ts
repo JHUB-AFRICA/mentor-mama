@@ -14,6 +14,8 @@ export interface FollowUp {
   placement_id: string;
   placement_state: string;
   student: { id: string; name: string } | null;
+  /** The mentor who logged the session (and asked for the follow-up). */
+  mentor?: { id: string; name: string } | null;
   ward: string | null;
   session_date: string;
   session_type: string;
@@ -50,6 +52,8 @@ export interface FollowUpPage {
     counts: FollowUpCounts;
     kinds: Array<{ value: string; label: string }>;
     students: Array<{ id: string; name: string }>;
+    /** Mentors with a follow-up in scope, for the filter (added for the nurse-manager screen). */
+    mentors?: Array<{ id: string; name: string }>;
   };
 }
 
@@ -57,6 +61,9 @@ export interface FollowUpQuery {
   status?: FollowUpStatus | "all";
   action?: string;
   studentId?: string;
+  mentorId?: string;
+  /** Only follow-ups whose session is at least this many days old. */
+  minAgeDays?: number;
   placementId?: string;
   page?: number;
   pageSize?: number;
@@ -67,6 +74,8 @@ export function listFollowUps(query: FollowUpQuery = {}): Promise<FollowUpPage> 
   params.set("status", query.status ?? "pending");
   if (query.action) params.set("action", query.action);
   if (query.studentId) params.set("student_id", query.studentId);
+  if (query.mentorId) params.set("mentor_id", query.mentorId);
+  if (query.minAgeDays) params.set("min_age_days", String(query.minAgeDays));
   if (query.placementId) params.set("placement_id", query.placementId);
   if (query.page && query.page > 1) params.set("page", String(query.page));
   if (query.pageSize) params.set("page_size", String(query.pageSize));

@@ -31,6 +31,7 @@ const titles: Record<string, string> = {
   "privacy.request_status_changed": "Your data request has an update",
   "feedback.received": "Confidential feedback is ready for review",
   "mentorship.follow_up": "A mentor follow-up needs review",
+  "mentorship.reminder": "A friendly reminder to log your sessions",
   "assessment.final_submitted": "A placement is ready for close-out",
 };
 
@@ -91,6 +92,11 @@ export function NotificationPopover() {
       setOpen(false);
       return;
     }
+    if (item.template_key === "mentorship.reminder") {
+      navigate(item.payload.never_signed_in ? "/mentor" : "/mentor?view=log");
+      setOpen(false);
+      return;
+    }
     if (typeof placementId === "string" && placementId) {
       const mentorPath = window.location.pathname.startsWith("/mentor");
       navigate(mentorPath
@@ -123,7 +129,7 @@ export function NotificationPopover() {
           <div className="flex items-center justify-between border-b border-border px-4 py-4"><div><p className="font-body text-[0.68rem] font-bold uppercase tracking-[0.14em] text-teal">Inbox</p><h2 className="mt-1 font-display text-lg font-bold text-navy">Notifications</h2></div><div className="flex items-center gap-1"><button type="button" className="rounded-lg px-2 py-1 font-body text-[0.68rem] font-bold text-teal hover:bg-mist disabled:cursor-not-allowed disabled:opacity-40" onClick={() => void markAllRead()} disabled={!unread}>Mark all read</button><button type="button" aria-label="Close notifications" className="rounded-lg p-2 text-navy-muted hover:bg-mist" onClick={() => setOpen(false)}><X size={17} /></button></div></div>
           {error && <p role="alert" className="border-b border-error/20 bg-error/5 px-4 py-3 font-body text-xs leading-5 text-error">{error}</p>}
           <div className="max-h-[calc(100dvh-11rem)] overflow-y-auto p-2 sm:max-h-[26rem]">
-            {loading ? <div className="flex items-center gap-2 px-3 py-8 font-body text-sm text-navy-muted"><LoaderCircle size={17} className="animate-spin text-teal" />Loading notifications…</div> : items.length === 0 ? <div className="px-3 py-8 text-center"><Check size={20} className="mx-auto text-teal" /><p className="mt-3 font-body text-sm font-semibold text-navy">You’re all caught up</p><p className="mt-1 font-body text-xs text-navy-muted">Important updates will appear here.</p></div> : items.map((item) => <button type="button" key={item.id} onClick={() => void read(item)} className={`block w-full rounded-xl px-3 py-3 text-left transition hover:bg-mist ${item.read_at ? "" : "bg-teal-light/35"}`}><div className="flex items-start gap-3"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.read_at ? "bg-border" : "bg-teal"}`} /><span className="min-w-0 flex-1"><span className="block font-body text-sm font-semibold text-navy">{titles[item.template_key] ?? "Programme update"}</span><span className="mt-1 block font-body text-xs leading-5 text-navy-muted">{item.template_key.startsWith("safeguarding") ? "Open the restricted workspace to review this safely." : "Open MentorMAMA to review the latest update."}</span><span className="mt-2 block font-body text-[0.68rem] text-navy-muted">{new Date(item.created_at).toLocaleString("en-GB")}</span></span></div></button>)}
+            {loading ? <div className="flex items-center gap-2 px-3 py-8 font-body text-sm text-navy-muted"><LoaderCircle size={17} className="animate-spin text-teal" />Loading notifications…</div> : items.length === 0 ? <div className="px-3 py-8 text-center"><Check size={20} className="mx-auto text-teal" /><p className="mt-3 font-body text-sm font-semibold text-navy">You’re all caught up</p><p className="mt-1 font-body text-xs text-navy-muted">Important updates will appear here.</p></div> : items.map((item) => <button type="button" key={item.id} onClick={() => void read(item)} className={`block w-full rounded-xl px-3 py-3 text-left transition hover:bg-mist ${item.read_at ? "" : "bg-teal-light/35"}`}><div className="flex items-start gap-3"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.read_at ? "bg-border" : "bg-teal"}`} /><span className="min-w-0 flex-1"><span className="block font-body text-sm font-semibold text-navy">{titles[item.template_key] ?? "Programme update"}</span><span className="mt-1 block font-body text-xs leading-5 text-navy-muted">{item.template_key.startsWith("safeguarding") ? "Open the restricted workspace to review this safely." : item.template_key === "mentorship.reminder" && typeof item.payload.message === "string" ? `${typeof item.payload.sent_by_name === "string" ? `From ${item.payload.sent_by_name}. ` : ""}${item.payload.message}` : "Open MentorMAMA to review the latest update."}</span><span className="mt-2 block font-body text-[0.68rem] text-navy-muted">{new Date(item.created_at).toLocaleString("en-GB")}</span></span></div></button>)}
           </div>
         </section>
       </>}

@@ -132,7 +132,9 @@ class PlacementBatchListView(APIView):
 
     def get(self, request):
         batches = PlacementBatch.objects.filter(actor_id=request.user.id).order_by("-created_at")[:50]
-        return Response({"data": [_batch_payload(batch) for batch in batches]})
+        # ?summary=1 leaves out each batch's placements (``created`` is then empty; use ``created_count``): the activity list needs only counts.
+        full = request.query_params.get("summary") not in {"1", "true"}
+        return Response({"data": [_batch_payload(batch, include_placements=full) for batch in batches]})
 
 
 class PlacementDetailView(APIView):
@@ -385,12 +387,14 @@ def _get_in_scope(request, placement_id):
     return placement
 
 
-def _batch_payload(batch):
-    placements = Placement.objects.filter(id__in=batch.created_placement_ids).order_by("created_at")
+def _batch_payload(batch, *, include_placements: bool = True):
+    placements = Placement.objects.filter(id__in=batch.created_placement_ids).order_by("created_at") if include_placements else []
     return {
         "batch_id": str(batch.id),
         "status": batch.status,
         "created": serializers.PlacementSerializer(placements, many=True).data,
+        "created_count": len(batch.created_placement_ids),
+        "skipped_count": len(batch.skipped or []),
         "skipped": batch.skipped,
         "error_message": batch.error_message,
         "cohort_id": str(batch.cohort_id),
@@ -563,7 +567,11 @@ class AutoArrangeView(APIView):
 
 
 class FacilityRequestView(APIView):
-    """Ask partner facilities to host draft placements, optionally splitting by declared capacity."""
+    """Ask partner facilities to host draft placements, optionally splitting by free ward places.
+
+    ``preview: true`` returns the plan (with ``plan_hash`` and the ``seed``); applying with the same ``seed`` and
+    ``expected_plan_hash`` guarantees the reviewed split is the one recorded, or the call is refused.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -575,16 +583,21 @@ class FacilityRequestView(APIView):
         data = dict(payload.validated_data)
         preview = data.pop("preview")
         data["seed"] = data.get("seed") or None
+        expected = data.pop("expected_plan_hash", None) or None
         if preview:
             return Response({"data": allocation.plan_facility_split(actor=request.user, **data)})
         with IdempotentCommand(request, "request_facilities") as command:
             if command.replayed:
-                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
-            if len(data["facility_ids"]) == 1:
+                from apps.placements.models import AllocationRun
+
+                stored = AllocationRun.objects.filter(id=command.result_ref, actor=request.user).first()
+                body = {**{k: v for k, v in stored.result.items() if k != "assignments"}, "run_id": str(stored.id), "seed": stored.seed} if stored else {"replayed": True}
+                return Response({"data": body, "meta": {"idempotency_replayed": True}})
+            if len(data["facility_ids"]) == 1 and not expected:
                 result = allocation.request_facility(actor=request.user, placement_ids=data["placement_ids"], facility_id=data["facility_ids"][0])
             else:
-                result = allocation.apply_facility_split(actor=request.user, **data)
-            command.record(UUID(int=0))
+                result = allocation.apply_facility_split(actor=request.user, expected_plan_hash=expected, **data)
+            command.record(UUID(result["run_id"]))
         return Response({"data": result}, status=status.HTTP_201_CREATED)
 
 
@@ -601,7 +614,8 @@ class AllocationListView(APIView):
         fmt = request.query_params.get("file", "csv").lower()
         if fmt not in allocation_list.FORMATS:
             raise errors.InvalidTransition("Choose CSV, XLSX or PDF.")
-        rows = allocation_list.rows_for(request.user, cohort_id=request.query_params.get("cohort_id") or None, file_format=fmt)
+        rows = allocation_list.rows_for(request.user, cohort_id=request.query_params.get("cohort_id") or None,
+                                        run_id=request.query_params.get("run_id") or None, file_format=fmt)
         from apps.core.documents.reports import scope_label
 
         content = allocation_list.render(rows, fmt, scope_label=scope_label(request.user))
@@ -639,12 +653,99 @@ class OverrideArrangementView(APIView):
 
 
 class AllocationRunsView(APIView):
+    """Recent allocation runs the caller may read (a coordinator's own institution, a manager's facility)."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from apps.placements import allocation
 
-        return Response({"data": allocation.runs_for(actor=request.user)})
+        try:
+            limit = min(max(int(request.query_params.get("limit", 8)), 1), 50)
+        except ValueError:
+            limit = 8
+        return Response({"data": allocation.runs_for(actor=request.user, limit=limit, mode=request.query_params.get("mode") or None)})
+
+
+class AllocationRunDetailView(APIView):
+    """The result of one run: summary, fill before/after, mentor spread, and every student with the outcome."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, run_id):
+        from apps.placements import allocation_results
+
+        query = serializers.RunDetailQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        return Response({"data": allocation_results.run_detail(actor=request.user, run_id=run_id, **query.validated_data)})
+
+
+class PlanningOverviewView(APIView):
+    """The coordinator's planning overview: the next cohort(s) with counts per pipeline status."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.placements import planning
+
+        return Response({"data": planning.overview(actor=request.user, institution_id=request.query_params.get("institution_id") or None)})
+
+
+class PlanningCohortView(APIView):
+    """One cohort: counts per status, its placement dates, and the free places across the programme for those dates."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, cohort_id):
+        from apps.placements import planning
+
+        return Response({"data": planning.cohort_summary(actor=request.user, cohort_id=cohort_id, institution_id=request.query_params.get("institution_id") or None)})
+
+
+class PlanningCohortStudentsView(APIView):
+    """Every student in a cohort with their pipeline status; filter, search, sort and page."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, cohort_id):
+        from apps.placements import planning
+
+        query = serializers.PlanningStudentsQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        data = dict(query.validated_data)
+        if data.get("facility_id"):
+            data["facility_id"] = str(data["facility_id"])
+        if data.get("ward_id"):
+            data["ward_id"] = str(data["ward_id"])
+        return Response({"data": planning.cohort_students(actor=request.user, cohort_id=cohort_id, **data)})
+
+
+class IncomingSummaryView(APIView):
+    """A nurse manager's incoming requests grouped by institution and cohort, with room for those dates."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.placements import planning
+
+        return Response({"data": planning.incoming_summary(actor=request.user, facility_id=request.query_params.get("facility_id") or None)})
+
+
+class ReleasePlacementsView(APIView):
+    """Release arranged placements to their students in bulk, with a per-student result."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.placements import planning
+
+        payload = serializers.ReleasePlacementsSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        with IdempotentCommand(request, "release_placements") as command:
+            result = planning.release_placements(actor=request.user, placement_ids=data.get("placement_ids"), cohort_id=data.get("cohort_id"))
+            command.record(UUID(int=0))
+        return Response({"data": result, "meta": {"idempotency_replayed": command.replayed}})
 
 
 class AllocationRunUndoView(APIView):
@@ -669,7 +770,10 @@ class AllocationRunRetryView(APIView):
 
         with IdempotentCommand(request, "retry_auto_arrange") as command:
             if command.replayed:
-                return Response({"data": {"replayed": True}, "meta": {"idempotency_replayed": True}})
+                from apps.placements.models import AllocationRun
+
+                stored = AllocationRun.objects.filter(id=command.result_ref, actor=request.user).first()
+                return Response({"data": stored.result if stored else {"replayed": True}, "meta": {"idempotency_replayed": True}})
             result = allocation.retry_unplaced(actor=request.user, run_id=run_id)
             command.record(UUID(result["run_id"]))
         return Response({"data": result}, status=status.HTTP_201_CREATED)

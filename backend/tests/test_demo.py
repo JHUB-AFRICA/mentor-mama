@@ -26,7 +26,7 @@ def test_seed_builds_every_lifecycle_state_and_rich_history(seeded):
     assert Session.objects.filter(placement__cohort__institution__program=seeded).count() >= 60
     roles = {r: User.objects.filter(program=seeded, role=r).count() for r in Role.values if r != Role.PLATFORM_ADMIN}
     assert roles[Role.PROGRAM_ADMIN] == 1 and roles[Role.COORDINATOR] == 2 and roles[Role.NURSE_MANAGER] == 2
-    assert roles[Role.MENTOR] == 5 and roles[Role.STUDENT] == 16
+    assert roles[Role.MENTOR] == 8 and roles[Role.STUDENT] == 16 + 58 + 25
     assert not User.objects.filter(program=seeded, role=Role.PLATFORM_ADMIN).exists()
 
 

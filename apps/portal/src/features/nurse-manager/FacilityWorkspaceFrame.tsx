@@ -6,12 +6,16 @@ import {
   Library,
   Building2,
   ClipboardList,
+  Inbox,
   LayoutDashboard,
+  ListChecks,
   Settings2,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import { logout, type CurrentUser } from "../../services/api";
+import { useFollowUpCounts } from "../../services/follow-ups";
+import { useIncomingCount } from "../../services/incoming-requests";
 import { PortalSidebar } from "../workspaces/PortalSidebar";
 import { PortalHeader } from "../workspaces/PortalHeader";
 import { useNavigate } from "react-router-dom";
@@ -19,10 +23,12 @@ import { useNavigate } from "react-router-dom";
 export type FacilityNav =
   | "overview"
   | "placements"
+  | "requests"
   | "mentors"
   | "wards"
   | "safeguarding"
   | "reports"
+  | "follow-ups"
   | "learning"
   | "library"
   | "activity";
@@ -41,7 +47,7 @@ interface FacilityWorkspaceFrameProps {
 
 const navGroups: Array<{
   label: string;
-  items: Array<{ id: FacilityNav; label: string; icon: ReactNode }>;
+  items: Array<{ id: FacilityNav; label: string; icon: ReactNode; badge?: number }>;
 }> = [
   {
     label: "Operate",
@@ -55,6 +61,11 @@ const navGroups: Array<{
         id: "placements",
         label: "Placements",
         icon: <ClipboardList size={17} aria-hidden="true" />,
+      },
+      {
+        id: "requests",
+        label: "Incoming requests",
+        icon: <Inbox size={17} aria-hidden="true" />,
       },
       {
         id: "mentors",
@@ -75,6 +86,11 @@ const navGroups: Array<{
         id: "safeguarding",
         label: "Safeguarding",
         icon: <ShieldCheck size={17} aria-hidden="true" />,
+      },
+      {
+        id: "follow-ups",
+        label: "Follow-ups",
+        icon: <ListChecks size={17} aria-hidden="true" />,
       },
       {
         id: "reports",
@@ -112,6 +128,12 @@ export function FacilityWorkspaceFrame({
 }: FacilityWorkspaceFrameProps) {
   const routerNavigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Supervisor follow-ups waiting for this manager (quiet on failure: no badge).
+  const followUps = useFollowUpCounts(true);
+  const pendingFollowUps = followUps.data?.pending ?? 0;
+  // Students waiting in incoming placement requests (quiet on failure: no badge).
+  const incomingRequests = useIncomingCount(true);
+  const pendingRequests = incomingRequests.data ?? 0;
   const facilityName =
     typeof user.scope?.facility_name === "string"
       ? user.scope.facility_name
@@ -163,7 +185,16 @@ export function FacilityWorkspaceFrame({
         onSignOut={() => void signOut()}
         groups={navGroups.map((group) => ({
           label: group.label,
-          items: group.items.map((item) => ({ ...item, onSelect: () => navigate(item.id) })),
+          items: group.items.map((item) => ({
+            ...item,
+            badge:
+              item.id === "follow-ups" && pendingFollowUps > 0
+                ? pendingFollowUps
+                : item.id === "requests" && pendingRequests > 0
+                  ? pendingRequests
+                  : undefined,
+            onSelect: () => navigate(item.id),
+          })),
         }))}
         footerItems={[{ id: "account", label: "Account & security", icon: <Settings2 />, onSelect: openAccount }]}
       />

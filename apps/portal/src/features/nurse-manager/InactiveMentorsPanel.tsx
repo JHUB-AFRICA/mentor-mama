@@ -1,14 +1,18 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Download, HeartHandshake } from "lucide-react";
+import { BellRing, CheckCircle2, Download, HeartHandshake } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
+import { Modal } from "../../components/kit";
 import { PortalErrorState } from "../../components/PortalErrorState";
 import { csvBlob, datedFilename, saveBlob } from "../../lib/download";
 import {
   ACTIVITY_DAY_OPTIONS,
   activityCsvRows,
   getMentorActivity,
+  remindedLabel,
+  remindMentor,
+  remindMentors,
   sortActivity,
   type ActivitySort,
   type MentorActivityRow,
@@ -29,9 +33,19 @@ function daysAgo(days: number | null) {
 
 export const inactiveQueryKey = (days: number) => ["facility-inactive-mentors", days] as const;
 
+/** The server caps one bulk send; the confirmation says so when the list is longer. */
+const BULK_CAP = 50;
+
+function plural(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 /** Mentors who may welcome a check-in. Supportive visibility for the nurse manager, not a performance score. */
 export function InactiveMentorsPanel() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "ok" | "problem"; text: string } | null>(null);
   const [days, setDays] = useState<number>(14);
   const [sort, setSort] = useState<ActivitySort>("quiet_longest");
   const [focus, setFocus] = useState<Focus>("inactive");
@@ -42,6 +56,42 @@ export function InactiveMentorsPanel() {
   const inductionRows = (data?.results ?? []).filter((row) => row.induction_waiting);
   const visible = sortActivity(focus === "inactive" ? inactiveRows : inductionRows, sort);
   const inductionDays = data?.definition.induction_waiting_days ?? 7;
+
+  const refreshList = () => queryClient.invalidateQueries({ queryKey: ["facility-inactive-mentors"] });
+  const dueNow = inactiveRows.filter((row) => row.can_remind);
+
+  const remindOne = useMutation({
+    mutationFn: (row: MentorActivityRow) => remindMentor(row.id, days),
+    onSuccess: (_result, row) => {
+      setNotice({ tone: "ok", text: `Reminder sent to ${row.name}. They will see it in MentorMAMA and by email.` });
+      void refreshList();
+    },
+    onError: (cause, row) => {
+      setNotice({ tone: "problem", text: cause instanceof Error ? cause.message : `We could not remind ${row.name}. Try again.` });
+      void refreshList();
+    },
+  });
+
+  const remindAll = useMutation({
+    mutationFn: () => remindMentors(days),
+    onSuccess: ({ summary }) => {
+      setConfirmAll(false);
+      const skipped = summary.already_reminded + summary.not_listed;
+      setNotice({
+        tone: "ok",
+        text:
+          `${summary.sent === 0 ? "No new reminders were needed" : `${plural(summary.sent, "reminder")} sent`}.` +
+          (skipped ? ` ${plural(skipped, "mentor")} skipped because they were reminded recently or are no longer listed.` : "") +
+          (summary.remaining ? ` ${summary.remaining} more can be reminded: send again to continue.` : ""),
+      });
+      void refreshList();
+    },
+    onError: (cause) => {
+      setConfirmAll(false);
+      setNotice({ tone: "problem", text: cause instanceof Error ? cause.message : "We could not send the reminders. Try again." });
+      void refreshList();
+    },
+  });
 
   function download() {
     saveBlob(csvBlob(activityCsvRows(visible, days)), datedFilename(focus === "inactive" ? "inactive-mentors" : "mentors-inductions-waiting", "csv", [`${days}-days`]));
@@ -103,9 +153,24 @@ export function InactiveMentorsPanel() {
           />
         </div>
         <span className="im-spacer" />
+        {focus === "inactive" && dueNow.length > 0 && (
+          <AdminButton variant="secondary" size="sm" icon={<BellRing />} onClick={() => { setNotice(null); setConfirmAll(true); }}>
+            Remind all listed ({dueNow.length})
+          </AdminButton>
+        )}
         <AdminButton variant="secondary" size="sm" icon={<Download />} disabled={visible.length === 0} onClick={download}>
           Download CSV
         </AdminButton>
+      </div>
+
+      <div className="im-live" role="status" aria-live="polite">
+        {notice && (
+          <p className={`im-notice im-notice--${notice.tone}`} role={notice.tone === "problem" ? "alert" : undefined}>
+            {notice.tone === "ok" && <CheckCircle2 aria-hidden="true" />}
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)}>Dismiss</button>
+          </p>
+        )}
       </div>
 
       <div aria-live="polite" aria-busy={query.isFetching}>
@@ -126,16 +191,54 @@ export function InactiveMentorsPanel() {
         ) : (
           <ul className="im-list" aria-label={focus === "inactive" ? "Mentors who may need a check-in" : "Mentors with inductions waiting"}>
             {visible.map((row) => (
-              <MentorCard key={row.id} row={row} days={days} focus={focus} onOpen={() => navigate(`/facility/mentors/${row.id}`)} />
+              <MentorCard
+                key={row.id}
+                row={row}
+                days={days}
+                focus={focus}
+                sending={remindOne.isPending && remindOne.variables?.id === row.id}
+                onRemind={() => { setNotice(null); remindOne.mutate(row); }}
+                onOpen={() => navigate(`/facility/mentors/${row.id}`)}
+              />
             ))}
           </ul>
         )}
       </div>
+
+      <Modal
+        open={confirmAll}
+        onClose={() => setConfirmAll(false)}
+        dismissible={!remindAll.isPending}
+        icon={<BellRing />}
+        title={`Remind ${plural(Math.min(dueNow.length, BULK_CAP), "mentor")}?`}
+        description="A short, kind reminder in your name."
+        footer={
+          <>
+            <AdminButton variant="secondary" size="sm" onClick={() => setConfirmAll(false)} disabled={remindAll.isPending}>Cancel</AdminButton>
+            <AdminButton size="sm" icon={<BellRing />} onClick={() => remindAll.mutate()} disabled={remindAll.isPending || dueNow.length === 0}>
+              {remindAll.isPending ? "Sending…" : `Send ${plural(Math.min(dueNow.length, BULK_CAP), "reminder")}`}
+            </AdminButton>
+          </>
+        }
+      >
+        <p className="im-confirm" data-testid="remind-all-count">
+          {plural(dueNow.length, "mentor")} will be reminded{dueNow.length > BULK_CAP ? `. You can send ${BULK_CAP} at a time, so the ${BULK_CAP} quietest go first` : ""}.
+        </p>
+        <ul className="im-confirm-list">
+          <li>Each mentor gets an in-app notice and an email from you. It says how many students they have and that logging takes about a minute and works offline.</li>
+          <li>No student names are included.</li>
+          <li>Mentors reminded in the last 3 days, and accounts that have not accepted their invitation, are skipped.</li>
+        </ul>
+      </Modal>
     </section>
   );
 }
 
-function MentorCard({ row, days, focus, onOpen }: { row: MentorActivityRow; days: number; focus: Focus; onOpen: () => void }) {
+function MentorCard({
+  row, days, focus, sending, onRemind, onOpen,
+}: { row: MentorActivityRow; days: number; focus: Focus; sending: boolean; onRemind: () => void; onOpen: () => void }) {
+  const reminded = remindedLabel(row.last_reminded_at);
+  const noteId = `remind-note-${row.id}`;
   const lastSession = formatDate(row.last_session_date);
   const signedIn = formatDate(row.last_sign_in);
   const chips = focus === "inactive" ? row.reasons : [row.induction_note];
@@ -180,6 +283,19 @@ function MentorCard({ row, days, focus, onOpen }: { row: MentorActivityRow; days
         </div>
       </dl>
       <div className="im-card__foot">
+        {focus === "inactive" && reminded && <span id={noteId} className="im-reminded">{reminded}</span>}
+        {focus === "inactive" && row.remindable && (
+          <AdminButton
+            variant="secondary"
+            size="sm"
+            icon={<BellRing />}
+            onClick={onRemind}
+            disabled={!row.can_remind || sending}
+            aria-describedby={reminded ? noteId : undefined}
+          >
+            {sending ? "Sending…" : <>Send reminder<span className="sr-only"> to {row.name}</span></>}
+          </AdminButton>
+        )}
         <AdminButton variant="secondary" size="sm" onClick={onOpen}>
           View {row.name.split(" ")[0]}
         </AdminButton>

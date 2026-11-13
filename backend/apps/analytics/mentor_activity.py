@@ -38,6 +38,7 @@ from apps.identity.models import Role, Status, User
 from apps.identity.scope import resolve
 from apps.learning import versioning
 from apps.learning.models import ModuleCompletion, TrainingModule
+from apps.mentorship import api as mentorship
 from apps.mentorship.models import Session
 from apps.placements.models import MentorAssignment, State, StudentAssignment
 
@@ -47,6 +48,7 @@ MAX_DAYS = 60
 INDUCTION_WAITING_DAYS = 7
 LIVE_STATES = [State.ORIENTATION, State.INDUCTION, State.ACTIVE, State.PAUSED]
 ALLOWED_ROLES = {Role.NURSE_MANAGER, Role.PROGRAM_ADMIN}
+REMINDER_CODES = {"not_signed_in", "never_logged", "no_recent_session"}
 
 
 class InvalidActivityWindow(DomainError):
@@ -143,6 +145,8 @@ def mentor_activity(*, actor, days=DEFAULT_DAYS, facility_id: UUID | None = None
     ).values_list("placement_id", "mentor_id"):
         waiting[mentor_id] += 1
     training = _required_progress(scope.program_id, ids)
+    reminded = mentorship.last_reminded(ids)
+    now = timezone.now()
 
     rows = []
     for mentor in mentors:
@@ -174,6 +178,11 @@ def mentor_activity(*, actor, days=DEFAULT_DAYS, facility_id: UUID | None = None
         inactive = bool(codes)
         if not inactive and not inductions:
             continue
+        last_reminded = reminded.get(mentor.id)
+        next_reminder = mentorship.reminder_next_allowed(last_reminded)
+        # Remindable = listed as inactive for a reason a nudge can help with.  Invited accounts have no sign-in yet,
+        # so they need a fresh invitation (People & access), not a reminder.
+        remindable = inactive and mentor.status == Status.ACTIVE and bool(set(codes) & REMINDER_CODES)
         rows.append({
             "id": str(mentor.id), "name": mentor.full_name or mentor.email, "email": mentor.email,
             "status": mentor.status,
@@ -187,6 +196,10 @@ def mentor_activity(*, actor, days=DEFAULT_DAYS, facility_id: UUID | None = None
             "training": {"required_completed": training["done"].get(mentor.id, 0), "required_total": training["total"]},
             "accepting_students": mentor.accepting_students,
             "inactive": inactive,
+            "remindable": remindable,
+            "can_remind": remindable and (next_reminder is None or now >= next_reminder),
+            "last_reminded_at": last_reminded.isoformat() if last_reminded else None,
+            "next_reminder_at": next_reminder.isoformat() if next_reminder else None,
             "reason_codes": codes,
             "reasons": reasons,
             "induction_waiting": inductions > 0,

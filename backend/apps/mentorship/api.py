@@ -9,6 +9,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from apps.mentorship.models import Session
+from apps.mentorship.reminders import ReminderTooSoon  # noqa: F401  (re-exported for analytics)
 
 
 def session_count(placement_id: UUID) -> int:
@@ -45,3 +46,27 @@ def dashboard_counts(actor) -> dict[str, int]:
         "sessions_total": rows.count(),
         "sessions_this_week": rows.filter(session_date__gte=today - timedelta(days=today.weekday())).count(),
     }
+
+
+def last_reminded(mentor_ids) -> dict:
+    """Latest reminder time per mentor id (inactive-mentors list and rate limit)."""
+    from apps.mentorship import reminders
+
+    return reminders.last_reminded(mentor_ids)
+
+
+def send_reminder(*, actor, mentor_id, reason_codes, live_students: int, days_since_last_session):
+    """Send one supportive reminder (at most one per mentor per three days).  The caller must already
+    have established that the actor may remind this mentor."""
+    from apps.mentorship import reminders
+
+    return reminders.send(
+        actor=actor, mentor_id=mentor_id, reason_codes=reason_codes, live_students=live_students,
+        days_since_last_session=days_since_last_session,
+    )
+
+
+def reminder_next_allowed(last):
+    from apps.mentorship import reminders
+
+    return reminders.next_allowed(last)

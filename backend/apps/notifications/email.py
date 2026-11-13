@@ -80,7 +80,9 @@ def _optional_email_enabled(*, user_id, event_type: str) -> bool:
         return True
     if event_type in {"PlacementAcknowledgementReminderRequested", "PlacementScheduled", "MentorAssigned", "MentorPlacementsAssigned", "PlacementsArranged", "PlacementsRequested", "PlacementsDeclined", "PlacementRequestsWithdrawn", "ArrangementOverridden", "MentorUnavailableForPlacements", "PlacementProvisionalNotice", "PlacementStartsSoon", "MentorReassigned", "OrientationAcknowledged", "InductionCompleted", "PlacementPaused", "PlacementResumed", "PlacementWithdrawn", "PlacementCompleted"}:
         return preference.placement_updates
-    if event_type in {"SessionLogged"}:
+    # A manager's nudge to log a session is an operational reminder, so it follows the "Session follow-ups" switch
+    # (account_activity) rather than being mandatory.  The in-app notification is still delivered.
+    if event_type in {"SessionLogged", "MentorReminderRequested"}:
         return preference.account_activity
     return preference.programme_updates
 
@@ -255,6 +257,32 @@ def deliver_outbox_event(event) -> None:
                 expiry="No personal details are included in this email.",
             )
             _send("A MentorMAMA data request needs a reply", text, settings.DEFAULT_FROM_EMAIL, recipient, event)
+            event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
+            event.save(update_fields=["delivered_to"])
+    elif event.event_type == "MentorReminderRequested":
+        # A kind nudge sent in a manager's name.  Counts only: the composed message never names a student.
+        for recipient_id in event.payload.get("recipient_user_ids", []):
+            if str(recipient_id) in (event.delivered_to or []):
+                continue
+            recipient = identity.user_of(recipient_id)
+            if not recipient or recipient.status != identity.STATUSES.ACTIVE:
+                continue
+            if not _optional_email_enabled(user_id=recipient.id, event_type=event.event_type):
+                continue
+            sender = event.payload.get("sent_by_name") or "Your nurse manager"
+            signing_in = bool(event.payload.get("never_signed_in"))
+            text = _email_content(
+                eyebrow="A friendly reminder", title="A quick check-in from your programme",
+                intro=f"Hello {recipient.first_name}, {sender} asked us to send you this short, friendly reminder.",
+                action_label="Sign in to MentorMAMA" if signing_in else "Log a session",
+                action_url=portal_url("/") if signing_in else portal_url("/mentor?view=log"),
+                detail=str(event.payload.get("message") or "Logging a session takes about a minute and works offline."),
+                expiry=(
+                    "This is a supportive nudge, not a performance notice. If you have already caught up, thank you. "
+                    "You can switch these emails off under Account settings, Notifications, Session follow-ups."
+                ),
+            )
+            _send(f"A friendly reminder from {sender}", text, settings.DEFAULT_FROM_EMAIL, recipient, event)
             event.delivered_to = [*(event.delivered_to or []), str(recipient.id)]
             event.save(update_fields=["delivered_to"])
     elif event.event_type in {"PlacementProvisionalNotice", "PlacementStartsSoon"}:

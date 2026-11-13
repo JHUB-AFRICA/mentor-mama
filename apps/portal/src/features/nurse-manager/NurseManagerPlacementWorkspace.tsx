@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Ban, Check, ClipboardList, Download, Inbox, RefreshCw, UserCog, Wand2 } from "lucide-react";
 import { Skeleton } from "@mentormama/ui";
 import { Field, Modal, SelectInput, TextArea } from "../../components/kit";
@@ -162,8 +162,15 @@ export function NurseManagerPlacementWorkspace({ user, onError }: { user: Curren
           }
         />
 
+        {incomingCount > 0 && (
+          <Notice icon={<Inbox />}>
+            <strong>{incomingCount} {incomingCount === 1 ? "student is" : "students are"} waiting for you.</strong>{" "}
+            <Link to="/facility/requests" style={{ fontWeight: 700, textDecoration: "underline" }}>Review incoming requests</Link> to check ward and mentor room, then arrange or decline them.
+          </Notice>
+        )}
+
         <StatGrid columns={3}>
-          <StatCard icon={<Inbox />} tone={incomingCount ? "amber" : "green"} value={incomingCount} label="Incoming students" hint={incomingCount ? "Requested by coordinators" : "No pending requests"} loading={incoming.isPending} />
+          <StatCard icon={<Inbox />} tone={incomingCount ? "amber" : "green"} value={incomingCount} label="Incoming students" hint={incomingCount ? "Requested by coordinators" : "No pending requests"} loading={incoming.isPending} onClick={() => navigate("/facility/requests")} />
           <StatCard icon={<ClipboardList />} tone="teal" value={list.data?.pagination.total_count ?? 0} label="Placements" hint="In your facility" loading={list.isPending} />
           <StatCard icon={<UserCog />} tone={needDecision ? "rose" : "green"} value={needDecision} label="Need a decision" hint="On this page: ward or mentor missing" loading={list.isPending} />
         </StatGrid>

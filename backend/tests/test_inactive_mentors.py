@@ -280,7 +280,7 @@ class TestScopeAndPrivacy:
             "id", "name", "email", "status", "last_sign_in", "last_session_date", "days_since_last_session",
             "sessions_in_window", "live_placements", "live_students", "students_without_recent_session", "training",
             "accepting_students", "inactive", "reason_codes", "reasons", "induction_waiting", "inductions_waiting",
-            "induction_note",
+            "induction_note", "remindable", "can_remind", "last_reminded_at", "next_reminder_at",
         }
 
     def test_service_rejects_bad_actor_directly(self, student):

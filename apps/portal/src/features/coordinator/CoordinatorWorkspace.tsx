@@ -15,6 +15,10 @@ import { CoordinatorPlacementDetail } from "./CoordinatorPlacementDetail";
 import { CoordinatorPlacementRegister } from "./CoordinatorPlacementRegister";
 import { CoordinatorStudentInvites } from "./CoordinatorStudentInvites";
 import { CoordinatorStudents } from "./CoordinatorStudents";
+import { AllocationResult } from "./planning/AllocationResult";
+import { AllocationRuns } from "./planning/AllocationRuns";
+import { PlacementPlanning } from "./planning/PlacementPlanning";
+import { PlacementsTabs } from "./planning/planningUi";
 import { TrainingWorkspace } from "../training/TrainingWorkspace";
 import { ContentLibrary } from "../content/ContentLibrary";
 import { ContentDetailScreen } from "../content/ContentDetailScreen";
@@ -91,10 +95,26 @@ export function CoordinatorWorkspace({
         render: () => <CoordinatorCohorts onOpenCohort={(id) => go(`/coordinator/cohorts/${id}`)} onError={onError} />,
       };
 
+    if (path === "/coordinator/placements/planning")
+      return {
+        nav: "placements", title: "Planning", crumbs: ["Placements"],
+        render: () => <><PlacementsTabs active="planning" /><PlacementPlanning user={user} /></>,
+      };
+    if (path === "/coordinator/placements/runs")
+      return {
+        nav: "placements", title: "Allocation runs", crumbs: ["Placements"],
+        render: () => <><PlacementsTabs active="runs" /><AllocationRuns /></>,
+      };
+    const runId = match(/^\/coordinator\/placements\/runs\/([^/]+)$/);
+    if (runId)
+      return {
+        nav: "placements", title: "Allocation result", crumbs: ["Placements", "Allocation runs"],
+        render: () => <><PlacementsTabs active="runs" /><AllocationResult runId={runId} user={user} /></>,
+      };
     if (path === "/coordinator/placements/batches")
       return {
         nav: "placements", title: "Batch activity", crumbs: ["Placements"],
-        render: () => <CoordinatorBatchManagement onOpen={(id) => go(`/coordinator/placements/batches/${id}`)} />,
+        render: () => <><PlacementsTabs active="batches" /><CoordinatorBatchManagement onOpen={(id) => go(`/coordinator/placements/batches/${id}`)} /></>,
       };
     const batchId = match(/^\/coordinator\/placements\/batches\/([^/]+)$/);
     if (batchId)
@@ -123,13 +143,16 @@ export function CoordinatorWorkspace({
       return {
         nav: "placements", title: "Placements",
         render: () => (
-          <CoordinatorPlacementRegister
-            user={user}
-            onError={onError}
-            onOpen={(id) => go(`/coordinator/placements/${id}`)}
-            onCreate={() => go("/coordinator/placements/new")}
-            onOpenBatches={() => go("/coordinator/placements/batches")}
-          />
+          <>
+            <PlacementsTabs active="register" />
+            <CoordinatorPlacementRegister
+              user={user}
+              onError={onError}
+              onOpen={(id) => go(`/coordinator/placements/${id}`)}
+              onCreate={() => go("/coordinator/placements/new")}
+              onOpenBatches={() => go("/coordinator/placements/batches")}
+            />
+          </>
         ),
       };
 
@@ -172,6 +195,7 @@ export function CoordinatorWorkspace({
           onInvite={() => go("/coordinator/students/invite")}
           onOpenCohort={(id) => go(`/coordinator/cohorts/${id}`)}
           onOpenPlacements={placementState}
+          onOpenPlanning={() => go("/coordinator/placements/planning")}
         />
       ),
     };
