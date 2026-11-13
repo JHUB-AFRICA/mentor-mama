@@ -89,3 +89,28 @@ Nurse managers can read confidential feedback attached to placements in their fa
 
 The placement becomes Scheduled and the coordinator is notified. The coordinator then releases it to the student, as long as the mentor has finished any required training.
 <!-- source: backend/apps/placements/services.py -->
+
+## Where do I see students that schools want to place at my facility?
+
+Open Incoming requests in the menu. Requests are grouped by school and cohort, with the dates, how many students are waiting, and how many ward and mentor places your facility has free for those dates, with a warning if there are more students than room. A banner on Placements also points here when requests are waiting.
+<!-- source: apps/portal/src/features/nurse-manager/IncomingRequests.tsx -->
+
+## How do I arrange incoming students automatically?
+
+On Incoming requests choose "Arrange automatically" for a group. The system shows a preview of which ward and mentor each student would get, respecting ward capacity and each mentor's workload, and shows who cannot be placed and why. Check it, then apply. Applying places the students and tells the coordinator. If you cannot take some students, decline them with a reason instead.
+<!-- source: apps/portal/src/features/nurse-manager/IncomingRequests.tsx, backend/apps/placements/allocation.py -->
+
+## How do I decline an incoming request?
+
+On Incoming requests choose Decline for the students you cannot host, write a reason and confirm. The coordinator sees the reason and can ask another facility.
+<!-- source: apps/portal/src/features/nurse-manager/IncomingRequests.tsx -->
+
+## What are supervisor follow-ups?
+
+Mentors can ask for your review after a session when something is worth a conversation. Open Follow-ups in the menu, filter by mentor, student or age, and mark each one done (with an optional note) once you have picked it up. Done items move to the Done tab and can be undone.
+<!-- source: apps/portal/src/features/nurse-manager/SupervisorFollowUps.tsx -->
+
+## How do I remind a mentor who has gone quiet?
+
+On the Mentors screen the inactive mentors list shows mentors with no recent sessions. Choose "Send reminder" on one mentor, or remind several at once (up to 50) and confirm. A mentor can be reminded once every three days, and the email respects their session follow-up notification preference.
+<!-- source: backend/apps/mentorship/reminders.py -->

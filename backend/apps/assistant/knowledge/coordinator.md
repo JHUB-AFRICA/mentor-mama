@@ -89,3 +89,33 @@ Go to Reports. Choose your filters and "Request export" (CSV, Excel, JSON or PDF
 
 You can read confidential feedback linked to placements in your institution (each read is logged) and grouped anonymous ratings only when three or more students responded. For safeguarding you see only the concerns that were sent to the coordinator (or to both the coordinator and the nurse manager). You may take and review those.
 <!-- source: docs/architecture/stage3-business-rules-and-invariants.md, docs/verification/anonymous-feedback-implementation-2026-11-09.md -->
+
+## Where can I see the next cohort and where each student is placed?
+
+Go to Placements, then the Planning tab. Choose a cohort card at the top. "Where the cohort is" shows how many students are not placed, requested, arranged, released, and confirmed or active; select a step to show only those students. The table lists every student with their facility, ward, mentor, start and end dates and any decline reason. You can filter by status, facility or ward, search, sort, and use "Download allocation list" for Excel, CSV or PDF. "Room at partner facilities" shows free ward places for the cohort's dates.
+<!-- source: apps/portal/src/features/coordinator/planning/PlacementPlanning.tsx -->
+
+## How do I place the whole next cohort automatically?
+
+On Placements, then Planning, the card "Place everyone who still needs a facility" has a "Share automatically" button. It covers students who are not placed yet, not yet requested, or declined. Choose the partner facilities, choose to share in proportion to free places or evenly, and review the preview: how many students each facility would receive, how many new placements will be created, and who would be left without a request because there is no room. "Shuffle again" gives a different random split. When you choose "Send requests" the system creates the missing placements, records the requests and emails each nurse manager. You land on the allocation result page. Students left over can be shared again later once there is more room.
+<!-- source: apps/portal/src/features/coordinator/planning/RequestSplitDialog.tsx, backend/apps/placements/allocation.py -->
+
+## How do I request facilities for selected students?
+
+On Placements, then Planning, tick the students (or choose "select all" for the current filter), then choose "Request facilities". Pick the facilities and review the split before sending. For a single student, open their placement and choose "Send to a partner facility". The facility's nurse manager then arranges the ward and mentor. You can withdraw a waiting request from the placement page or from the allocation result.
+<!-- source: apps/portal/src/features/coordinator/planning/RequestSplitDialog.tsx, apps/portal/src/features/coordinator/CoordinatorPlacementDetail.tsx -->
+
+## What is the allocation result and the allocation runs list?
+
+Every time students are shared across facilities the result is kept. Open Placements, then Allocation runs, and choose a run to see who was requested of which facility, who was not placed and why, and how full each facility is. You can download the list, withdraw requests that are still waiting, or choose other facilities for students who were not placed.
+<!-- source: apps/portal/src/features/coordinator/planning/AllocationResult.tsx -->
+
+## How do I release arranged placements to students in bulk?
+
+On Placements, then Planning, filter to students that are ready to release (arranged with a ward and mentor), select them and choose "Release". The result lists who was released and who was blocked, for example because the mentor has not finished required training.
+<!-- source: apps/portal/src/features/coordinator/planning/ReleaseDialog.tsx -->
+
+## What happens if a facility declines my request?
+
+The student shows as "Declined by facility" with the reason. They go back to needing a facility, so you can include them in "Share automatically" again or request a different facility.
+<!-- source: backend/apps/placements/planning.py -->
