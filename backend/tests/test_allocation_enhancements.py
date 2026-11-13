@@ -918,3 +918,12 @@ def test_cohort_auto_request_refuses_a_stale_plan_and_other_roles(world):
     assert stale.status_code in (400, 409, 422)
     manager = world.facilities[0][1]
     assert post(manager, path, {"preview": True}).status_code in (403, 404)
+
+
+def test_a_manager_can_read_progress_for_a_draft_requested_of_their_facility_but_not_anothers(world):
+    placement = world.placements[0]
+    world.request_all(0, [placement])
+    own_manager, other_manager = world.facilities[0][1], world.facilities[1][1]
+    assert get(own_manager, f"placements/{placement.id}").status_code == 200
+    assert get(own_manager, f"placements/{placement.id}/progress").status_code == 200  # was 404 for the facility it was requested of
+    assert get(other_manager, f"placements/{placement.id}/progress").status_code == 404

@@ -170,7 +170,7 @@ def placement_progress(*, actor, placement_id) -> dict:
     """Compose the placement progress value object on read (WFR-022)."""
     if actor.status != Status.ACTIVE:
         return {}
-    placement = placement_api.assert_access(placement_id, actor=actor)
+    placement = placement_api.assert_read_access(placement_id, actor=actor)
     induction_data = induction.progress(placement.id)
     assessment_data = assessments.progress(placement.id)
     mentorship_data = mentorship.progress(placement.id)

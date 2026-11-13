@@ -24,7 +24,7 @@ __all__ = [
     "date_within_pause", "request_transition", "register_completion_blocker", "verify_session_write",
     "verify_assessment_write",
     "available_transitions", "blocked_transitions",
-    "assert_access", "dashboard_counts", "interruption_report", "export_rows", "student_placement_summaries",
+    "assert_access", "assert_read_access", "dashboard_counts", "interruption_report", "export_rows", "student_placement_summaries",
 ]
 
 
@@ -266,6 +266,26 @@ def assert_access(placement_id: UUID, *, actor) -> Placement:
         from apps.core.errors import UnauthorizedFacilityAccess
         raise UnauthorizedFacilityAccess()
     return placement
+
+
+def assert_read_access(placement_id: UUID, *, actor) -> Placement:
+    """Read-only access: everything ``assert_access`` allows, plus a draft that was requested of the actor's own facility.
+
+    A nurse manager can already open those drafts (they are their incoming queue), so read-only panels about the same
+    placement must not answer 404. Writes keep using ``assert_access``.
+    """
+    from apps.core.errors import UnauthorizedFacilityAccess
+
+    try:
+        return assert_access(placement_id, actor=actor)
+    except UnauthorizedFacilityAccess:
+        placement = Placement.objects.filter(id=placement_id).first()
+        if (
+            placement is not None and actor.status == "active" and actor.facility_id
+            and placement.state == State.DRAFT and placement.facility_id is None and placement.requested_facility_id == actor.facility_id
+        ):
+            return placement
+        raise
 
 
 def notice_details(placement_id: UUID) -> dict | None:
