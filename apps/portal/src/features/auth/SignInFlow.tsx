@@ -46,15 +46,15 @@ export function SignInFlow({
       else if (result.user) onAuthenticated(result.user);
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === "AccountSuspended") {
-        navigate("/account-status?status=suspended", { replace: true });
+        navigate("/account-status?status=suspended", { replace: true, state: { email: email.trim() } });
         return;
       }
       if (cause instanceof ApiError && cause.code === "AccountDeactivated") {
-        navigate("/account-status?status=deactivated", { replace: true });
+        navigate("/account-status?status=deactivated", { replace: true, state: { email: email.trim() } });
         return;
       }
       if (cause instanceof ApiError && cause.code === "InvitationPending") {
-        navigate("/account-status?status=invited", { replace: true });
+        navigate("/account-status?status=invited", { replace: true, state: { email: email.trim() } });
         return;
       }
       if (cause instanceof ApiError && cause.code === "UsePlatformSignIn") setWrongPage("platform");

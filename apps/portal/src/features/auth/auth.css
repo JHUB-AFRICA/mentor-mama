@@ -413,3 +413,9 @@
 .auth-demo__use:hover:not(:disabled) { background: #157373; transform: translateY(-1px); }
 .auth-demo__use:disabled { opacity: 0.7; cursor: default; }
 .auth-demo__error { margin: 8px 0 0; font-size: 0.8125rem; color: #b83e3e; }
+
+.auth-account { margin: 0.9rem 0 0; font-size: 0.85rem; color: var(--auth-muted); overflow-wrap: anywhere; }
+.auth-account strong { color: #0D1B33; font-weight: 600; }
+.auth-note--steps { padding: 0.85rem 1rem; font-size: 0.85rem; }
+.auth-todo { margin: 0.45rem 0 0; padding-left: 1.15rem; list-style: decimal; display: grid; gap: 0.4rem; color: var(--auth-muted); line-height: 1.5; }
+.auth-actions { display: grid; gap: 0.6rem; }

@@ -30,7 +30,7 @@ function isUnknownRoute(pathname: string): boolean {
 
 export function App() {
   const { pushToast } = useToast();
-  const { pathname: path, search } = useLocation();
+  const { pathname: path, search, state: navigationState } = useLocation();
   const activationRoute = path === "/activate";
   const resetRoute = path === "/reset-password";
   const statusRoute = path === "/account-status";
@@ -147,6 +147,7 @@ export function App() {
             ? status
             : "revoked"
         }
+        email={typeof (navigationState as { email?: unknown } | null)?.email === "string" ? (navigationState as { email: string }).email : undefined}
       />
     );
   }
